@@ -1,10 +1,14 @@
 import argparse
 import logging
 import os
+import secrets
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 
 # Ensure consistent imports
 project_root = Path(__file__).resolve().parents[2]
@@ -12,9 +16,40 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from app.common import gsm_loader
+from app.common.alchemy import init_connection_engine
+from app.db.models import ApiKey
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+
+def get_or_create_internal_key() -> str:
+    """
+    Retrieves the internal API key from the database, generating a new secure
+    key if it does not already exist. Handles concurrent startup race conditions.
+    """
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        # Check if the key already exists
+        statement = select(ApiKey).where(ApiKey.name == "system_internal")
+        existing_key = session.exec(statement).first()
+        if existing_key:
+            return existing_key.key
+
+        # Key does not exist, let's try to create one
+        new_key_value = f"pc_internal_{secrets.token_urlsafe(32)}"
+        new_key = ApiKey(key=new_key_value, name="system_internal", is_active=True, scopes='["global"]')
+        session.add(new_key)
+        try:
+            session.commit()
+            return new_key_value
+        except IntegrityError:
+            # Another process inserted the key at the exact same time
+            session.rollback()
+            existing_key = session.exec(select(ApiKey).where(ApiKey.name == "system_internal")).first()
+            if existing_key:
+                return existing_key.key
+            raise RuntimeError("Failed to get or create internal API key due to unexpected database state.") from None
 
 
 def _get_executable_path(executable_name: str) -> str:

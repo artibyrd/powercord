@@ -5,7 +5,6 @@ import logging
 import sys
 from pathlib import Path
 
-import httpx
 from fasthtml.common import *
 from fasthtml.core import APIRouter
 
@@ -24,6 +23,7 @@ from app.ui.helpers import (
     get_guild_cogs,
     get_guild_sprockets,
     get_guild_widgets,
+    get_internal_api_client,
     get_widget_name,
     get_widget_settings,
     is_gadget_enabled,
@@ -111,7 +111,10 @@ async def server_extension_details_route(guild_id: int, extension_name: str, req
     """Returns a modal with the extension details for a specific server dashboard."""
     from app.ui.helpers import get_extension_details_modal
 
-    return get_extension_details_modal(extension_name)
+    auth_data = req.session.get("auth", {})
+    token_data = auth_data.get("token_data", {})
+    access_token = token_data.get("access_token")
+    return get_extension_details_modal(extension_name, access_token=access_token)
 
 
 @dashboard_router("/dashboard/{guild_id:int}/extensions/{extension_name}/confirm-delete", methods=["GET"])
@@ -658,7 +661,7 @@ async def _render_access_roles(guild_id: int):
     # Fetch roles from bot API
     guild_roles = []
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.get(f"http://127.0.0.1:8001/guilds/{guild_id}/roles", timeout=2.0)
             if resp.status_code == 200:
                 guild_roles = resp.json().get("roles", [])

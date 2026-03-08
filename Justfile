@@ -220,6 +220,25 @@ ext-list:
     poetry run python -m app.common.extension_manager list
 
 
+# Add a third-party API key. Usage: just add-api-key <name> [scopes]
+[group: "db"]
+add-api-key name scopes='["global"]':
+    poetry run python app/db/manage_api_keys.py add {{name}} --scopes '{{scopes}}'
+
+
+# Revoke a third-party API key. Usage: just revoke-api-key <id>
+[group: "db"]
+revoke-api-key id:
+    poetry run python app/db/manage_api_keys.py revoke {{id}}
+
+
+# List all third-party API keys
+[group: "db"]
+list-api-keys:
+    poetry run python app/db/manage_api_keys.py list
+
+
+
 # Import extension justfiles (optional, only loaded when present)
 import? 'app/extensions/midi_library/justfile'
 import? 'app/extensions/honeypot/justfile'

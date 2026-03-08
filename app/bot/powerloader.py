@@ -6,8 +6,12 @@ from typing import TYPE_CHECKING
 import nextcord
 from nextcord import Interaction, SlashOption
 from nextcord.ext import commands
+from sqlmodel import Session, select
 
+from app.common.alchemy import init_connection_engine
 from app.common.extension_hooks import get_deletable_extensions, run_hook
+from app.common.extension_loader import GadgetInspector
+from app.db.models import ApiAccessRole
 
 if TYPE_CHECKING:
     from app.main_bot import Bot
@@ -203,6 +207,142 @@ class AppPowerLoader(commands.Cog):
             return
         matches = [e for e in deletable if e.lower().startswith(extension.lower())]
         await interaction.response.send_autocomplete(matches)
+
+    # ── API Access Management ────────────────────────────────────────────
+
+    def _get_api_scopes(self) -> list[str]:
+        inspector = GadgetInspector()
+        extensions = list(inspector.inspect_extensions().keys())
+        return ["global", "default"] + extensions
+
+    @powercord.subcommand(
+        name="api_access_grant",
+        description="Grant API access (a specific scope) to a Discord role.",
+    )
+    async def api_access_grant(
+        self,
+        interaction: Interaction,
+        role: nextcord.Role = SlashOption(name="role", description="The Discord role to grant access to."),  # noqa: B008
+        scope: str = SlashOption(name="scope", description="The API scope to grant."),  # noqa: B008
+    ) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+            return
+
+        valid_scopes = self._get_api_scopes()
+        if scope not in valid_scopes:
+            await interaction.response.send_message(f"Invalid scope: `{scope}`.", ephemeral=True)
+            return
+
+        engine = init_connection_engine()
+        with Session(engine) as session:
+            # Check if it already exists
+            stmt = select(ApiAccessRole).where(
+                ApiAccessRole.guild_id == interaction.guild.id,
+                ApiAccessRole.role_id == role.id,
+                ApiAccessRole.extension_name == scope,
+            )
+            existing = session.exec(stmt).first()
+            if existing:
+                await interaction.response.send_message(
+                    f"Role {role.mention} already has the `{scope}` API scope.", ephemeral=True
+                )
+                return
+
+            new_mapping = ApiAccessRole(guild_id=interaction.guild.id, role_id=role.id, extension_name=scope)
+            session.add(new_mapping)
+            session.commit()
+
+        await interaction.response.send_message(f"✅ Granted `{scope}` API scope to {role.mention}.", ephemeral=True)
+
+    @api_access_grant.on_autocomplete("scope")
+    async def autocomplete_grant_scopes(self, interaction: Interaction, scope: str) -> None:
+        scopes = self._get_api_scopes()
+        if not scope:
+            await interaction.response.send_autocomplete(scopes[:25])
+            return
+        matches = [s for s in scopes if s.lower().startswith(scope.lower())]
+        await interaction.response.send_autocomplete(matches[:25])
+
+    @powercord.subcommand(
+        name="api_access_revoke",
+        description="Revoke API access (a specific scope) from a Discord role.",
+    )
+    async def api_access_revoke(
+        self,
+        interaction: Interaction,
+        role: nextcord.Role = SlashOption(name="role", description="The Discord role to revoke access from."),  # noqa: B008
+        scope: str = SlashOption(name="scope", description="The API scope to revoke."),  # noqa: B008
+    ) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+            return
+
+        valid_scopes = self._get_api_scopes()
+        if scope not in valid_scopes:
+            await interaction.response.send_message(f"Invalid scope: `{scope}`.", ephemeral=True)
+            return
+
+        engine = init_connection_engine()
+        with Session(engine) as session:
+            stmt = select(ApiAccessRole).where(
+                ApiAccessRole.guild_id == interaction.guild.id,
+                ApiAccessRole.role_id == role.id,
+                ApiAccessRole.extension_name == scope,
+            )
+            existing = session.exec(stmt).first()
+            if not existing:
+                await interaction.response.send_message(
+                    f"Role {role.mention} does not have the `{scope}` API scope.", ephemeral=True
+                )
+                return
+
+            session.delete(existing)
+            session.commit()
+
+        await interaction.response.send_message(f"✅ Revoked `{scope}` API scope from {role.mention}.", ephemeral=True)
+
+    @api_access_revoke.on_autocomplete("scope")
+    async def autocomplete_revoke_scopes(self, interaction: Interaction, scope: str) -> None:
+        scopes = self._get_api_scopes()
+        if not scope:
+            await interaction.response.send_autocomplete(scopes[:25])
+            return
+        matches = [s for s in scopes if s.lower().startswith(scope.lower())]
+        await interaction.response.send_autocomplete(matches[:25])
+
+    @powercord.subcommand(
+        name="api_access_list",
+        description="List all API access roles configured for this server.",
+    )
+    async def api_access_list(self, interaction: Interaction) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+            return
+
+        engine = init_connection_engine()
+        with Session(engine) as session:
+            stmt = select(ApiAccessRole).where(ApiAccessRole.guild_id == interaction.guild.id)
+            mappings = session.exec(stmt).all()
+
+        if not mappings:
+            await interaction.response.send_message("No API access roles configured for this server.", ephemeral=True)
+            return
+
+        # Group by role_id
+        role_scopes: dict[int, list[str]] = {}
+        for mapping in mappings:
+            if mapping.role_id not in role_scopes:
+                role_scopes[mapping.role_id] = []
+            role_scopes[mapping.role_id].append(mapping.extension_name)
+
+        embed = nextcord.Embed(title="API Access Roles", color=nextcord.Color.blue())
+        for role_id, scopes in role_scopes.items():
+            role_mention = f"<@&{role_id}>"
+            embed.add_field(name="Role", value=role_mention, inline=False)
+            embed.add_field(name="Scopes", value=" ".join(f"`{s}`" for s in scopes), inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 def setup(bot: commands.Bot):

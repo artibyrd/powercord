@@ -5,7 +5,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+
+from app.api.dependencies import api_scope_required
 
 
 class GadgetType(str, Enum):
@@ -125,7 +127,12 @@ class GadgetInspector:
                 for router_name in router_names:
                     router = getattr(module, router_name, None)
                     if router:
-                        app.include_router(router, prefix=f"/{extension_name}", tags=[extension_name])
+                        app.include_router(
+                            router,
+                            prefix=f"/{extension_name}",
+                            tags=[extension_name],
+                            dependencies=[Depends(api_scope_required(extension_name))],
+                        )
                         logging.info(f"Loaded router '{router_name}' from extension '{extension_name}'.")
             except ImportError as e:
                 logging.error(f"Could not import sprocket for extension '{extension_name}': {e}")

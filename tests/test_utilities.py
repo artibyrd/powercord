@@ -1,12 +1,11 @@
-import os
-
 import nextcord
 import pytest
 from fastapi import HTTPException
 
-from app.api.dependencies import verify_api_key
+from app.api.dependencies import get_current_api_user
 from app.api.responses import ErrorResponse, StandardResponse
 from app.bot.embeds import EmbedFactory
+from app.db.db_tools import get_or_create_internal_key
 from app.ui.components import Card, PrimaryButton
 
 # All tests in this module are unit tests.
@@ -28,20 +27,30 @@ def test_error_response():
 
 
 @pytest.mark.asyncio
-async def test_verify_api_key():
-    os.environ["API_RELOAD_KEY"] = "test-key"
+async def test_get_current_api_user():
+    internal_key = get_or_create_internal_key()
 
-    # Valid key
-    await verify_api_key(authorization="Bearer test-key")
+    class MockState:
+        user_identity = None
 
-    # Invalid key
+    class MockRequest:
+        state = MockState()
+
+    req = MockRequest()
+
+    # Valid key (internal system)
+    user_info = await get_current_api_user(request=req, authorization=f"Bearer {internal_key}")
+    assert user_info["identity"] == "system_internal"
+    assert "global" in user_info["scopes"]
+
+    # Invalid Auth scheme
     with pytest.raises(HTTPException) as exc:
-        await verify_api_key(authorization="Bearer wrong-key")
-    assert exc.value.status_code == 403
+        await get_current_api_user(request=req, authorization="Basic test")
+    assert exc.value.status_code == 401
 
     # Missing header
     with pytest.raises(HTTPException) as exc:
-        await verify_api_key(authorization=None)
+        await get_current_api_user(request=req, authorization=None)
     assert exc.value.status_code == 401
 
 

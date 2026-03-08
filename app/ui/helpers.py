@@ -20,11 +20,18 @@ from sqlmodel import Session, select
 
 from app.common.alchemy import init_connection_engine
 from app.common.extension_loader import GadgetInspector
+from app.db.db_tools import get_or_create_internal_key
 from app.db.models import AdminUser, GuildExtensionSettings, WidgetSettings
 from app.ui.auth import get_bot_guild_ids, get_user_guilds
 
 SCOPE_PUBLIC = 0
 SCOPE_ADMIN_DASHBOARD = 1
+
+
+def get_internal_api_client() -> httpx.AsyncClient:
+    """Returns an httpx.AsyncClient configured with the internal API key."""
+    key = get_or_create_internal_key()
+    return httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"})
 
 
 def get_widget_name(widget: Callable | FT) -> str | None:
@@ -346,7 +353,7 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
         elif gid in allowed_roles_by_guild:
             # Check Bot API for user roles in this guild
             try:
-                async with httpx.AsyncClient() as client:
+                async with get_internal_api_client() as client:
                     resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{gid}/roles", timeout=2.0)
                     if resp.status_code == 200:
                         user_role_ids = {str(r) for r in resp.json().get("roles", [])}
@@ -371,12 +378,11 @@ async def notify_api_of_config_change(guild_id: int):
         logging.warning("API reload URL or key not configured. Skipping notification.")
         return
 
-    headers = {"Authorization": f"Bearer {api_reload_key}"}
     payload = {"guild_id": guild_id}
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(api_reload_url, json=payload, headers=headers)
+        async with get_internal_api_client() as client:
+            response = await client.post(api_reload_url, json=payload)
             response.raise_for_status()
             logging.info(f"Successfully notified API to reload config for guild {guild_id}.")
     except httpx.RequestError as e:
@@ -386,26 +392,23 @@ async def notify_api_of_config_change(guild_id: int):
 async def notify_bot_of_config_change(guild_id: int):
     """Sends a notification to the bot to reload its configuration for a specific guild."""
     bot_reload_url = os.getenv("BOT_RELOAD_URL", "http://127.0.0.1:8001/config/reload")
-    # key is optional for internal localhost api if we decide so, but let's keep it if set
-    bot_reload_key = os.getenv("BOT_RELOAD_KEY", "")
 
     if not bot_reload_url:
         logging.warning("Bot reload URL or key not configured. Skipping notification.")
         return
 
-    headers = {"Authorization": f"Bearer {bot_reload_key}"}
     payload = {"guild_id": guild_id}
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(bot_reload_url, json=payload, headers=headers)
+        async with get_internal_api_client() as client:
+            response = await client.post(bot_reload_url, json=payload)
             response.raise_for_status()
             logging.info(f"Successfully notified bot to reload config for guild {guild_id}.")
     except httpx.RequestError as e:
         logging.error(f"Failed to notify bot for guild {guild_id}: {e}")
 
 
-def get_extension_details_modal(extension_name: str) -> FT:
+def get_extension_details_modal(extension_name: str, access_token: str | None = None) -> FT:
     """Generates a modal containing the extension's README and functionality breakdown."""
     inspector = GadgetInspector()
     extensions_report = inspector.inspect_extensions()
@@ -446,10 +449,14 @@ def get_extension_details_modal(extension_name: str) -> FT:
     header_elements = [H3(f"{extension_name.capitalize()} Details", cls="font-bold text-2xl flex-grow")]
 
     if "sprocket" in gadgets:
+        href_url = f"http://localhost:8000/docs#/{extension_name}"
+        if access_token:
+            href_url = f"http://localhost:8000/docs?token={access_token}#/{extension_name}"
+
         docs_link = A(
             I(cls="fa-solid fa-book"),
             " API Docs",
-            href=f"http://localhost:8000/docs#/{extension_name}",
+            href=href_url,
             target="_blank",
             cls="btn btn-ghost btn-outline btn-sm text-info ml-4",
             title="API Docs",

@@ -67,3 +67,22 @@ class DashboardAccessRole(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     guild_id: int = Field(sa_column=Column(BigInteger, index=True))
     role_id: int = Field(sa_column=Column(BigInteger))
+
+
+class ApiKey(SQLModel, table=True):
+    __tablename__ = "api_keys"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    key: str = Field(index=True, max_length=255, unique=True)
+    name: str = Field(max_length=255, unique=True)
+    is_active: bool = Field(default=True)
+    scopes: str = Field(default="[]", description="JSON list of valid scopes")
+
+
+class ApiAccessRole(SQLModel, table=True):
+    __tablename__ = "api_access_roles"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    guild_id: int = Field(sa_column=Column(BigInteger, index=True))
+    role_id: int = Field(sa_column=Column(BigInteger))
+    extension_name: str = Field(max_length=255)

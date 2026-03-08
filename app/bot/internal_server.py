@@ -7,11 +7,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import psutil
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from uvicorn import Config, Server
 
+from app.api.api_logging import ApiAccessLoggerMiddleware
+from app.api.dependencies import api_scope_required
 from app.common.gsm_loader import load_env
 
 load_env()
@@ -28,7 +33,22 @@ async def lifespan(app: FastAPI):
     # Shutdown: logic here if needed
 
 
-api = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+class AdminNetworkRestrictionMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path not in ["/docs", "/openapi.json", "/static"]:
+            client_ip = request.client.host if request.client else ""
+            if client_ip not in ("127.0.0.1", "::1", "localhost", "testclient"):
+                return JSONResponse(status_code=403, content={"detail": "Forbidden: External access denied"})
+        return await call_next(request)
+
+
+api = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+api.add_middleware(AdminNetworkRestrictionMiddleware)
+api.add_middleware(ApiAccessLoggerMiddleware)
+
+# APIRouter for endpoints that require authentication
+api_router = APIRouter(dependencies=[Depends(api_scope_required("global"))])
 
 # Resolve static directory relative to this file
 # app/bot/internal_server.py -> parents[1] = app
@@ -37,10 +57,18 @@ static_dir = Path(__file__).resolve().parents[1] / "static"
 api.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
-@api.get("/docs", include_in_schema=False)
-async def custom_swagger_ui_html():
+@api.get("/openapi.json", include_in_schema=False, dependencies=[Depends(api_scope_required("global"))])
+async def get_openapi_endpoint():
+    return JSONResponse(get_openapi(title=api.title, version=api.version, routes=api.routes))
+
+
+@api.get("/docs", include_in_schema=False, dependencies=[Depends(api_scope_required("global"))])
+async def custom_swagger_ui_html(request: Request):
+    token = request.query_params.get("token")
+    openapi_url = f"/openapi.json?token={token}" if token else "/openapi.json"
+
     return get_swagger_ui_html(
-        openapi_url=api.openapi_url,
+        openapi_url=openapi_url,
         title=api.title + " - Swagger UI",
         oauth2_redirect_url=api.swagger_ui_oauth2_redirect_url,
         swagger_js_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
@@ -53,7 +81,7 @@ def set_bot_instance(bot):
     bot_instance = bot
 
 
-@api.get("/stats")
+@api_router.get("/stats")
 async def get_stats():
     """Returns system and bot statistics."""
     if not bot_instance:
@@ -83,7 +111,7 @@ async def get_stats():
     }
 
 
-@api.get("/logs")
+@api_router.get("/logs")
 async def get_logs(limit: int = 50):
     """Returns the last N lines of the log file."""
     log_dir = Path(__file__).resolve().parents[1] / "logs"
@@ -102,7 +130,7 @@ async def get_logs(limit: int = 50):
         return {"logs": [f"Error reading logs: {e}"]}
 
 
-@api.get("/user/{user_id}/guilds/{guild_id}/roles")
+@api_router.get("/user/{user_id}/guilds/{guild_id}/roles")
 async def get_user_guild_roles(user_id: int, guild_id: int):
     """Returns a list of role IDs for a user in a specific guild."""
     if not bot_instance:
@@ -120,7 +148,7 @@ async def get_user_guild_roles(user_id: int, guild_id: int):
     return {"roles": [str(role.id) for role in member.roles]}
 
 
-@api.get("/guilds/{guild_id}/roles")
+@api_router.get("/guilds/{guild_id}/roles")
 async def get_guild_roles(guild_id: int):
     """Returns all roles for a specific guild."""
     if not bot_instance:
@@ -136,7 +164,7 @@ async def get_guild_roles(guild_id: int):
     return {"roles": roles}
 
 
-@api.post("/extensions/{name}/reload")
+@api_router.post("/extensions/{name}/reload")
 async def reload_extension(name: str):
     """Reloads a specific extension."""
     if not bot_instance:
@@ -159,7 +187,7 @@ async def reload_extension(name: str):
         raise HTTPException(status_code=500, detail=str(e)) from None
 
 
-@api.post("/extensions/{name}/unload")
+@api_router.post("/extensions/{name}/unload")
 async def unload_extension(name: str):
     """Unloads a specific extension and syncs commands."""
     if not bot_instance:
@@ -179,7 +207,7 @@ async def unload_extension(name: str):
         raise HTTPException(status_code=500, detail=str(e)) from None
 
 
-@api.get("/extensions/{name}/hotload-check")
+@api_router.get("/extensions/{name}/hotload-check")
 async def hotload_check(name: str):
     """Checks if a cog has preload requirements that prevent hot-loading."""
     if not bot_instance:
@@ -196,7 +224,7 @@ async def hotload_check(name: str):
     return {"requires_restart": requires_restart}
 
 
-@api.post("/bot/restart")
+@api_router.post("/bot/restart")
 async def restart_bot():
     """Gracefully shuts down the bot process. Relies on the process manager to restart it."""
     if not bot_instance:
@@ -209,7 +237,7 @@ async def restart_bot():
     sys.exit(0)
 
 
-@api.post("/config/reload")
+@api_router.post("/config/reload")
 async def reload_config(payload: dict):
     """Reloads bot configuration for a guild."""
     if not bot_instance:
@@ -225,7 +253,7 @@ async def reload_config(payload: dict):
     return {"status": "success", "message": f"Config reload triggered for guild {guild_id}"}
 
 
-@api.post("/examples/counters")
+@api_router.post("/examples/counters")
 async def toggle_example_counters(payload: dict):
     """Toggles the example counters in the ExamplesCog."""
     if not bot_instance:
@@ -257,6 +285,10 @@ async def toggle_example_counters(payload: dict):
     except Exception as e:
         logging.error(f"Failed to toggle example counters: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+# Finally include the router on the main api object
+api.include_router(api_router)
 
 
 async def start_bot_api(bot):

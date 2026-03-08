@@ -10,7 +10,15 @@ project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from app.api.dependencies import get_current_api_user  # noqa: E402
 from app.bot.internal_server import api, set_bot_instance, start_bot_api  # noqa: E402
+
+
+def override_get_current_api_user():
+    return {"identity": "system_internal", "scopes": ["global"]}
+
+
+api.dependency_overrides[get_current_api_user] = override_get_current_api_user
 
 # All tests in this module are unit tests.
 pytestmark = pytest.mark.unit

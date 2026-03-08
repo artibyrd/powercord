@@ -202,6 +202,24 @@ Server admins can trigger data deletion in two ways:
 > [!NOTE]
 > The `midi_library` extension is **excluded** from data deletion because its tables contain global data shared across all servers. See [midi_library README](app/extensions/midi_library/README.md) for details.
 
+## API Security and Management
+Powercord implements a robust security model for both its internal and external APIs:
+- **Admin API**: Uses a database-backed, auto-generated secure key ensuring only trusted system components can access it. In addition, an IP restriction middleware ensures the Admin API is only accessible from local networks.
+- **Sprocket API**: Secured using a unified authentication dependency supporting both API Keys and Discord OAuth tokens.
+- **Granular Scopes**: API endpoints require specific scopes. For example, sprockets use scopes tied to their extension name (e.g., `honeypot`), while the internal API requires a `global` scope.
+- **JSON Structured Logging**: All API access (both Admin and Sprocket) is logged in a structured JSON format to `stdout`. This captures request paths, execution times, and client identities, making it ideal for ingestion and analysis by external logging services like Google Cloud Logging.
+
+### Viewing API Documentation
+The auto-generated FastAPI Swagger documentation endpoints (`/docs` and `/openapi.json`) are secured behind the same authentication requirements as the rest of the API to prevent unauthorized configuration analysis. 
+- **Browser Access**: To view the interactive Swagger docs in a browser, append a valid API key using the `token` query parameter: `http://localhost:8000/docs?token=YOUR_API_KEY`
+- **Postman/cURL**: To interact with the documented endpoints programmatically, set the standard `Authorization: Bearer YOUR_API_KEY` header in your requests.
+
+### Managing Third-Party API Keys
+You can generate and manage API keys for 3rd party integrations using the built-in CLI commands from your terminal:
+- **Add a new key**: `just add-api-key <name> <scopes>` (e.g., `just add-api-key myapp '["global", "honeypot"]'`)
+- **List all keys**: `just list-api-keys`
+- **Revoke a key**: `just revoke-api-key <name>`
+
 ## Database Management
 Powercord provides commands to easily export and import your Postgres database, seamlessly handling the difference between local machine instances and isolated Docker containers. 
 

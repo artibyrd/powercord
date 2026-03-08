@@ -34,6 +34,7 @@ from app.ui.helpers import (
     get_guild_cogs,
     get_guild_sprockets,
     get_guild_widgets,
+    get_internal_api_client,
     get_widget_name,
     get_widget_settings,
     is_gadget_enabled,
@@ -327,7 +328,7 @@ async def admin_home(sess):
     # Fetch stats from Bot API
     stats = {}
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.get("http://127.0.0.1:8001/stats", timeout=2.0)
             if resp.status_code == 200:
                 stats = resp.json()
@@ -386,7 +387,7 @@ async def admin_home(sess):
     # Fetch logs from Bot API
     logs = []
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.get("http://127.0.0.1:8001/logs?limit=20", timeout=2.0)
             if resp.status_code == 200:
                 logs = resp.json().get("logs", [])
@@ -618,7 +619,7 @@ async def admin_home(sess):
 async def start_counters_route(req):
     """Starts the example counters via Bot API."""
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.post("http://127.0.0.1:8001/examples/counters", json={"action": "start"}, timeout=5.0)
             if resp.status_code == 200:
                 return P("Counters started successfully!", style="color: green;")
@@ -632,7 +633,7 @@ async def start_counters_route(req):
 async def stop_counters_route(req):
     """Stops the example counters via Bot API."""
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.post("http://127.0.0.1:8001/examples/counters", json={"action": "stop"}, timeout=5.0)
             if resp.status_code == 200:
                 return P("Counters stopped successfully!", style="color: green;")
@@ -721,7 +722,7 @@ async def reload_extension_action(req):
     extension_name = form_data.get("extension_name")
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.post(f"http://127.0.0.1:8001/extensions/{extension_name}/reload", timeout=5.0)
             if resp.status_code == 200:
                 return P(f"Extension '{extension_name}' reloaded successfully!", style="color: green;")
@@ -754,7 +755,7 @@ async def toggle_gadget_route(req):
     status_msg = ""
     if "cog" in gadgets:
         try:
-            async with httpx.AsyncClient() as client:
+            async with get_internal_api_client() as client:
                 # Check if the cog has preload requirements (persistent views/modals)
                 check_resp = await client.get(
                     f"http://127.0.0.1:8001/extensions/{extension_name}/hotload-check", timeout=3.0
@@ -804,7 +805,7 @@ async def toggle_gadget_route(req):
 async def restart_bot_action(req):
     """Sends a restart request to the bot's internal API."""
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.post("http://127.0.0.1:8001/bot/restart", timeout=5.0)
             if resp.status_code == 200:
                 return P("Bot restart initiated.", style="color: green;")
@@ -820,7 +821,7 @@ async def restart_bot_action(req):
 async def restart_api_action(req):
     """Sends a restart request to the backend API."""
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             resp = await client.post("http://127.0.0.1:8000/restart", timeout=5.0)
             if resp.status_code == 200:
                 return P("API restart initiated.", style="color: green;")
@@ -853,7 +854,7 @@ async def restart_system_action(req):
 
     # 1. Restart Bot
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             await client.post("http://127.0.0.1:8001/bot/restart", timeout=2.0)
         msgs.append("Bot restarted.")
     except Exception:
@@ -861,7 +862,7 @@ async def restart_system_action(req):
 
     # 2. Restart API
     try:
-        async with httpx.AsyncClient() as client:
+        async with get_internal_api_client() as client:
             await client.post("http://127.0.0.1:8000/restart", timeout=2.0)
         msgs.append("API restarted.")
     except Exception:
@@ -885,7 +886,10 @@ async def extension_details_route(extension_name: str, req):
     """Returns a modal with the extension details (Global admin)."""
     from app.ui.helpers import get_extension_details_modal
 
-    return get_extension_details_modal(extension_name)
+    auth_data = req.session.get("auth", {})
+    token_data = auth_data.get("token_data", {})
+    access_token = token_data.get("access_token")
+    return get_extension_details_modal(extension_name, access_token=access_token)
 
 
 # ── Extension UI Routes ───────────────────────────────────────────────────
