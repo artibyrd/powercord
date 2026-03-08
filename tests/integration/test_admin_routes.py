@@ -170,10 +170,10 @@ def test_render_admin_list_with_zero_id(mock_get_admins, mock_get_username, mock
     from app.main_ui import _render_admin_list
 
     mock_get_admins.return_value = [SimpleNamespace(user_id=0, comment="Test User 0")]
-    
+
     async def get_username_mock(user_id):
         return "Test Username"
-        
+
     mock_get_username.side_effect = get_username_mock
 
     component = asyncio.run(_render_admin_list(mock_session))

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import random
 import typing
 from typing import List, Union
@@ -16,7 +17,7 @@ from app.common.guild_cog import GuildAwareCog
 
 from .blueprint import TodoItem
 
-WEBHOOK_URL = "https://discord.com/api/webhooks/970665242801627136/qL4PSPpyTuX2qQNW5XqXWkrFVUiJ91qEpw_pmx-Icxe3MgX8hdsWOIaGaNyi0NruBxwF"
+WEBHOOK_URL = os.environ.get("EXAMPLE_WEBHOOK_URL", "")
 
 
 async def send_to_webhook(url, content):

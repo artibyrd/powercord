@@ -36,3 +36,6 @@ The `example` extension serves as a template and reference implementation for bu
 
 ## Setup Instructions
 This extension is enabled by default for demonstration purposes. To create a new extension, simply copy this folder structure, rename the components, and build out your logic!
+
+### Environment Variables
+- `EXAMPLE_WEBHOOK_URL`: (Optional) The URL of a Discord webhook to send a message to for testing purposes.
