@@ -1,0 +1,53 @@
+steps:
+  # 0. Install dependencies and run QA
+  - name: "python:3.12"
+    id: "Run QA"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install poetry
+        poetry install
+        poetry run ruff check .
+        poetry run ruff format --check .
+        poetry run mypy .
+        poetry run pytest tests
+
+  # 1. Build the Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    id: "Build Docker Image"
+    args:
+      [
+        "build",
+        "-t",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA",
+        ".",
+      ]
+
+  # 2. Push the Docker image to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    id: "Push Docker Image"
+    args:
+      [
+        "push",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA",
+      ]
+
+  # 3. Build the GCE VM image with Packer
+  - name: "gcr.io/cloud-builders/packer"
+    id: "Build VM Image"
+    args:
+      - "build"
+      - "-var"
+      - "project_id=${PROJECT_ID}"
+      - "-var"
+      - "docker_image=us-central1-docker.pkg.dev/${PROJECT_ID}/powercord/powercord-app:${SHORT_SHA}"
+      - "packer.pkr.hcl"
+
+images:
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+serviceAccount: "projects/${PROJECT_ID}/serviceAccounts/cloud-build-packer-sa@${PROJECT_ID}.iam.gserviceaccount.com"

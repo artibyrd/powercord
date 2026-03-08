@@ -1,0 +1,441 @@
+/* 
+   Synthwave / Retroweb Override
+   Building on DaisyUI 'synthwave' theme
+*/
+
+:root,
+[data-theme="synthwave"] {
+    /* Enhanced Synthwave Colors */
+    --b1: #1a1025;
+    /* Very dark purple base */
+    --b2: #2d1b4e;
+    /* Lighter purple for cards/elevated elements */
+    --b3: #11081f;
+    /* Deepest background */
+
+    --bc: #f8c6eb;
+    /* Soft pinky-white text */
+
+    --border-col: #ff00ff;
+    /* Neon pink standard border */
+
+    /* Semantic Neon Colors */
+    --p: #e779c1;
+    /* Bright Pink */
+    --pc: #1a1025;
+    --s: #58c7f3;
+    /* Cyan/Blue */
+    --sc: #1a1025;
+    --a: #f3cc30;
+    /* Yellow */
+    --ac: #1a1025;
+    --n: #221551;
+    --nc: #f8c6eb;
+
+    --info: #53c0f9;
+    --success: #6fe5ba;
+    --warning: #f8d55c;
+    --error: #f67171;
+
+    --body-bg: var(--b3);
+}
+
+body {
+    background-color: var(--b3) !important;
+    background-image:
+        linear-gradient(rgba(231, 121, 193, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(88, 199, 243, 0.05) 1px, transparent 1px) !important;
+    background-size: 40px 40px !important;
+    color: var(--bc) !important;
+    min-height: 100vh;
+    font-family: 'Share Tech Mono', monospace;
+    /* Base retro font */
+}
+
+/* Headers - Futuristic Font and Neon Glow */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: 'Orbitron', sans-serif;
+    color: var(--s);
+    /* default to cyan */
+    text-shadow: 0 0 5px rgba(88, 199, 243, 0.5), 0 0 10px rgba(88, 199, 243, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+h1 {
+    color: var(--p);
+    text-shadow: 0 0 8px rgba(231, 121, 193, 0.6), 0 0 15px rgba(231, 121, 193, 0.4);
+}
+
+p,
+span,
+div,
+li {
+    color: var(--bc);
+}
+
+/* Link Overrides */
+a {
+    color: var(--s);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+a:hover {
+    color: var(--p);
+    text-shadow: 0 0 8px var(--p);
+}
+
+/* Component Overrides with Borders and Glow */
+[data-theme="synthwave"] .card,
+[data-theme="synthwave"] .navbar,
+[data-theme="synthwave"] .drawer,
+[data-theme="synthwave"] .modal-box {
+    background-color: var(--b1);
+    color: var(--bc);
+    border: 2px solid var(--border-col) !important;
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.2);
+    border-radius: 4px;
+    /* More squared-off retro look */
+}
+
+/* Buttons */
+.btn {
+    font-family: 'Orbitron', sans-serif;
+    border-radius: 2px !important;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background-color: transparent !important;
+    border: 2px solid var(--p) !important;
+    color: var(--p) !important;
+    box-shadow: inset 0 0 5px rgba(231, 121, 193, 0.2), 0 0 5px rgba(231, 121, 193, 0.5);
+}
+
+.btn-primary:hover {
+    background-color: var(--p) !important;
+    color: var(--pc) !important;
+    box-shadow: 0 0 15px var(--p);
+}
+
+.btn-ghost {
+    color: var(--s) !important;
+}
+
+.btn-ghost:hover {
+    background-color: rgba(88, 199, 243, 0.1) !important;
+    text-shadow: 0 0 8px var(--s);
+}
+
+/* Inputs need to be distinct, but leave checkboxes/radios to DaisyUI/custom classes */
+[data-theme="synthwave"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="synthwave"] select,
+[data-theme="synthwave"] textarea {
+    background-color: var(--b2);
+    color: var(--s);
+    /* Neon cyan text inside inputs */
+    border: 1px solid var(--s) !important;
+    border-radius: 2px;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* Focus glow for text inputs only — leave toggles and checkboxes to DaisyUI */
+[data-theme="synthwave"] input:not([type="checkbox"]):not([type="radio"]):focus,
+[data-theme="synthwave"] select:focus,
+[data-theme="synthwave"] textarea:focus {
+    box-shadow: 0 0 8px var(--s);
+    outline: none;
+}
+
+/* --- Terminal Styling --- */
+[data-theme="synthwave"] .mockup-code {
+    background-color: #0d0614 !important;
+    border: 1px solid var(--s) !important;
+    box-shadow: inset 0 0 20px rgba(88, 199, 243, 0.2);
+    color: var(--s) !important;
+    /* Cyan text */
+    font-family: 'Share Tech Mono', monospace !important;
+    border-radius: 4px;
+}
+
+[data-theme="synthwave"] .mockup-code pre,
+[data-theme="synthwave"] .mockup-code code {
+    font-family: 'Share Tech Mono', monospace !important;
+    background-color: transparent !important;
+}
+
+/* Simpler Checkbox Fix for DaisyUI Synthwave - Exclude toggles */
+[data-theme="synthwave"] .checkbox:not(.toggle),
+[data-theme="synthwave"] input[type="checkbox"]:not(.toggle) {
+    border: 2px solid var(--s) !important;
+    border-radius: 2px;
+    background-color: transparent;
+}
+
+[data-theme="synthwave"] .checkbox:checked:not(.toggle),
+[data-theme="synthwave"] input[type="checkbox"]:checked:not(.toggle) {
+    --chkbg: var(--p);
+    --chkfg: var(--b3);
+    border-color: var(--p) !important;
+    box-shadow: 0 0 8px var(--p);
+}
+
+/* ─── DaisyUI Toggle Handle Fix ─────────────────────────────────────
+   The Tailwind CDN play script's preflight resets ::before content,
+   stripping DaisyUI's toggle handle.  These rules explicitly restore
+   it with a squared-off retro aesthetic that matches the Synthwave
+   theme. ──────────────────────────────────────────────────────────── */
+[data-theme="synthwave"] .toggle {
+    --tglbg: var(--b2);
+    --handleoffset: 1.5rem;
+    appearance: none;
+    position: relative;
+    border: 2px solid var(--s);
+    background-color: var(--b2);
+    border-radius: 4px;
+    /* Squared-off retro look */
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+[data-theme="synthwave"] .toggle::before {
+    content: "" !important;
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    transform: translateY(-50%);
+    height: calc(100% - 4px);
+    aspect-ratio: 1;
+    border-radius: 2px;
+    /* Squared handle */
+    background-color: var(--s);
+    box-shadow: 0 0 4px rgba(88, 199, 243, 0.4);
+    transition: left 0.2s ease-in-out, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+[data-theme="synthwave"] .toggle:checked {
+    --tglbg: var(--p);
+    background-color: rgba(231, 121, 193, 0.15);
+    border-color: var(--p);
+    box-shadow: 0 0 8px rgba(231, 121, 193, 0.4);
+}
+
+[data-theme="synthwave"] .toggle:checked::before {
+    left: calc(100% - 2px);
+    transform: translateY(-50%) translateX(-100%);
+    background-color: var(--p);
+    box-shadow: 0 0 6px var(--p);
+}
+
+/* Size variant: toggle-sm */
+[data-theme="synthwave"] .toggle-sm {
+    height: 1.25rem;
+    width: 2rem;
+}
+
+[data-theme="synthwave"] .toggle-sm::before {
+    height: calc(100% - 4px);
+}
+
+/* Utility Class Overrides - Helper to beat global resets */
+.text-primary {
+    color: var(--p) !important;
+    text-shadow: 0 0 5px var(--p);
+}
+
+.text-secondary {
+    color: var(--s) !important;
+    text-shadow: 0 0 5px var(--s);
+}
+
+.text-accent {
+    color: var(--a) !important;
+    text-shadow: 0 0 5px var(--a);
+}
+
+.text-neutral {
+    color: var(--n) !important;
+}
+
+.text-info {
+    color: var(--info) !important;
+}
+
+.text-success {
+    color: var(--success) !important;
+    text-shadow: 0 0 5px var(--success);
+}
+
+.text-warning {
+    color: var(--warning) !important;
+    text-shadow: 0 0 5px var(--warning);
+}
+
+.text-error {
+    color: var(--error) !important;
+    text-shadow: 0 0 5px var(--error);
+}
+
+/* --- MIDI Gallery Widget --- */
+
+/* Responsive auto-fill grid for piano-roll tiles */
+.midi-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    /* slightly more gap for glow */
+}
+
+/* Individual gallery tile — clickable card with hover effects */
+.midi-gallery-tile {
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    border: 2px solid #4a2574;
+    /* dark purple un-hovered border */
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: var(--b2);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+}
+
+.midi-gallery-tile:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 0 15px var(--s), 0 0 30px rgba(88, 199, 243, 0.4);
+    border-color: var(--s);
+    /* Neon cyan border on hover */
+}
+
+/* Piano-roll image fills the tile uniformly */
+.midi-gallery-img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+    mix-blend-mode: screen;
+    /* Makes black background disappear against dark purple card */
+    filter: hue-rotate(45deg) saturate(150%);
+    /* Tweak default midi colors slightly towards pink/blue */
+}
+
+/* Gradient overlay at the bottom of each tile for filename/quality */
+.midi-gallery-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 10px;
+    background: linear-gradient(transparent, rgba(17, 8, 31, 0.95) 80%);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-top: 1px solid rgba(88, 199, 243, 0.2);
+    /* faint scanline */
+}
+
+.midi-gallery-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--s);
+    text-shadow: 0 0 4px var(--s);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+    letter-spacing: 0.5px;
+}
+
+.midi-gallery-quality {
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Loading skeleton placeholders while HTMX fetches gallery tiles */
+.midi-gallery-skeleton {
+    height: 160px;
+    border-radius: 4px;
+    background-color: var(--b2);
+    border: 2px solid #4a2574;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+
+    100% {
+        opacity: 0.6;
+    }
+}
+
+/* html-midi-player component styling to match the synthwave theme */
+midi-player {
+    display: block;
+    width: 100%;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    /* html-midi-player CSS custom properties */
+    --primary-color: #e779c1;
+    /* Hot Pink */
+    --background: #11081f;
+    /* Deepest background */
+    --foreground: #58c7f3;
+    /* Neon Cyan text/icons */
+    --accent-color: #e779c1;
+    /* Hot Pink */
+}
+
+/* Force dark colours inside the player's shadow DOM parts */
+midi-player::part(control-panel) {
+    background: #11081f;
+    border: 2px solid var(--p);
+    border-radius: 4px;
+    box-shadow: 0 0 8px rgba(231, 121, 193, 0.4);
+}
+
+midi-player::part(play-button) {
+    color: var(--s);
+    fill: var(--s);
+    filter: drop-shadow(0 0 4px var(--s));
+}
+
+midi-player::part(time) {
+    color: var(--p);
+    font-family: 'Share Tech Mono', monospace;
+    text-shadow: 0 0 3px var(--p);
+}
+
+/* Staff visualizer shown under the player */
+midi-visualizer {
+    display: block;
+    width: 100%;
+    max-height: 200px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-radius: 4px;
+    border: 2px solid var(--s);
+    background: #11081f;
+    box-shadow: inset 0 0 15px rgba(88, 199, 243, 0.2);
+}
+
+midi-visualizer svg {
+    /* Try to push colors towards neon pink/cyan. 
+       Invert the black background to white, then shift hues.
+       It's not perfect but fits the aesthetic better than default. */
+    filter: invert(0.9) hue-rotate(240deg) saturate(300%) contrast(150%);
+}

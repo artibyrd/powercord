@@ -1,0 +1,12 @@
+{
+    "name": "utilities",
+    "version": "1.0.0",
+    "description": "Administrative tools for server analytics and security auditing.",
+    "python_dependencies": [],
+    "discord_permissions": [
+        "manage_roles",
+        "manage_channels"
+    ],
+    "has_migrations": true,
+    "internal": true
+}

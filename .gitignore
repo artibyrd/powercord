@@ -1,0 +1,34 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+*.dump
+*svc-acct.json
+.sesskey
+.env
+*.log
+
+# Testing & Tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Distribution / Build
+dist/
+build/
+*.egg-info/
+
+# SQL Dumps
+bgml-data.sql
+*-export.sql
+
+# External extensions (installed via `just ext-install`)
+# Internal extensions (example, utilities) are tracked by git.
+app/extensions/honeypot/
+app/extensions/midi_library/
+
+# Extension tests (copied into tests/extensions/ during ext-install)
+tests/extensions/

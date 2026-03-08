@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+.dockerignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Env
+.venv/
+venv/
+env/
+
+# Environment Variables & Secrets
+.env
+*svc-acct.json
+.sesskey
+
+# Testing & Tooling
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+.mypy_cache/
+.ruff_cache/
+
+# Documentation
+docs/
+
+# IDEs
+.vscode/
+.idea/
+
+# Other
+Justfile
+README.md
+*.log
+
+# SQL Dumps
+*.sql
+*.dump

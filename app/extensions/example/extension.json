@@ -1,0 +1,9 @@
+{
+    "name": "example",
+    "version": "1.0.0",
+    "description": "Template and reference implementation for building new Powercord extensions.",
+    "python_dependencies": [],
+    "discord_permissions": [],
+    "has_migrations": true,
+    "internal": true
+}
