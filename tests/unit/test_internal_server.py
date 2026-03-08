@@ -225,3 +225,168 @@ async def test_start_bot_api_error():
 
         await start_bot_api(mock_bot)
         mock_log.assert_called_once()
+
+
+# ── unload_extension endpoint tests ──────────────────────────────────
+
+
+def test_unload_extension_loaded(mock_bot):
+    """Unloading a loaded extension should succeed and trigger command rollout."""
+    mock_bot.extensions = ["app.extensions.test_ext.cog"]
+    response = client.post("/extensions/test_ext/unload")
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    mock_bot.unload_extension.assert_called_with("app.extensions.test_ext.cog")
+    mock_bot.rollout_application_commands.assert_called_once()
+
+
+def test_unload_extension_not_loaded(mock_bot):
+    """Unloading an extension that isn't loaded should succeed with 'not loaded' message."""
+    mock_bot.extensions = []
+    response = client.post("/extensions/test_ext/unload")
+    assert response.status_code == 200
+    assert "not loaded" in response.json()["message"]
+
+
+def test_unload_extension_error(mock_bot):
+    """Errors during unload should return 500."""
+    mock_bot.extensions = ["app.extensions.test_ext.cog"]
+    mock_bot.unload_extension.side_effect = Exception("UnloadFailed")
+    response = client.post("/extensions/test_ext/unload")
+    assert response.status_code == 500
+
+
+def test_unload_extension_no_bot():
+    """Unloading with no bot instance should return 503."""
+    set_bot_instance(None)
+    response = client.post("/extensions/test_ext/unload")
+    assert response.status_code == 503
+
+
+# ── hotload_check endpoint tests ─────────────────────────────────────
+
+
+def test_hotload_check_safe(mock_bot):
+    """A cog without preload requirements should report requires_restart=False."""
+    mock_powerloader = MagicMock()
+    mock_powerloader._hotload_caution.return_value = False
+    mock_bot.get_cog.return_value = mock_powerloader
+
+    response = client.get("/extensions/safe_cog/hotload-check")
+    assert response.status_code == 200
+    assert response.json()["requires_restart"] is False
+
+
+def test_hotload_check_requires_restart(mock_bot):
+    """A cog with preload requirements should report requires_restart=True."""
+    mock_powerloader = MagicMock()
+    mock_powerloader._hotload_caution.return_value = True
+    mock_bot.get_cog.return_value = mock_powerloader
+
+    response = client.get("/extensions/risky_cog/hotload-check")
+    assert response.status_code == 200
+    assert response.json()["requires_restart"] is True
+
+
+def test_hotload_check_no_powerloader(mock_bot):
+    """If AppPowerLoader isn't loaded, assume safe to hot-load."""
+    mock_bot.get_cog.return_value = None
+    response = client.get("/extensions/any_cog/hotload-check")
+    assert response.status_code == 200
+    assert response.json()["requires_restart"] is False
+
+
+def test_hotload_check_no_bot():
+    """Hotload check with no bot should return 503."""
+    set_bot_instance(None)
+    response = client.get("/extensions/any_cog/hotload-check")
+    assert response.status_code == 503
+
+
+# ── user guild roles endpoint tests ──────────────────────────────────
+
+
+def test_get_user_guild_roles_success(mock_bot):
+    """Should return role IDs for a valid user in a valid guild."""
+    mock_guild = MagicMock()
+    mock_member = MagicMock()
+    mock_role1 = MagicMock()
+    mock_role1.id = 111
+    mock_role2 = MagicMock()
+    mock_role2.id = 222
+    mock_member.roles = [mock_role1, mock_role2]
+    mock_guild.get_member.return_value = mock_member
+    mock_bot.get_guild.return_value = mock_guild
+
+    response = client.get("/user/123/guilds/456/roles")
+    assert response.status_code == 200
+    assert "111" in response.json()["roles"]
+    assert "222" in response.json()["roles"]
+
+
+def test_get_user_guild_roles_no_guild(mock_bot):
+    """Non-existent guild should return 404."""
+    mock_bot.get_guild.return_value = None
+    response = client.get("/user/123/guilds/999/roles")
+    assert response.status_code == 404
+
+
+def test_get_user_guild_roles_no_member(mock_bot):
+    """Non-existent member in a valid guild should return 404."""
+    mock_guild = MagicMock()
+    mock_guild.get_member.return_value = None
+    mock_bot.get_guild.return_value = mock_guild
+    response = client.get("/user/123/guilds/456/roles")
+    assert response.status_code == 404
+
+
+def test_get_user_guild_roles_no_bot():
+    """User guild roles with no bot should return 503."""
+    set_bot_instance(None)
+    response = client.get("/user/123/guilds/456/roles")
+    assert response.status_code == 503
+
+
+# ── guild roles endpoint tests ───────────────────────────────────────
+
+
+def test_get_guild_roles_success(mock_bot):
+    """Should return roles (excluding @everyone) sorted by name."""
+    mock_guild = MagicMock()
+    role_admin = MagicMock()
+    role_admin.id = 1
+    role_admin.name = "Admin"
+    role_admin.color = "0x00ff00"
+
+    role_mod = MagicMock()
+    role_mod.id = 2
+    role_mod.name = "Moderator"
+    role_mod.color = "0xff0000"
+
+    role_everyone = MagicMock()
+    role_everyone.name = "@everyone"
+
+    mock_guild.roles = [role_everyone, role_mod, role_admin]
+    mock_bot.get_guild.return_value = mock_guild
+
+    response = client.get("/guilds/456/roles")
+    assert response.status_code == 200
+    roles = response.json()["roles"]
+    assert len(roles) == 2
+    # Should be sorted alphabetically (Admin before Moderator)
+    assert roles[0]["name"] == "Admin"
+    assert roles[1]["name"] == "Moderator"
+
+
+def test_get_guild_roles_no_guild(mock_bot):
+    """Non-existent guild should return 404."""
+    mock_bot.get_guild.return_value = None
+    response = client.get("/guilds/999/roles")
+    assert response.status_code == 404
+
+
+def test_get_guild_roles_no_bot():
+    """Guild roles with no bot should return 503."""
+    set_bot_instance(None)
+    response = client.get("/guilds/456/roles")
+    assert response.status_code == 503

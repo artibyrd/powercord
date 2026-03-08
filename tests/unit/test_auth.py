@@ -136,3 +136,110 @@ async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_
                 # Should redirect appropriately setting auth context along the way
                 assert res.status_code == 303
                 assert sess["auth"]["id"] == "123"
+
+
+# ── auth_before edge cases ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_auth_before_admin_revoked():
+    """An admin route with revoked privileges should redirect to /profile."""
+    sess = {"auth": {"id": "789", "user": "formerly_admin"}}
+    req = MagicMock()
+    req.scope = {}
+    req.url.path = "/admin/some-page"
+
+    with patch("app.ui.helpers.is_dashboard_admin", return_value=False):
+        with patch("app.ui.auth.add_toast"):
+            redirect = await auth_before(req, sess)
+            assert redirect.status_code == 303
+            # Should redirect to profile, not login
+            assert "/profile" in str(redirect.headers.get("location", redirect.body))
+
+
+@pytest.mark.asyncio
+async def test_auth_before_dashboard_missing_token():
+    """A dashboard route with no access_token in session should redirect to login."""
+    sess = {"auth": {"id": "123", "token_data": {}}}
+    req = MagicMock()
+    req.scope = {}
+    req.url.path = "/dashboard/456/settings"
+
+    with patch("app.ui.auth.add_toast"):
+        redirect = await auth_before(req, sess)
+        assert redirect.status_code == 303
+
+
+@pytest.mark.asyncio
+async def test_auth_before_dashboard_valid_access():
+    """A dashboard route with valid guild access should pass through."""
+    sess = {"auth": {"id": "123", "token_data": {"access_token": "valid_token"}}}
+    req = MagicMock()
+    req.scope = {}
+    req.url.path = "/dashboard/456/settings"
+
+    with patch("app.ui.helpers.get_admin_guilds", new_callable=AsyncMock) as mock_guilds:
+        mock_guilds.return_value = {"456": {"id": "456", "name": "Test Server"}}
+        result = await auth_before(req, sess)
+        # Should return None (pass through, no redirect)
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_auth_before_dashboard_unauthorized_guild():
+    """A dashboard route for a guild the user doesn't have access to should redirect."""
+    sess = {"auth": {"id": "123", "token_data": {"access_token": "valid_token"}}}
+    req = MagicMock()
+    req.scope = {}
+    req.url.path = "/dashboard/999/settings"
+
+    with patch("app.ui.helpers.get_admin_guilds", new_callable=AsyncMock) as mock_guilds:
+        mock_guilds.return_value = {"456": {"id": "456", "name": "Other Server"}}
+        with patch("app.ui.auth.add_toast"):
+            redirect = await auth_before(req, sess)
+            assert redirect.status_code == 303
+
+
+@pytest.mark.asyncio
+async def test_auth_before_dashboard_validation_error():
+    """A dashboard route where guild validation throws should redirect safely."""
+    sess = {"auth": {"id": "123", "token_data": {"access_token": "valid_token"}}}
+    req = MagicMock()
+    req.scope = {}
+    req.url.path = "/dashboard/456/settings"
+
+    with patch("app.ui.helpers.get_admin_guilds", new_callable=AsyncMock) as mock_guilds:
+        mock_guilds.side_effect = Exception("API timeout")
+        with patch("app.ui.auth.add_toast"):
+            redirect = await auth_before(req, sess)
+            assert redirect.status_code == 303
+
+
+# ── dev_login tests ──────────────────────────────────────────────────
+
+
+def test_dev_login_in_debug_mode():
+    """dev_login should create a synthetic admin session when DEBUG is set."""
+    from app.ui.auth import dev_login
+
+    sess = {}
+    with patch.dict(os.environ, {"DEBUG": "1", "BASE_URL": "http://localhost:5001"}):
+        res = dev_login(sess)
+        assert res.status_code == 303
+        assert sess["auth"]["username"] == "DevAdmin"
+        assert sess["auth"]["is_dashboard_admin"] is True
+
+
+def test_dev_login_blocked_in_production():
+    """dev_login should redirect to login when not in debug/local mode."""
+    from app.ui.auth import dev_login
+
+    sess = {}
+    with patch.dict(os.environ, {"BASE_URL": "https://production.example.com"}, clear=False):
+        # Ensure DEBUG is not set
+        env = os.environ.copy()
+        env.pop("DEBUG", None)
+        with patch.dict(os.environ, env, clear=True):
+            res = dev_login(sess)
+            assert res.status_code == 303
+            assert "auth" not in sess
