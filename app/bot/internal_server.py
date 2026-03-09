@@ -164,6 +164,39 @@ async def get_guild_roles(guild_id: int):
     return {"roles": roles}
 
 
+@api_router.get("/user/{user_id}/admin_guilds")
+async def get_user_admin_guilds(user_id: int):
+    """Returns a list of guilds where the user has Administrator permissions."""
+    if not bot_instance:
+        raise HTTPException(status_code=503, detail="Bot not initialized")
+
+    from sqlmodel import Session, select
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import AdminUser
+
+    # Check if user is a global Powercord Admin
+    engine = init_connection_engine()
+    is_global_admin = False
+    with Session(engine) as session:
+        admin_check = session.exec(select(AdminUser).where(AdminUser.user_id == user_id)).first()
+        if admin_check:
+            is_global_admin = True
+
+    admin_guilds = []
+    for guild in bot_instance.guilds:
+        member = guild.get_member(user_id)
+        if is_global_admin or (member and member.guild_permissions.administrator):
+            admin_guilds.append({
+                "id": str(guild.id),
+                "name": guild.name,
+                "icon": guild.icon.key if getattr(guild, "icon", None) and hasattr(guild.icon, "key") else (guild.icon.url if getattr(guild, "icon", None) else None)
+            })
+            
+    # Sort guilds nicely
+    admin_guilds.sort(key=lambda x: x["name"].lower())
+    return {"guilds": admin_guilds}
+
+
 @api_router.post("/extensions/{name}/reload")
 async def reload_extension(name: str):
     """Reloads a specific extension."""

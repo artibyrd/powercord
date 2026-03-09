@@ -226,6 +226,126 @@ def public_home(sess: dict):
     )
 
 
+async def _render_client_keys(sess):
+    import secrets
+    from sqlmodel import Session, select
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey
+
+    auth = sess.get("auth", {})
+    user_id = auth.get("id")
+    if not user_id:
+        return Div()
+
+    prefix = f"client_{user_id}_"
+    engine = init_connection_engine()
+    
+    with Session(engine) as session:
+        stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active == True)
+        active_keys = session.exec(stmt).all()
+
+    key_rows = []
+    for k in active_keys:
+        key_rows.append(
+            Tr(
+                Td(str(k.id)),
+                Td(k.name, cls="font-mono text-xs opacity-70"),
+                Td(Code(k.key, cls="bg-base-300 p-1 rounded"), cls="font-mono text-sm text-success"),
+                Td(
+                    Form(
+                        Hidden(name="key_id", value=str(k.id)),
+                        Button("Revoke", cls="btn btn-error btn-xs"),
+                        hx_post="/profile/client-key/revoke",
+                        hx_target="#client-keys-container",
+                        hx_swap="outerHTML",
+                    )
+                ),
+            )
+        )
+
+    table = Table(
+        Thead(Tr(Th("ID"), Th("Name"), Th("API Key"), Th("Action"))),
+        Tbody(*key_rows),
+        cls="table w-full",
+    ) if key_rows else P("You have no active client keys.", cls="italic opacity-70 mb-4")
+
+    generate_btn = Form(
+        Button(I(cls="fa-solid fa-key mr-2"), "Generate New Client Key", cls="btn btn-primary btn-sm"),
+        hx_post="/profile/client-key/generate",
+        hx_target="#client-keys-container",
+        hx_swap="outerHTML",
+    )
+
+    return Div(
+        H2("Companion Client Keys", cls="text-2xl font-bold mb-4"),
+        P(
+            "Use these keys to authenticate the Powercord Desktop or Mobile application. Do not share them.",
+            cls="mb-4 opacity-80",
+        ),
+        Div(
+            table,
+            generate_btn,
+            cls="card bg-base-100 shadow-sm border border-base-content/20 p-4",
+        ),
+        id="client-keys-container",
+        cls="mb-8",
+    )
+
+
+@rt("/profile/client-key/generate", methods=["POST"])
+async def generate_client_key_route(req, sess):
+    import secrets
+    from sqlmodel import Session
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey
+
+    auth = sess.get("auth", {})
+    user_id = auth.get("id")
+    if user_id:
+        # Give full API scope to personal client keys for now
+        scopes = '["global"]'
+        random_suffix = secrets.token_hex(4)
+        name = f"client_{user_id}_{random_suffix}"
+        new_key = f"pc_{secrets.token_urlsafe(32)}"
+
+        engine = init_connection_engine()
+        with Session(engine) as session:
+            api_key = ApiKey(key=new_key, name=name, scopes=scopes, is_active=True)
+            session.add(api_key)
+            session.commit()
+            
+    return await _render_client_keys(sess)
+
+
+@rt("/profile/client-key/revoke", methods=["POST"])
+async def revoke_client_key_route(req, sess):
+    from sqlmodel import Session
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey
+
+    auth = sess.get("auth", {})
+    user_id = auth.get("id")
+    
+    form = await req.form()
+    key_id_str = form.get("key_id")
+
+    if user_id and key_id_str:
+        try:
+            key_id = int(key_id_str)
+            engine = init_connection_engine()
+            with Session(engine) as session:
+                api_key = session.get(ApiKey, key_id)
+                # Verify it belongs to the user
+                if api_key and api_key.name.startswith(f"client_{user_id}_"):
+                    api_key.is_active = False
+                    session.add(api_key)
+                    session.commit()
+        except ValueError:
+            pass
+
+    return await _render_client_keys(sess)
+
+
 @rt("/profile")
 async def profile_page(sess):
     """The user profile page, showing connected servers and session data."""
@@ -311,10 +431,13 @@ async def profile_page(sess):
         cls="mb-8",
     )
 
+    client_keys_section = await _render_client_keys(sess)
+
     return StandardPage(
         "Profile",
         H1(f"Welcome, {username}!", cls="text-2xl font-extrabold mb-8"),
         server_list,
+        client_keys_section,
         session_data,
         auth=auth,
     )
