@@ -635,9 +635,16 @@ async def admin_home(sess):
             # Only show if enabled in Admin Dashboard Layout
             if widget_setting.get("is_enabled", False):
                 try:
+                    import inspect
+
+                    sig = inspect.signature(func)
+                    kwargs = {}
+                    if "access_token" in sig.parameters:
+                        kwargs["access_token"] = auth.get("token_data", {}).get("access_token")
+
                     admin_widget_configs.append(
                         {
-                            "component": func(),
+                            "component": func(**kwargs),
                             "order": widget_setting.get("display_order", 99),
                             "span": widget_setting.get("column_span", 4),
                         }

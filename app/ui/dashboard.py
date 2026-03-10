@@ -294,9 +294,18 @@ async def dashboard(guild_id: int, sess):
             widget_setting = settings.get(w_name, {})
             if widget_setting.get("is_enabled", False):
                 try:
+                    import inspect
+
+                    sig = inspect.signature(func)
+                    kwargs = {}
+                    if "guild_id" in sig.parameters:
+                        kwargs["guild_id"] = guild_id
+                    if "access_token" in sig.parameters:
+                        kwargs["access_token"] = user_access_token
+
                     guild_widget_configs.append(
                         {
-                            "component": func(guild_id),
+                            "component": func(**kwargs),
                             "order": widget_setting.get("display_order", 99),
                             "span": widget_setting.get("column_span", 4),
                         }
