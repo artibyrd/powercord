@@ -314,6 +314,17 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
     if not bot_token:
         raise ValueError("DISCORD_TOKEN is not set.")
 
+    if user_access_token == "dev-token":  # noqa: S105
+        logging.info("Skipping Discord fetch for synthetic dev session.")
+        return {
+            "000000000000000000": {
+                "id": "000000000000000000",
+                "name": "Dev Synthetic Server",
+                "icon": None,
+                "permissions": str(ADMIN_PERM),
+            }
+        }
+
     logging.info("Fetching admin guilds...")
     try:
         user_guilds, bot_guild_ids = await asyncio.gather(

@@ -367,6 +367,11 @@ async def profile_page(sess):
         try:
             user_id = int(auth.get("id"))
             admin_guilds = await get_admin_guilds(user_access_token, user_id)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                add_toast(sess, "Discord session expired. Please log in again.", "error")
+                return RedirectResponse("/logout", status_code=303)
+            logging.error(f"Failed to fetch guild information in route: {e}", exc_info=True)
         except Exception as e:
             logging.error(f"Failed to fetch guild information in route: {e}", exc_info=True)
 

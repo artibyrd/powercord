@@ -65,6 +65,13 @@ async def auth_before(req, sess):
                 if guild_id not in admin_guilds:
                     add_toast(sess, "You do not have permission to access that server dashboard.", "error")
                     return RedirectResponse("/profile", status_code=303)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 401:
+                    add_toast(sess, "Discord session expired. Please log in again.", "error")
+                    return RedirectResponse("/logout", status_code=303)
+                logging.error(f"Failed to re-validate guild {guild_id} access: {e}")
+                add_toast(sess, "Error validating server access.", "error")
+                return RedirectResponse("/profile", status_code=303)
             except Exception as e:
                 logging.error(f"Failed to re-validate guild {guild_id} access: {e}")
                 add_toast(sess, "Error validating server access.", "error")
