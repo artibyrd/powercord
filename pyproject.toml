@@ -49,11 +49,11 @@ omit = [
 ]
 
 
+
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.0"
 bandit = "^1.9.3"
 mypy = "^1.19.1"
-pre-commit = "^4.5.1"
 types-requests = "^2.32.4.20260107"
 playwright = "^1.58.0"
 

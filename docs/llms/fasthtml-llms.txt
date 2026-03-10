@@ -97,7 +97,7 @@ This example shows key aspects of how FTs handle attributes:
 
 ``` python
 Label(
-    "Choose an option", 
+    "Choose an option",
     Select(
         Option("one", value="1", selected=True),  # True renders just the attribute name
         Option("two", value=2, selected=False),   # Non-string values are converted to strings. False omits the attribute entirely
@@ -113,7 +113,7 @@ Classes with `__ft__` defined are rendered using that method.
 ``` python
 class FtTest:
     def __ft__(self): return P('test')
-    
+
 to_xml(FtTest())
 ```
 
@@ -159,9 +159,9 @@ generate parts of your JS or JSON like this:
 
 ``` python
 # In future snippets this import will not be shown, but is required
-from fasthtml.common import * 
+from fasthtml.common import *
 app,rt = fast_app(hdrs=[Script(src="https://cdn.plot.ly/plotly-2.32.0.min.js")])
-# `index` is a special function name which maps to the `/` route. 
+# `index` is a special function name which maps to the `/` route.
 @rt
 def index():
     data = {'somedata':'fill me in…'}
@@ -213,7 +213,7 @@ async def serve_static_file(fname:str, ext:str): return FileResponse(f'public/{f
 
 app, rt = fast_app(hdrs=(MarkdownJS(), HighlightJS(langs=['python', 'javascript'])))
 @rt
-def index(): 
+def index():
     return Titled("Example",
                   Div("*markdown* here", cls="marked"),
                   Pre(Code("def foo(): pass")))
@@ -369,8 +369,8 @@ def profile(req, sess, user_id: int=None):
     visits = sess.setdefault('visit_count', 0) + 1
     sess['visit_count'] = visits
     user = get_user(user_id or sess.get('user_id'))
-    return Titled(f"Profile: {user.name}", 
-                  P(f"Visits: {visits}"), 
+    return Titled(f"Profile: {user.name}",
+                  P(f"Visits: {visits}"),
                   P(f"IP: {ip}"),
                   Button("Logout", hx_post=logout))
 ```
@@ -590,7 +590,7 @@ class Book: isbn: str; title: str; pages: int; userid: int
 # The transform arg instructs fastlite to change the db schema when fields change.
 # Create only creates a table if the table doesn't exist.
 books = db.create(Book, pk='isbn', transform=True)
-                
+
 class User: id: int; name: str; active: bool = True
 # If no pk is provided, id is used as the primary key.
 users = db.create(User, transform=True)
@@ -1108,9 +1108,9 @@ return Response(content, status_code=200, headers=headers)
 from starlette.responses import RedirectResponse
 
 async handler(request):
-    # Customize status_code: 
-    #   301: permanent redirect 
-    #   302: temporary redirect 
+    # Customize status_code:
+    #   301: permanent redirect
+    #   302: temporary redirect
     #   303: see others
     #   307: temporary redirect (default)
     return RedirectResponse(url=url, status_code=303)
@@ -1134,21 +1134,21 @@ async handler(request):
 
 ```
 {
-    'host': 'example.com:8080', 
-    'connection': 'keep-alive', 
-    'cache-control': 'max-age=0', 
-    'sec-ch-ua': 'Google Chrome 80', 
-    'dnt': '1', 
-    'upgrade-insecure-requests': '1', 
+    'host': 'example.com:8080',
+    'connection': 'keep-alive',
+    'cache-control': 'max-age=0',
+    'sec-ch-ua': 'Google Chrome 80',
+    'dnt': '1',
+    'upgrade-insecure-requests': '1',
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) ...',
-    'sec-fetch-dest': 'document', 
-    'accept': 'text/html,image/apng,*/*;q=0.8;v=b3;q=0.9', 
-    'sec-origin-policy': '0', 
-    'sec-fetch-site': 'none', 
-    'sec-fetch-mode': 'navigate', 
-    'sec-fetch-user': '?1', 
-    'accept-encoding': 'gzip, deflate, br', 
-    'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,zh-TW;q=0.6', 
+    'sec-fetch-dest': 'document',
+    'accept': 'text/html,image/apng,*/*;q=0.8;v=b3;q=0.9',
+    'sec-origin-policy': '0',
+    'sec-fetch-site': 'none',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-user': '?1',
+    'accept-encoding': 'gzip, deflate, br',
+    'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7,zh-TW;q=0.6',
     'cookie': 'session=eyJhZG1pbl91c2_KiQ...'
 }
 
@@ -1173,26 +1173,26 @@ async handler(request):
 
 ```
 {
-    'type': 'http', 
-    'http_version': '1.1', 
-    'server': ('127.0.0.1', 9092), 
-    'client': ('127.0.0.1', 53102), 
-    'scheme': 'https', 
-    'method': 'GET', 
-    'root_path': '', 
-    'path': '/', 
-    'raw_path': b'/', 
-    'query_string': b'kw=hello', 
+    'type': 'http',
+    'http_version': '1.1',
+    'server': ('127.0.0.1', 9092),
+    'client': ('127.0.0.1', 53102),
+    'scheme': 'https',
+    'method': 'GET',
+    'root_path': '',
+    'path': '/',
+    'raw_path': b'/',
+    'query_string': b'kw=hello',
     'headers': [
-        (b'host', b'example.com:8080'), 
-        (b'connection', b'keep-alive'), 
-        (b'cache-control', b'max-age=0'), 
+        (b'host', b'example.com:8080'),
+        (b'connection', b'keep-alive'),
+        (b'cache-control', b'max-age=0'),
         ...
-    ], 
-    'app': <starlette.applications.Starlette object at 0x1081bd650>, 
-    'session': {'uid': '57ba03ea7333f72a25f837cf'}, 
-    'router': <starlette.routing.Router object at 0x1081bd6d0>, 
-    'endpoint': <class 'app.index.Index'>, 
+    ],
+    'app': <starlette.applications.Starlette object at 0x1081bd650>,
+    'session': {'uid': '57ba03ea7333f72a25f837cf'},
+    'router': <starlette.routing.Router object at 0x1081bd6d0>,
+    'endpoint': <class 'app.index.Index'>,
     'path_params': {}
 }
 
@@ -1947,7 +1947,7 @@ class CustomHeaderMiddleware(BaseHTTPMiddleware):
     Converts input types into strings that can be passed to FT components
 
 - `class VEnum(Enum)`
-    Members: 
+    Members:
 
     - `__str__(self)`
     - `__add__(self, other)`

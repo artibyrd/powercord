@@ -171,6 +171,7 @@ async def get_user_admin_guilds(user_id: int):
         raise HTTPException(status_code=503, detail="Bot not initialized")
 
     from sqlmodel import Session, select
+
     from app.common.alchemy import init_connection_engine
     from app.db.models import AdminUser
 
@@ -186,12 +187,16 @@ async def get_user_admin_guilds(user_id: int):
     for guild in bot_instance.guilds:
         member = guild.get_member(user_id)
         if is_global_admin or (member and member.guild_permissions.administrator):
-            admin_guilds.append({
-                "id": str(guild.id),
-                "name": guild.name,
-                "icon": guild.icon.key if getattr(guild, "icon", None) and hasattr(guild.icon, "key") else (guild.icon.url if getattr(guild, "icon", None) else None)
-            })
-            
+            admin_guilds.append(
+                {
+                    "id": str(guild.id),
+                    "name": guild.name,
+                    "icon": guild.icon.key
+                    if getattr(guild, "icon", None) and hasattr(guild.icon, "key")
+                    else (guild.icon.url if getattr(guild, "icon", None) else None),
+                }
+            )
+
     # Sort guilds nicely
     admin_guilds.sort(key=lambda x: x["name"].lower())
     return {"guilds": admin_guilds}

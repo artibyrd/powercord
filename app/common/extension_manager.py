@@ -113,11 +113,37 @@ def install_extension(source_path: str | Path) -> None:
     name = manifest["name"]
     dest = EXTENSIONS_DIR / name
 
-    # Guard against overwriting an existing installation
-    if dest.exists():
-        print(f"Extension '{name}' is already installed at {dest}.")
-        print("Uninstall it first with: just ext-uninstall " + name)
+    if source.resolve() == dest.resolve():
+        print(f"Error: Cannot install extension '{name}' from its own installation directory.")
         sys.exit(1)
+
+    # Guard against overwriting an existing installation unless we are reinstalling
+    is_reinstall = False
+    old_deps = []
+    old_migration_version = None
+
+    if dest.exists():
+        print(f"Extension '{name}' is already installed at {dest}. Reinstalling...")
+        is_reinstall = True
+        try:
+            old_manifest = load_manifest(dest)
+            old_deps = old_manifest.get("python_dependencies", [])
+            old_migration_version = old_manifest.get("latest_migration_version", None)
+        except (FileNotFoundError, ValueError):
+            pass
+
+        # Clear out the existing files safely
+        if dest.is_symlink() or (hasattr(dest, "is_junction") and dest.is_junction()):
+            dest.unlink()
+        else:
+            shutil.rmtree(dest)
+
+        test_dest = TESTS_DIR / name
+        if test_dest.exists():
+            if test_dest.is_symlink() or (hasattr(test_dest, "is_junction") and test_dest.is_junction()):
+                test_dest.unlink()
+            else:
+                shutil.rmtree(test_dest)
 
     print(f"Installing extension '{name}' v{manifest['version']}...")
 
@@ -155,31 +181,40 @@ def install_extension(source_path: str | Path) -> None:
     # 2. Install Python dependencies
     deps = manifest.get("python_dependencies", [])
     if deps:
-        print(f"  📦 Installing {len(deps)} Python dependencies...")
-        try:
-            subprocess.run(  # noqa: S603
-                [_POETRY_CMD, "add", *deps],  # noqa: S607
-                check=True,
-                cwd=str(EXTENSIONS_DIR.parents[1]),
-            )
-            print("  ✅ Dependencies installed.")
-        except subprocess.CalledProcessError as exc:
-            print(f"  ⚠️  Failed to install dependencies: {exc}")
-            print("     You may need to run 'poetry add' manually.")
+        if is_reinstall and set(deps) == set(old_deps):
+            print("  📦 Skipped Python dependencies installation (no changes detected).")
+        else:
+            print(f"  📦 Installing {len(deps)} Python dependencies...")
+            try:
+                subprocess.run(  # noqa: S603
+                    [_POETRY_CMD, "add", *deps],  # noqa: S607
+                    check=True,
+                    cwd=str(EXTENSIONS_DIR.parents[1]),
+                )
+                print("  ✅ Dependencies installed.")
+            except subprocess.CalledProcessError as exc:
+                print(f"  ⚠️  Failed to install dependencies: {exc}")
+                print("     You may need to run 'poetry add' manually.")
 
     # 3. Run database migrations if needed
     if manifest.get("has_migrations", False):
-        print("  🗄️  Running database migrations...")
-        try:
-            subprocess.run(  # noqa: S603
-                [_POETRY_CMD, "run", "alembic", "upgrade", "head"],  # noqa: S607
-                check=True,
-                cwd=str(EXTENSIONS_DIR.parents[1]),
-            )
-            print("  ✅ Migrations applied.")
-        except subprocess.CalledProcessError as exc:
-            print(f"  ⚠️  Migration failed: {exc}")
-            print("     Run 'just db-upgrade' manually after resolving.")
+        new_migration_version = manifest.get("latest_migration_version", None)
+
+        # Skip if we are reinstalling and the migration version hasn't changed, provided it is explicitly set
+        if is_reinstall and new_migration_version and new_migration_version == old_migration_version:
+            print(f"  🗄️  Skipped database migrations (latest_migration_version '{new_migration_version}' unchanged).")
+        else:
+            print("  🗄️  Running database migrations...")
+            try:
+                subprocess.run(  # noqa: S603
+                    [_POETRY_CMD, "run", "alembic", "upgrade", "head"],  # noqa: S607
+                    check=True,
+                    cwd=str(EXTENSIONS_DIR.parents[1]),
+                )
+                print("  ✅ Migrations applied.")
+            except subprocess.CalledProcessError as exc:
+                print(f"  ⚠️  Migration failed: {exc}")
+                print("     Run 'just db-upgrade' manually after resolving.")
 
     # 4. Fire on_install hook (if extension registers one)
     _fire_hook(name, "on_install")
@@ -231,7 +266,8 @@ def uninstall_extension(name: str) -> None:
     _fire_hook(name, "on_uninstall")
 
     # 2. Remove Python dependencies (only those unique to this extension)
-    deps: list[str] = list(manifest.get("python_dependencies") or [])
+    deps_raw = manifest.get("python_dependencies", [])
+    deps: list[str] = [str(d) for d in deps_raw] if isinstance(deps_raw, list) else []
     if deps:
         # Collect deps used by OTHER installed extensions so we don't remove shared ones
         other_deps: set[str] = set()
@@ -258,6 +294,9 @@ def uninstall_extension(name: str) -> None:
                 print("  ✅ Dependencies removed.")
             except subprocess.CalledProcessError as exc:
                 print(f"  ⚠️  Failed to remove some dependencies: {exc}")
+                print("     Note: On Windows, make sure the server is stopped so files aren't locked.")
+                print("     Aborting uninstallation. Stop the server and try again.")
+                sys.exit(1)
 
     # 3. Remove extension directory
     shutil.rmtree(dest)

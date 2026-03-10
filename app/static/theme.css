@@ -1,4 +1,4 @@
-/* 
+/*
    Synthwave / Retroweb Override
    Building on DaisyUI 'synthwave' theme
 */
@@ -434,7 +434,7 @@ midi-visualizer {
 }
 
 midi-visualizer svg {
-    /* Try to push colors towards neon pink/cyan. 
+    /* Try to push colors towards neon pink/cyan.
        Invert the black background to white, then shift hues.
        It's not perfect but fits the aesthetic better than default. */
     filter: invert(0.9) hue-rotate(240deg) saturate(300%) contrast(150%);

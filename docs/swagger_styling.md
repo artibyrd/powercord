@@ -53,15 +53,15 @@ async def run():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        
+
         await page.goto("http://localhost:8000/docs", wait_until="networkidle")
-        
+
         # Example: Check computed color of a header
         header = await page.query_selector("section.models h4")
         if header:
             color = await header.evaluate("el => window.getComputedStyle(el).color")
             print(f"Header Color: {color}")
-            
+
         await browser.close()
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 # About Powercord Cog Hotloading
-Certain Nextcord features (custom contexts, persistent modals/views) cannot be hot loaded and must be loaded when the bot first starts up. 
+Certain Nextcord features (custom contexts, persistent modals/views) cannot be hot loaded and must be loaded when the bot first starts up.
 
 When using custom cog contexts, use a class named `CogContexts` that inherits from `commands.Context`, and place your custom context functions in this class with the prefix `cc_`.
 
-For persistent modals/views, create a class called `CogPersists` in your cog, and put your persistent modal/view classes inside this class.  Persistent modal classes inside this class should inherit from `nextcord.ui.Modal`, and persistent views from `nextcord.ui.View`. 
+For persistent modals/views, create a class called `CogPersists` in your cog, and put your persistent modal/view classes inside this class.  Persistent modal classes inside this class should inherit from `nextcord.ui.Modal`, and persistent views from `nextcord.ui.View`.
 
 See the [example cog](../app/extensions/example/cog.py) for implementation details.
 
@@ -25,4 +25,3 @@ The manual **Reload** button (🔄) on each extension card remains available for
 ## Restart Bot
 
 A **Restart Bot** button is available on the Admin Dashboard under the **Bot Management** section. This gracefully shuts down the bot process. In production environments (Docker, systemd), the process manager will automatically restart it. During local development with `just dev`, the bot process will stop and must be manually restarted.
-

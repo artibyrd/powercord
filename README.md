@@ -14,7 +14,7 @@ Powercord provides a framework for building full featured web applications with 
 - **SQL database support**
     - An integrated Postgresql database is accessible to the bot, API, and UI components.  Easily add new tables to support your own complex relational data structures.
 - **Easy deployment**
-    - Powercord is built into a _single_ Docker image and can be run locally (only recommended for development/testing), or easily deployed to any Cloud hosting provider that supports containerized workloads.   Detailed configuration and instructions are provided only for deployment to a Google Compute Engine virtual machine instance.  
+    - Powercord is built into a _single_ Docker image and can be run locally (only recommended for development/testing), or easily deployed to any Cloud hosting provider that supports containerized workloads.   Detailed configuration and instructions are provided only for deployment to a Google Compute Engine virtual machine instance.
 
 
 ## Components
@@ -99,7 +99,7 @@ Running `just dev` starts each of the application components (Bot, API, UI) dire
 
 #### Containerized Development (`just run`)
 Running `just run` spins up the entire application stack inside Docker containers using Docker Compose.
-- **Database**: Uses a dedicated Docker-managed volume (`postgres_data`). This database is completely separate from your host machine's local database. 
+- **Database**: Uses a dedicated Docker-managed volume (`postgres_data`). This database is completely separate from your host machine's local database.
   - *Note*: If you run `just run` for the first time, the Docker database will be empty. You will need to run the database migrations and manually add your user as an admin again inside the container environment.
 - **Shared Sessions**: Because both `just dev` and `just run` use the same local `.env` file (which contains your `SESSION_KEY`), your browser session cookies remain valid across both environments. If you login during `just dev` and then switch to `just run`, the UI will still recognize your session, but since the Docker database is empty, your admin permissions will be revoked and you'll be redirected to your profile until you add yourself as an admin to the container's database.
 
@@ -136,6 +136,9 @@ just ext-install /path/to/extension
 ```
 This copies the extension files into `app/extensions/<name>/`, installs any declared Python dependencies via Poetry, runs database migrations if needed, and reports required Discord permissions.
 
+**Graceful Reinstalls for Development:**
+During development, you can repeatedly run `just ext-install /path/to/extension` on an already installed extension to cleanly overwrite it with your newest code. The CLI will safely wipe the existing installation directory and intelligently check the manifests. If your `python_dependencies` and `latest_migration_version` haven't changed, it will completely skip the lengthy `poetry add` and `alembic upgrade head` phases, deploying your updates instantly.
+
 #### Uninstalling an Extension
 ```bash
 just ext-uninstall <name>
@@ -157,6 +160,7 @@ Each extension includes an `extension.json` file declaring its metadata:
     "python_dependencies": ["some-pkg>=1.0"],
     "discord_permissions": ["manage_channels"],
     "has_migrations": true,
+    "latest_migration_version": "1c7fc4ef8015",
     "internal": false
 }
 ```
@@ -165,7 +169,7 @@ Each extension includes an `extension.json` file declaring its metadata:
 > Installing or uninstalling extensions that add Python packages or database tables requires rebuilding the Docker image and redeploying for production use.
 
 ### Extension Documentation
-The `README.md` file located at the root of your extension folder is highly recommended. Powercord automatically parses this file and renders its markdown natively into the "Manage Extensions" section of the web dashboard via a "Details" modal using `marked.js`. 
+The `README.md` file located at the root of your extension folder is highly recommended. Powercord automatically parses this file and renders its markdown natively into the "Manage Extensions" section of the web dashboard via a "Details" modal using `marked.js`.
 
 To ensure your extension looks stunning in the UI, we recommend adopting a standardized README structure:
 - **Description**: 1-2 paragraphs detailing the extension's purpose.
@@ -210,7 +214,7 @@ Powercord implements a robust security model for both its internal and external 
 - **JSON Structured Logging**: All API access (both Admin and Sprocket) is logged in a structured JSON format to `stdout`. This captures request paths, execution times, and client identities, making it ideal for ingestion and analysis by external logging services like Google Cloud Logging.
 
 ### Viewing API Documentation
-The auto-generated FastAPI Swagger documentation endpoints (`/docs` and `/openapi.json`) are secured behind the same authentication requirements as the rest of the API to prevent unauthorized configuration analysis. 
+The auto-generated FastAPI Swagger documentation endpoints (`/docs` and `/openapi.json`) are secured behind the same authentication requirements as the rest of the API to prevent unauthorized configuration analysis.
 - **Browser Access**: To view the interactive Swagger docs in a browser, append a valid API key using the `token` query parameter: `http://localhost:8000/docs?token=YOUR_API_KEY`
 - **Postman/cURL**: To interact with the documented endpoints programmatically, set the standard `Authorization: Bearer YOUR_API_KEY` header in your requests.
 
@@ -221,7 +225,7 @@ You can generate and manage API keys for 3rd party integrations using the built-
 - **Revoke a key**: `just revoke-api-key <name>`
 
 ## Database Management
-Powercord provides commands to easily export and import your Postgres database, seamlessly handling the difference between local machine instances and isolated Docker containers. 
+Powercord provides commands to easily export and import your Postgres database, seamlessly handling the difference between local machine instances and isolated Docker containers.
 
 > [!NOTE]
 > **Host Requirements**: If you are running `just dev` (Local Development), these commands require the PostgreSQL command-line tools (`pg_dump` and `psql`) to be installed and available in your system's `PATH`. If you are using `just run`, these tools are automatically executed inside the Docker container and do not need to be installed on your host machine.

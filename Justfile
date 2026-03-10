@@ -12,7 +12,6 @@ default:
 [group: "dev"]
 install:
     poetry install
-    poetry run pre-commit install
 
 
 # Clean up temporary files
@@ -20,6 +19,7 @@ install:
 dev-clean:
     @echo "Cleaning up..."
     for /d /r . %d in (__pycache__ .pytest_cache .mypy_cache) do @if exist "%d" rd /s /q "%d"
+    @if exist ".venv" rd /s /q ".venv"
     @echo "Cleanup complete!"
 
 

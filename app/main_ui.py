@@ -227,8 +227,8 @@ def public_home(sess: dict):
 
 
 async def _render_client_keys(sess):
-    import secrets
     from sqlmodel import Session, select
+
     from app.common.alchemy import init_connection_engine
     from app.db.models import ApiKey
 
@@ -239,9 +239,9 @@ async def _render_client_keys(sess):
 
     prefix = f"client_{user_id}_"
     engine = init_connection_engine()
-    
+
     with Session(engine) as session:
-        stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active == True)
+        stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active)
         active_keys = session.exec(stmt).all()
 
     key_rows = []
@@ -263,11 +263,15 @@ async def _render_client_keys(sess):
             )
         )
 
-    table = Table(
-        Thead(Tr(Th("ID"), Th("Name"), Th("API Key"), Th("Action"))),
-        Tbody(*key_rows),
-        cls="table w-full",
-    ) if key_rows else P("You have no active client keys.", cls="italic opacity-70 mb-4")
+    table = (
+        Table(
+            Thead(Tr(Th("ID"), Th("Name"), Th("API Key"), Th("Action"))),
+            Tbody(*key_rows),
+            cls="table w-full",
+        )
+        if key_rows
+        else P("You have no active client keys.", cls="italic opacity-70 mb-4")
+    )
 
     generate_btn = Form(
         Button(I(cls="fa-solid fa-key mr-2"), "Generate New Client Key", cls="btn btn-primary btn-sm"),
@@ -295,7 +299,9 @@ async def _render_client_keys(sess):
 @rt("/profile/client-key/generate", methods=["POST"])
 async def generate_client_key_route(req, sess):
     import secrets
+
     from sqlmodel import Session
+
     from app.common.alchemy import init_connection_engine
     from app.db.models import ApiKey
 
@@ -313,19 +319,20 @@ async def generate_client_key_route(req, sess):
             api_key = ApiKey(key=new_key, name=name, scopes=scopes, is_active=True)
             session.add(api_key)
             session.commit()
-            
+
     return await _render_client_keys(sess)
 
 
 @rt("/profile/client-key/revoke", methods=["POST"])
 async def revoke_client_key_route(req, sess):
     from sqlmodel import Session
+
     from app.common.alchemy import init_connection_engine
     from app.db.models import ApiKey
 
     auth = sess.get("auth", {})
     user_id = auth.get("id")
-    
+
     form = await req.form()
     key_id_str = form.get("key_id")
 
