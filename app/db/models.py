@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column
+from sqlalchemy import BigInteger, Column, Text
 from sqlmodel import Field, SQLModel
 
 
@@ -86,3 +86,78 @@ class ApiAccessRole(SQLModel, table=True):
     guild_id: int = Field(sa_column=Column(BigInteger, index=True))
     role_id: int = Field(sa_column=Column(BigInteger))
     extension_name: str = Field(max_length=255)
+
+
+# ── Custom Content sanitization constants (Fix #1) ────────────────────
+# Only allow tags/attributes that Quill.js actually produces.
+# This follows the principle of least privilege.
+CUSTOM_CONTENT_ALLOWED_TAGS = {
+    "p",
+    "br",
+    "strong",
+    "em",
+    "u",
+    "s",
+    "a",
+    "blockquote",
+    "pre",
+    "code",
+    "h1",
+    "h2",
+    "h3",
+    "ol",
+    "ul",
+    "li",
+    "span",
+    "sub",
+    "sup",
+    "img",
+    "video",
+    "iframe",
+}
+
+CUSTOM_CONTENT_ALLOWED_ATTRIBUTES: dict[str, set[str]] = {
+    "*": {"class", "style"},
+    # Note: "rel" is intentionally omitted — nh3 auto-injects "noopener noreferrer"
+    # on all links via its default link_rel setting. Including "rel" here would panic.
+    "a": {"href", "target"},
+    "img": {"src", "alt", "width", "height"},
+    "video": {"src", "controls", "width", "height"},
+    "iframe": {"src", "frameborder", "allowfullscreen", "width", "height"},
+    "span": {"style"},
+}
+
+# Only allow safe URL schemes — blocks javascript: URIs (Fix #3 defense-in-depth).
+CUSTOM_CONTENT_URL_SCHEMES = {"http", "https", "mailto"}
+
+
+def _sanitize_content(raw_content: str) -> str:
+    """Sanitize HTML content using nh3 with an explicit whitelist.
+
+    This is the single source of truth for content sanitization across
+    the entire custom_content extension.
+    """
+    import nh3
+
+    return nh3.clean(
+        raw_content,
+        tags=CUSTOM_CONTENT_ALLOWED_TAGS,
+        attributes=CUSTOM_CONTENT_ALLOWED_ATTRIBUTES,
+        url_schemes=CUSTOM_CONTENT_URL_SCHEMES,
+    )
+
+
+class CustomContentItem(SQLModel, table=True):
+    __tablename__ = "custom_content_items"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    guild_id: int = Field(sa_column=Column(BigInteger, index=True))
+    name: str = Field(max_length=100)  # Capped at 100 chars for safety
+    content: str = Field(default="", sa_column=Column(Text))
+    format: str = Field(default="html", max_length=50)  # html or markdown
+    has_frame: bool = Field(default=True)
+
+    # Fix #4: Model-layer sanitization — always clean content on assignment
+    def set_content(self, raw_content: str) -> None:
+        """Sanitize and store content. All write paths should use this method."""
+        self.content = _sanitize_content(raw_content)

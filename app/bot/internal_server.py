@@ -210,6 +210,10 @@ async def reload_extension(name: str):
 
     cog_path = f"app.extensions.{name}.cog"
     try:
+        cog_file = Path(__file__).resolve().parents[1] / "extensions" / name / "cog.py"
+        if not cog_file.exists():
+            return {"status": "success", "message": f"Extension '{name}' reloaded (no cog to sync)."}
+
         # Check if extension is loaded
         if cog_path in bot_instance.extensions:
             bot_instance.reload_extension(cog_path)
@@ -233,6 +237,10 @@ async def unload_extension(name: str):
 
     cog_path = f"app.extensions.{name}.cog"
     try:
+        cog_file = Path(__file__).resolve().parents[1] / "extensions" / name / "cog.py"
+        if not cog_file.exists():
+            return {"status": "success", "message": f"Extension '{name}' unloaded (no cog to sync)."}
+
         if cog_path in bot_instance.extensions:
             bot_instance.unload_extension(cog_path)
             # Trigger rollout to remove commands from Discord

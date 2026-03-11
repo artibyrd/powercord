@@ -15,6 +15,7 @@ if str(project_root) not in sys.path:
 
 from app.common.extension_hooks import run_hook, supports_delete_data
 from app.common.extension_loader import GadgetInspector
+from app.common.extension_manager import get_installed_extensions
 from app.ui.components import Card
 from app.ui.helpers import (
     SCOPE_ADMIN_DASHBOARD,
@@ -241,6 +242,9 @@ async def dashboard(guild_id: int, sess):
     if "powerloader" in all_extensions:
         del all_extensions["powerloader"]
 
+    # Filter out global_only extensions from being configurable per-server
+    global_only_extensions = {ext["name"] for ext in get_installed_extensions() if ext.get("global_only")}
+
     enabled_cogs = get_guild_cogs(guild_id)
     enabled_sprockets = get_guild_sprockets(guild_id)
     enabled_widgets = get_guild_widgets(guild_id)
@@ -251,6 +255,9 @@ async def dashboard(guild_id: int, sess):
 
     server_extension_cards = []
     for name, gadgets in all_extensions.items():
+        if name in global_only_extensions:
+            continue
+
         server_gadgets = []
         if "cog" in gadgets and name in global_cogs:
             server_gadgets.append("cog")
@@ -392,6 +399,30 @@ def _get_ordered_widgets(scope_id: int) -> list[dict]:
     return widgets
 
 
+def _humanize_widget_name(ext_name: str, raw_name: str) -> str:
+    """Convert an internal widget function name to a human-readable label.
+
+    If the widget function has a ``display_name`` attribute (set by dynamic
+    widget generators like custom_content), that value is used directly.
+    Otherwise, the raw function name is cleaned up by stripping common prefixes
+    and replacing underscores with spaces.
+    """
+    # Check if the actual widget function carries a display_name attribute
+    inspector = GadgetInspector()
+    all_widgets = inspector.inspect_widgets()
+    for func in all_widgets.get(ext_name, []):
+        if getattr(func, "__name__", None) == raw_name:
+            display = getattr(func, "display_name", None)
+            if display:
+                return display
+
+    # Fallback: strip common prefixes and humanize
+    name = raw_name
+    name = name.removeprefix("widget_")
+    name = name.replace("_", " ").strip()
+    return name.title() if name else raw_name
+
+
 def _render_layout_editor(widgets: list[dict], scope_id: int):
     """Render the layout editor table + live preview as an HTMX fragment."""
 
@@ -400,7 +431,7 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
 
     rows = []
     for idx, w in enumerate(widgets):
-        label = f"{w['ext'].capitalize()}: {w['widget']}"
+        label = f"{w['ext'].replace('_', ' ').title()}: {_humanize_widget_name(w['ext'], w['widget'])}"
         rows.append(
             Tr(
                 # Widget name
@@ -503,8 +534,8 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
         preview_items.append(
             Div(
                 Div(
-                    H5(w["ext"].capitalize(), cls="font-bold text-xs opacity-70"),
-                    Div(w["widget"], cls="text-sm font-semibold truncate"),
+                    H5(w["ext"].replace("_", " ").title(), cls="font-bold text-xs opacity-70"),
+                    Div(_humanize_widget_name(w["ext"], w["widget"]), cls="text-sm font-semibold truncate"),
                     cls="card-body p-3 text-center",
                 ),
                 cls=f"card bg-base-100 shadow-sm border border-base-content/20 {opacity}",

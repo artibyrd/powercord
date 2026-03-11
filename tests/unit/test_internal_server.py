@@ -64,7 +64,8 @@ def test_get_stats_no_bot():
     assert response.status_code == 503
 
 
-def test_reload_extension_success(mock_bot):
+@patch("app.bot.internal_server.Path.exists", return_value=True)
+def test_reload_extension_success(mock_exists, mock_bot):
     response = client.post("/extensions/example_extension/reload")
 
     assert response.status_code == 200
@@ -73,7 +74,8 @@ def test_reload_extension_success(mock_bot):
     mock_bot.rollout_application_commands.assert_called_once()
 
 
-def test_reload_extension_not_loaded(mock_bot):
+@patch("app.bot.internal_server.Path.exists", return_value=True)
+def test_reload_extension_not_loaded(mock_exists, mock_bot):
     mock_bot.extensions = []
 
     response = client.post("/extensions/new_extension/reload")
@@ -84,7 +86,8 @@ def test_reload_extension_not_loaded(mock_bot):
     mock_bot.rollout_application_commands.assert_called_once()
 
 
-def test_reload_extension_error(mock_bot):
+@patch("app.bot.internal_server.Path.exists", return_value=True)
+def test_reload_extension_error(mock_exists, mock_bot):
     mock_bot.reload_extension.side_effect = Exception("TestError")
     response = client.post("/extensions/example_extension/reload")
     assert response.status_code == 500
@@ -230,7 +233,8 @@ async def test_start_bot_api_error():
 # ── unload_extension endpoint tests ──────────────────────────────────
 
 
-def test_unload_extension_loaded(mock_bot):
+@patch("app.bot.internal_server.Path.exists", return_value=True)
+def test_unload_extension_loaded(mock_exists, mock_bot):
     """Unloading a loaded extension should succeed and trigger command rollout."""
     mock_bot.extensions = ["app.extensions.test_ext.cog"]
     response = client.post("/extensions/test_ext/unload")
@@ -240,7 +244,8 @@ def test_unload_extension_loaded(mock_bot):
     mock_bot.rollout_application_commands.assert_called_once()
 
 
-def test_unload_extension_not_loaded(mock_bot):
+@patch("app.bot.internal_server.Path.exists", return_value=True)
+def test_unload_extension_not_loaded(mock_exists, mock_bot):
     """Unloading an extension that isn't loaded should succeed with 'not loaded' message."""
     mock_bot.extensions = []
     response = client.post("/extensions/test_ext/unload")
@@ -248,7 +253,8 @@ def test_unload_extension_not_loaded(mock_bot):
     assert "not loaded" in response.json()["message"]
 
 
-def test_unload_extension_error(mock_bot):
+@patch("app.bot.internal_server.Path.exists", return_value=True)
+def test_unload_extension_error(mock_exists, mock_bot):
     """Errors during unload should return 500."""
     mock_bot.extensions = ["app.extensions.test_ext.cog"]
     mock_bot.unload_extension.side_effect = Exception("UnloadFailed")

@@ -1,0 +1,10 @@
+{
+    "name": "custom_content",
+    "version": "1.0.0",
+    "description": "Allows creating and managing custom widgets with Markdown and Rich Text content.",
+    "python_dependencies": ["nh3", "markdown"],
+    "discord_permissions": [],
+    "has_migrations": false,
+    "internal": true,
+    "global_only": true
+}

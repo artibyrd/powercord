@@ -161,9 +161,13 @@ Each extension includes an `extension.json` file declaring its metadata:
     "discord_permissions": ["manage_channels"],
     "has_migrations": true,
     "latest_migration_version": "1c7fc4ef8015",
-    "internal": false
+    "internal": false,
+    "global_only": false
 }
 ```
+**Key Flags:**
+- `internal`: Tells the Extension Manager that this extension is shipped with the framework itself and should not be uninstalled.
+- `global_only`: Hides the extension from individual Server (Guild) Dashboards, making its widgets configurable only from the Global Admin Dashboard.
 
 > [!NOTE]
 > Installing or uninstalling extensions that add Python packages or database tables requires rebuilding the Docker image and redeploying for production use.
