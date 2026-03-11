@@ -42,6 +42,19 @@ EXTENSIONS_DIR = Path(__file__).resolve().parents[1] / "extensions"
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests" / "extensions"
 
 
+# ── Package name helpers ──────────────────────────────────────────────
+
+
+def _normalize_pkg_name(dep: str) -> str:
+    """Strip version specifiers from a dependency string.
+
+    For example ``"pretty-midi>=0.2.11"`` → ``"pretty-midi"``.
+    """
+    for sep in (">", "<", "=", "!", "~", "["):
+        dep = dep.split(sep, 1)[0]
+    return dep.strip()
+
+
 # ── Manifest helpers ──────────────────────────────────────────────────
 
 
@@ -265,9 +278,13 @@ def uninstall_extension(name: str) -> None:
     # 1. Fire on_uninstall hook
     _fire_hook(name, "on_uninstall")
 
-    # 2. Remove Python dependencies (only those unique to this extension)
+    # 2. Remove Python dependencies (only those unique to this extension).
+    #    Each dep is removed individually so a locked transitive dependency
+    #    (e.g. a .pyd file held by a running server) doesn't block removal
+    #    of the other unrelated packages.
     deps_raw = manifest.get("python_dependencies", [])
     deps: list[str] = [str(d) for d in deps_raw] if isinstance(deps_raw, list) else []
+    failed_deps: list[str] = []
     if deps:
         # Collect deps used by OTHER installed extensions so we don't remove shared ones
         other_deps: set[str] = set()
@@ -275,28 +292,34 @@ def uninstall_extension(name: str) -> None:
             if ext["name"] != name:
                 for dep in ext.get("python_dependencies", []):
                     # Normalize to just the package name (strip version specifiers)
-                    other_deps.add(dep.split(">=")[0].split("<=")[0].split("==")[0].split("<")[0].split(">")[0].strip())
+                    other_deps.add(_normalize_pkg_name(dep))
 
         unique_deps = []
         for dep in deps:
-            pkg_name = dep.split(">=")[0].split("<=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+            pkg_name = _normalize_pkg_name(dep)
             if pkg_name not in other_deps:
                 unique_deps.append(pkg_name)
 
         if unique_deps:
             print(f"  📦 Removing {len(unique_deps)} unique dependencies...")
-            try:
-                subprocess.run(  # noqa: S603
-                    [_POETRY_CMD, "remove", *unique_deps],  # noqa: S607
-                    check=True,
-                    cwd=str(EXTENSIONS_DIR.parents[1]),
-                )
-                print("  ✅ Dependencies removed.")
-            except subprocess.CalledProcessError as exc:
-                print(f"  ⚠️  Failed to remove some dependencies: {exc}")
-                print("     Note: On Windows, make sure the server is stopped so files aren't locked.")
-                print("     Aborting uninstallation. Stop the server and try again.")
-                sys.exit(1)
+            for pkg in unique_deps:
+                try:
+                    subprocess.run(  # noqa: S603
+                        [_POETRY_CMD, "remove", pkg],  # noqa: S607
+                        check=True,
+                        cwd=str(EXTENSIONS_DIR.parents[1]),
+                    )
+                    print(f"  ✅ Removed {pkg}")
+                except subprocess.CalledProcessError:
+                    failed_deps.append(pkg)
+                    print(f"  ⚠️  Failed to remove {pkg} (file may be locked)")
+
+            if failed_deps:
+                print(f"\n  ⚠️  {len(failed_deps)} of {len(unique_deps)} dependencies could not be removed:")
+                for pkg in failed_deps:
+                    print(f"       - {pkg}")
+                print("     Stop the server, then run manually:")
+                print(f"       poetry remove {' '.join(failed_deps)}")
 
     # 3. Remove extension directory
     shutil.rmtree(dest)
@@ -314,7 +337,10 @@ def uninstall_extension(name: str) -> None:
         print("     These tables still exist in your database.")
         print("     To fully clean up, manually drop the tables or create a down-migration.")
 
-    print(f"\n✅ Extension '{name}' uninstalled successfully!")
+    if failed_deps:
+        print(f"\n⚠️  Extension '{name}' uninstalled with warnings (some deps remain).")
+    else:
+        print(f"\n✅ Extension '{name}' uninstalled successfully!")
     print("   A new Docker build and deploy is required for production use.")
 
 
