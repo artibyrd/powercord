@@ -46,6 +46,54 @@ gcloud services enable \
 This repository will store the Docker image of your application.
 
 ```bash
+# Google Cloud Platform Deployment Guide
+
+This guide provides all the necessary steps to configure a Google Cloud Platform (GCP) project and deploy the Powercord application using Cloud Build and a Compute Engine (GCE) instance.
+
+The guide is split into two parts:
+*   **Part 1: Initial Project and Infrastructure Setup** - These are one-time steps you perform when setting up a new GCP project for this application.
+*   **Part 2: Application Deployment and Updates** - These are the steps you will repeat each time you want to deploy a new version of the application.
+
+---
+
+## Part 1: Initial Project and Infrastructure Setup (One-Time Only)
+
+### 1.1. Prerequisites
+
+*   A Google Cloud Platform account with an active billing account.
+*   The [Google Cloud SDK (`gcloud`)](https://cloud.google.com/sdk/docs/install) installed and authenticated on your local machine.
+
+First, log in and initialize the gcloud CLI:
+
+```bash
+gcloud auth login
+gcloud init
+```
+
+Set your project ID for all subsequent commands. Replace `[YOUR_PROJECT_ID]` with your actual GCP project ID.
+
+```bash
+gcloud config set project [YOUR_PROJECT_ID]
+```
+
+### 1.2. Enable Required APIs
+
+The deployment process requires several GCP services. Enable their APIs with the following command:
+
+```bash
+gcloud services enable \
+  cloudbuild.googleapis.com \
+  compute.googleapis.com \
+  artifactregistry.googleapis.com \
+  secretmanager.googleapis.com \
+  iam.googleapis.com
+```
+
+### 1.3. Create an Artifact Registry Repository
+
+This repository will store the Docker image of your application.
+
+```bash
 gcloud artifacts repositories create powercord \
   --repository-format=docker \
   --location=us-central1 \
@@ -54,9 +102,11 @@ gcloud artifacts repositories create powercord \
 
 ### 1.4. Store Secrets in Secret Manager
 
-For security, we'll store sensitive data like database credentials and your Discord bot token in Secret Manager.
+Powercord securely loads all environment variables directly from Google Secret Manager at runtime using `app/common/gsm_loader.py`.
 
-**Important:** Replace the placeholder values (`your_..._here`) with your actual secrets.
+It uses the `.example.env` file as a manifest. **Every variable listed in `.example.env` MUST be created as a secret in Google Secret Manager**, otherwise the application will fail to start.
+
+**Important:** Replace the placeholder values (`your_..._here`) with your actual secrets. For standard deployment, add at least the following:
 
 ```bash
 # Database User
@@ -70,7 +120,22 @@ echo -n "powercord_db" | gcloud secrets create POSTGRES_DB --replication-policy=
 
 # Discord Bot Token
 echo -n "your_discord_bot_token_here" | gcloud secrets create DISCORD_TOKEN --replication-policy="automatic" --data-file=-
+
+# Discord OAuth Client ID
+echo -n "your_discord_client_id_here" | gcloud secrets create DISCORD_CLIENT_ID --replication-policy="automatic" --data-file=-
+
+# Discord OAuth Client Secret
+echo -n "your_discord_client_secret_here" | gcloud secrets create DISCORD_CLIENT_SECRET --replication-policy="automatic" --data-file=-
+
+# Session Key (Generate a random secure string for UI cookies)
+echo -n "your_random_secure_session_key" | gcloud secrets create SESSION_KEY --replication-policy="automatic" --data-file=-
+
+# Base URL (e.g., http://<your-instance-external-ip> or your domain name)
+echo -n "http://your_domain_or_ip" | gcloud secrets create BASE_URL --replication-policy="automatic" --data-file=-
 ```
+
+> [!NOTE]
+> Review `.example.env` for any other required extension secrets (e.g., `BUCKET_URL`, `API_RELOAD_KEY`, etc.) and ensure they are also added to Secret Manager using the same `gcloud secrets create` command format.
 
 ### 1.5. Create Service Accounts and Grant Permissions
 
@@ -152,8 +217,10 @@ gcloud compute instances create powercord-instance \
   --machine-type=e2-small \
   --scopes=cloud-platform \
   --tags=http-server \
+  --metadata GCE_ENV_TYPE=PROD \
   --disk=name=powercord-data-disk,auto-delete=no,boot=no
 ```
+*(The `--metadata GCE_ENV_TYPE=PROD` flag is essential. It signals `gsm_loader.py` to fetch secrets from Google Secret Manager instead of looking for a local `.env` file!)*
 
 ### 2.3. Update an Existing Instance (Re-deploy)
 
@@ -173,6 +240,7 @@ For all subsequent deployments, you will update the existing instance by recreat
       --machine-type=e2-small \
       --scopes=cloud-platform \
       --tags=http-server \
+      --metadata GCE_ENV_TYPE=PROD \
       --disk=name=powercord-data-disk,auto-delete=no,boot=no
     ```
 

@@ -31,21 +31,13 @@ qa fix="": (lint fix) (format fix) check test
 # Linting. Usage: just lint [fix] (pass "fix" to auto-fix issues)
 [group: "qa"]
 lint fix="":
-    @if "{{fix}}" == "fix" ( \
-        poetry run ruff check . --fix \
-    ) else ( \
-        poetry run ruff check . \
-    )
+    poetry run ruff check . {{ if fix == "fix" { "--fix" } else { "" } }}
 
 
 # Formatting. Usage: just format [fix] (pass "fix" to apply formatting, otherwise check-only)
 [group: "qa"]
 format fix="":
-    @if "{{fix}}" == "fix" ( \
-        poetry run ruff format . \
-    ) else ( \
-        poetry run ruff format . --check \
-    )
+    poetry run ruff format . {{ if fix != "fix" { "--check" } else { "" } }}
 
 
 # Type Checking
@@ -80,33 +72,21 @@ alias kill := kill-dev
 [group: "dev"]
 bot debug='false':
     @just _kill_port 8001
-    @if "{{debug}}" == "debug" ( \
-        set DEBUG=1&& poetry run python app/main_bot.py \
-    ) else ( \
-        poetry run python app/main_bot.py \
-    )
+    {{ if debug == "debug" { "set DEBUG=1&& " } else { "" } }}poetry run python app/main_bot.py
 
 
 # Run the FastAPI server
 [group: "dev"]
 api debug='false':
     @just _kill_port 8000
-    @if "{{debug}}" == "debug" ( \
-        poetry run uvicorn app.main_api:app --log-level debug \
-    ) else ( \
-        poetry run uvicorn app.main_api:app --log-level info \
-    )
+    poetry run uvicorn app.main_api:app --log-level {{ if debug == "debug" { "debug" } else { "info" } }}
 
 
 # Run the FastHTML frontend
 [group: "dev"]
 ui debug='false':
     @just _kill_port 5001
-    @if "{{debug}}" == "debug" ( \
-        set DEBUG=1&& poetry run python app/main_ui.py \
-    ) else ( \
-        poetry run python app/main_ui.py \
-    )
+    {{ if debug == "debug" { "set DEBUG=1&& " } else { "" } }}poetry run python app/main_ui.py
 
 
 # Upgrade the database to the latest version
@@ -124,11 +104,7 @@ db-revision message:
 # Run tests. Usage: just test [type] (type: unit, integration, or empty for all)
 [group: "qa"]
 test type="":
-    @if "{{type}}" == "" ( \
-        poetry run pytest tests \
-    ) else ( \
-        poetry run pytest tests -m {{type}} \
-    )
+    poetry run pytest tests {{ if type != "" { "-m " + type } else { "" } }}
 
 
 # Run tests and generate coverage report
@@ -146,11 +122,7 @@ alias db-connect := postgres
 
 # A recipe to show the startup message for the dev environment
 _dev_message debug='false':
-    @if "{{debug}}" == "debug" ( \
-        echo "Powercord is running in DEBUG mode! Please wait ~1 minute for all services to start.  Use Ctrl+C to exit." \
-    ) else ( \
-        echo "Powercord is starting! Please wait ~1 minute for all services to start.  Use Ctrl+C to exit." \
-    )
+    @echo "Powercord is {{ if debug == "debug" { "running in DEBUG mode" } else { "starting" } }}! Please wait ~1 minute for all services to start.  Use Ctrl+C to exit."
 
 
 # Run Powercord stack locally.
@@ -256,3 +228,46 @@ db-export file="powercord-export.sql":
 [group: "db"]
 db-import file:
     poetry run python app/db/db_tools.py import "{{file}}"
+
+
+# =========================================================================
+# Deployment
+# =========================================================================
+
+gcp_instance := "powercord-instance"
+gcp_zone := "us-central1-a"
+gcp_image_family := "powercord-app"
+gcp_machine_type := "e2-small"
+gcp_disk_name := "powercord-data-disk"
+
+# Build the Powercord Docker image and push to GCP Artifact Registry
+[group: "deploy"]
+gcp-build:
+    gcloud builds submit --config cloudbuild.yaml .
+
+# First time GCP instance creation (attaches persistent disk)
+[group: "deploy"]
+[confirm("Are you sure you want to deploy the FIRST TIME and create a new instance?")]
+gcp-deploy-first-time:
+    gcloud compute instances create {{gcp_instance}} \
+      --zone={{gcp_zone}} \
+      --image-family={{gcp_image_family}} \
+      --machine-type={{gcp_machine_type}} \
+      --scopes=cloud-platform \
+      --tags=http-server \
+      --metadata GCE_ENV_TYPE=PROD \
+      --disk=name={{gcp_disk_name}},auto-delete=no,boot=no
+
+# Redeploy to GCP by deleting the current instance and recreating it
+[group: "deploy"]
+[confirm("Are you sure you want to REDEPLOY by deleting and recreating the current instance?")]
+gcp-redeploy:
+    gcloud compute instances delete {{gcp_instance}} --zone={{gcp_zone}} --keep-disks=boot --quiet
+    gcloud compute instances create {{gcp_instance}} \
+      --zone={{gcp_zone}} \
+      --image-family={{gcp_image_family}} \
+      --machine-type={{gcp_machine_type}} \
+      --scopes=cloud-platform \
+      --tags=http-server \
+      --metadata GCE_ENV_TYPE=PROD \
+      --disk=name={{gcp_disk_name}},auto-delete=no,boot=no
