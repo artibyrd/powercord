@@ -136,7 +136,9 @@ Spins up the full stack in Docker containers.
 
 ---
 
-## 7. Import Legacy MIDI Data (Optional)
+## 7. Legacy Migrations (Optional)
+
+### 7.1. Import Legacy MIDI Data
 
 If you have a legacy MIDI database SQL dump:
 
@@ -146,6 +148,19 @@ just midi-migrate <path_to_dump.sql>
 
 This recipe is provided by the `midi_library` extension's own justfile
 and is automatically available after installation.
+
+### 7.2. Migrating Legacy API Keys (V2 to V3)
+
+If you have an existing application using the older V2 of Powercord (e.g., `bards-guild-midi-project-2`), its legacy API keys are not automatically supported in the new V3 database. You will need to explicitly register the existing key string so that existing integrations won't break.
+
+Execute the `manage_api_keys.py` script and pass the explicit legacy exact key using the `--key` flag:
+
+```bash
+# Example syntax using your exact legacy string
+python app/db/manage_api_keys.py add "Legacy V2 App" --scopes '["global"]' --key "your-legacy-key-string-here"
+```
+
+This bypasses the internal secure generation and uses your specified key, ensuring existing API-consuming clients continue to work seamlessly.
 
 ---
 

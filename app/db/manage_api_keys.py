@@ -17,7 +17,7 @@ from app.db.models import ApiKey
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
-def add_api_key(name: str, scopes: str):
+def add_api_key(name: str, scopes: str, specific_key: str | None = None):
     engine = init_connection_engine()
     with Session(engine) as session:
         # Check if name exists
@@ -26,7 +26,7 @@ def add_api_key(name: str, scopes: str):
             logging.error(f"API Key with name '{name}' already exists.")
             sys.exit(1)
 
-        new_key = f"pc_{secrets.token_urlsafe(32)}"
+        new_key = specific_key if specific_key else f"pc_{secrets.token_urlsafe(32)}"
         api_key = ApiKey(key=new_key, name=name, scopes=scopes, is_active=True)
         session.add(api_key)
         session.commit()
@@ -78,6 +78,12 @@ if __name__ == "__main__":
         default='["global"]',
         help="JSON string list of scopes, e.g. '[\"global\"]' or '[\"example\"]'",
     )
+    add_parser.add_argument(
+        "--key",
+        type=str,
+        default=None,
+        help="Specific exact key to insert (useful for migrating existing legacy keys). If omitted, a secure key is generated.",
+    )
 
     # REVOKE
     revoke_parser = subparsers.add_parser("revoke", help="Revoke an existing API Key")
@@ -89,7 +95,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.action == "add":
-        add_api_key(args.name, args.scopes)
+        add_api_key(args.name, args.scopes, args.key)
     elif args.action == "revoke":
         revoke_api_key(args.id)
     elif args.action == "list":
