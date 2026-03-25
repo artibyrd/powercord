@@ -252,9 +252,13 @@ just db-import <filename.sql>
 > **Migrating between environments**: The `just dev` (Local) and `just run` (Containerized) environments use two completely different Postgres databases. If you wish to migrate your local data into the Docker container, run `just db-export my-local-db.sql` while the local environment is active, then terminate it. Start the containerized app with `just run`, let the blank database initialize, and run `just db-import my-local-db.sql` in a new terminal window to migrate your data!
 
 ## Further Reading
-- [Google Cloud Platform Deployment Guide](docs/GCP.md)
-- [About Powercord Cog Hotloading](docs/cogs.md)
-- [Database Documentation](docs/db.md)
+- **[Fresh Setup Guide](docs/SETUP.md)** - Instructions on how to clone, install extensions, and run Powercord from scratch.
+- **[Google Cloud Platform Deployment Guide](docs/GCP.md)** - Guide for deploying the Powercord framework to a GCP virtual machine.
+- **[About Powercord Cog Hotloading](docs/cogs.md)** - Details on the dynamic hotloading and unloading of Discord cogs.
+- **[Database Documentation](docs/db.md)** - Reference for database management, models, and migrations.
+- **[Core Utilities Documentation](docs/utilities.md)** - Overview of reusable components available across the API, Bot, and UI layers.
+- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing guide covering execution, coverage targets, and test organization.
+- **[Swagger UI Styling Guide](docs/swagger_styling.md)** - Information on customizing the Swagger API docs with dark themes and CSS overrides.
 
 ## LLMS Files
 Included are LLMS files for [FastHTML](docs/llms/fasthtml-llms.txt) and [Pydantic](docs/llms/pydantic-llms.txt), to give large language models better introspection for more useful code assist.
