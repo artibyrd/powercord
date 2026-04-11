@@ -241,40 +241,32 @@ db-import file:
 # Deployment
 # =========================================================================
 
-gcp_instance := "powercord-instance"
-gcp_zone := "us-central1-a"
-gcp_image_family := "powercord-app"
-gcp_machine_type := "e2-small"
-gcp_disk_name := "powercord-data-disk"
+gcp_project := `gcloud config get-value project`
+gcp_bucket := gcp_project + "-tf-state"
 
-# Build the Powercord Docker image and push to GCP Artifact Registry
+# Run terraform init
+[group: "deploy"]
+tf-init:
+    cd terraform && terraform init -backend-config=bucket={{gcp_bucket}}
+
+# Run terraform plan
+[group: "deploy"]
+tf-plan:
+    cd terraform && terraform plan
+
+# Apply infrastructure changes
+[group: "deploy"]
+[confirm("Are you sure you want to apply Terraform changes to your infrastructure?")]
+tf-apply:
+    cd terraform && terraform apply
+
+# Destroy infrastructure
+[group: "deploy"]
+[confirm("Are you absolutely sure you want to DESTROY all Terraform infrastructure? This process cannot be reversed!")]
+tf-destroy:
+    cd terraform && terraform destroy
+
+# Build the Powercord Docker image and trigger the CI deployment pipeline
 [group: "deploy"]
 gcp-build:
     gcloud builds submit --config cloudbuild.yaml .
-
-# First time GCP instance creation (attaches persistent disk)
-[group: "deploy"]
-[confirm("Are you sure you want to deploy the FIRST TIME and create a new instance?")]
-gcp-deploy-first-time:
-    gcloud compute instances create {{gcp_instance}} \
-      --zone={{gcp_zone}} \
-      --image-family={{gcp_image_family}} \
-      --machine-type={{gcp_machine_type}} \
-      --scopes=cloud-platform \
-      --tags=http-server \
-      --metadata GCE_ENV_TYPE=PROD \
-      --disk=name={{gcp_disk_name}},auto-delete=no,boot=no
-
-# Redeploy to GCP by deleting the current instance and recreating it
-[group: "deploy"]
-[confirm("Are you sure you want to REDEPLOY by deleting and recreating the current instance?")]
-gcp-redeploy:
-    gcloud compute instances delete {{gcp_instance}} --zone={{gcp_zone}} --keep-disks=boot --quiet
-    gcloud compute instances create {{gcp_instance}} \
-      --zone={{gcp_zone}} \
-      --image-family={{gcp_image_family}} \
-      --machine-type={{gcp_machine_type}} \
-      --scopes=cloud-platform \
-      --tags=http-server \
-      --metadata GCE_ENV_TYPE=PROD \
-      --disk=name={{gcp_disk_name}},auto-delete=no,boot=no

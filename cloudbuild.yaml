@@ -33,16 +33,24 @@ steps:
         "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA",
       ]
 
-  # 3. Build the GCE VM image with Packer
-  - name: "gcr.io/cloud-builders/packer"
-    id: "Build VM Image"
+  # 3. Initialize Terraform
+  - name: "hashicorp/terraform:latest"
+    id: "Terraform Init"
+    dir: "terraform"
     args:
-      - "build"
-      - "-var"
-      - "project_id=${PROJECT_ID}"
-      - "-var"
-      - "docker_image=us-central1-docker.pkg.dev/${PROJECT_ID}/powercord/powercord-app:${SHORT_SHA}"
-      - "packer.pkr.hcl"
+      - "init"
+      - "-backend-config=bucket=${PROJECT_ID}-tf-state"
+
+  # 4. Apply Terraform Infrastructure
+  - name: "hashicorp/terraform:latest"
+    id: "Terraform Apply"
+    dir: "terraform"
+    env:
+      - "TF_VAR_project_id=${PROJECT_ID}"
+      - "TF_VAR_docker_image=us-central1-docker.pkg.dev/${PROJECT_ID}/powercord/powercord-app:${SHORT_SHA}"
+    args:
+      - "apply"
+      - "-auto-approve"
 
 images:
   - "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA"
