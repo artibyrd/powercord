@@ -17,14 +17,28 @@ from app.db import models  # noqa: F401
 # Dynamically import all installed extension blueprints so Alembic's
 # autogenerate can detect their SQLModel tables.  Only extensions that
 # are currently installed under app/extensions/ will be picked up.
+# We also automatically mount any extension's isolated alembic/versions
+# folder to facilitate localized decoupled schema migrations.
+import os
+
 _extensions_dir = Path(__file__).resolve().parents[1] / "app" / "extensions"
+_version_locations = [str(Path(__file__).resolve().parent / "versions")]
+
 for _ext_path in sorted(_extensions_dir.iterdir()):
-    if _ext_path.is_dir() and (_ext_path / "blueprint.py").exists():
-        importlib.import_module(f"app.extensions.{_ext_path.name}.blueprint")
+    if _ext_path.is_dir():
+        if (_ext_path / "blueprint.py").exists():
+            importlib.import_module(f"app.extensions.{_ext_path.name}.blueprint")
+        
+        _ext_versions = _ext_path / "alembic" / "versions"
+        if _ext_versions.exists():
+            _version_locations.append(str(_ext_versions))
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Inject dynamic version locations for proper extension migration discovery
+config.set_main_option("version_locations", os.pathsep.join(_version_locations))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

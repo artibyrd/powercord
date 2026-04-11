@@ -168,6 +168,8 @@ Each extension includes an `extension.json` file declaring its metadata:
 **Key Flags:**
 - `internal`: Tells the Extension Manager that this extension is shipped with the framework itself and should not be uninstalled.
 - `global_only`: Hides the extension from individual Server (Guild) Dashboards, making its widgets configurable only from the Global Admin Dashboard.
+- `has_migrations`: Identifies if the extension utilizes decoupled database tables.
+- `latest_migration_version`: If `has_migrations` is true, this declares the specific independent `alembic` revision hash (e.g. `honey0001`) that models your tables. Powercord's multibase discovery natively detects isolated `alembic/versions` directories hosted inside your extension, ensuring schema decoupling.
 
 > [!NOTE]
 > Installing or uninstalling extensions that add Python packages or database tables requires rebuilding the Docker image and redeploying for production use.

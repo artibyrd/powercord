@@ -41,7 +41,9 @@ just db-connect
 
 - **Models**: Defined in `app/db/models.py`.
 - **Connection**: Managed in `app/common/alchemy.py`.
-- **Migrations**: Stored in `alembic/versions/`.
+- **Migrations**: 
+  - **Core Migrations**: Stored in the root `alembic/versions/`. This tracks essential framework tables (users, roles, API security models).
+  - **Extension Migrations**: Stored fully independently inside each extension's structure (e.g., `app/extensions/<name>/alembic/versions/`). The system relies on dynamically parsing multibase branches during execution, maintaining 100% decoupled schema isolation where plugins can be dropped seamlessly without creating entangled histories.
 
 ## Core Tables
 

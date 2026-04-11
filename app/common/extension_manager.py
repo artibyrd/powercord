@@ -218,9 +218,10 @@ def install_extension(source_path: str | Path) -> None:
             print(f"  🗄️  Skipped database migrations (latest_migration_version '{new_migration_version}' unchanged).")
         else:
             print("  🗄️  Running database migrations...")
+            target_rev = new_migration_version if new_migration_version else "head"
             try:
                 subprocess.run(  # noqa: S603
-                    [_POETRY_CMD, "run", "alembic", "upgrade", "head"],  # noqa: S607
+                    [_POETRY_CMD, "run", "alembic", "upgrade", target_rev],  # noqa: S607
                     check=True,
                     cwd=str(EXTENSIONS_DIR.parents[1]),
                 )
@@ -331,11 +332,22 @@ def uninstall_extension(name: str) -> None:
         shutil.rmtree(test_dest)
         print(f"  ✅ Removed tests from {test_dest}")
 
-    # 4. Warn about orphaned database tables
+    # 4. Warn about orphaned database tables and clean up alembic_version
     if manifest.get("has_migrations", False):
         print(f"  ⚠️  Extension '{name}' had database tables.")
         print("     These tables still exist in your database.")
         print("     To fully clean up, manually drop the tables or create a down-migration.")
+        old_migration_version = manifest.get("latest_migration_version", None)
+        if old_migration_version:
+            try:
+                from sqlalchemy import text
+                from app.common.alchemy import init_connection_engine
+                engine = init_connection_engine()
+                with engine.begin() as conn:
+                    conn.execute(text(f"DELETE FROM alembic_version WHERE version_num = '{old_migration_version}'"))
+                print(f"  ✅ Cleared revision {old_migration_version} from database history.")
+            except Exception as e:
+                print(f"  ⚠️  Failed to clear revision history: {e}")
 
     if failed_deps:
         print(f"\n⚠️  Extension '{name}' uninstalled with warnings (some deps remain).")
