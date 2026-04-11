@@ -12,11 +12,3 @@ class TodoItem(SQLModel, table=True):
     user_id: str  # Discord User ID
 
 
-# Create the table if it doesn't exist
-# Note: In a production app, use Alembic migrations.
-# This is a shortcut for the example extension to ensure it works out of the box.
-try:
-    engine = init_connection_engine()
-    SQLModel.metadata.create_all(engine)
-except Exception as e:
-    print(f"Warning: Could not create tables for example extension: {e}")

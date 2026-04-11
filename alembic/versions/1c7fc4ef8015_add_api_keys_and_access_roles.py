@@ -34,7 +34,10 @@ def upgrade() -> None:
     # op.drop_table("midifile")
     # op.drop_index(op.f("ix_honeypot_settings_guild_id"), table_name="honeypot_settings")
     # op.drop_table("honeypot_settings")
-    op.drop_table("hero")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if "hero" in inspector.get_table_names():
+        op.drop_table("hero")
     # ### end Alembic commands ###
 
 
