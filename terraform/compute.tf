@@ -1,4 +1,4 @@
-resource "google_compute_instance" "app" {
+resource "google_compute_instance" "main" {
   name         = "powercord-instance"
   machine_type = "e2-small"
   zone         = var.zone
@@ -12,7 +12,7 @@ resource "google_compute_instance" "app" {
   }
 
   attached_disk {
-    source      = google_compute_disk.data_disk.id
+    source      = google_compute_disk.main.id
     device_name = "powercord-data-disk"
   }
 
@@ -38,8 +38,8 @@ resource "google_compute_instance" "app" {
             image = var.docker_image
             volumeMounts = [
               {
-                name      = "data-disk",
-                mountPath = "/var/lib/postgresql/data",
+                name      = "data-disk"
+                mountPath = "/var/lib/postgresql/data"
                 readOnly  = false
               }
             ]
@@ -61,10 +61,7 @@ resource "google_compute_instance" "app" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [metadata["gce-container-declaration"]] # Handled dynamically unless updated via explicit apply
-    # Wait, actually we *want* it to update if var.docker_image changes!
-    # So we should NOT ignore changes here, because we want terraform to rollout the new container.
   }
 
-  depends_on = [google_project_service.enabled_apis]
+  depends_on = [google_project_service.main]
 }

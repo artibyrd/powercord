@@ -1,4 +1,4 @@
-resource "google_compute_disk" "data_disk" {
+resource "google_compute_disk" "main" {
   name    = "powercord-data-disk"
   type    = "pd-standard"
   zone    = var.zone
@@ -9,5 +9,5 @@ resource "google_compute_disk" "data_disk" {
     prevent_destroy = true
   }
 
-  depends_on = [google_project_service.enabled_apis]
+  depends_on = [google_project_service.main]
 }

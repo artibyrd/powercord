@@ -2,7 +2,7 @@ resource "google_service_account" "compute_sa" {
   account_id   = "powercord-compute-sa"
   display_name = "Service Account for Powercord Compute Instance"
   project      = var.project_id
-  depends_on   = [google_project_service.enabled_apis]
+  depends_on   = [google_project_service.main]
 }
 
 resource "google_project_iam_member" "compute_secret_accessor" {
