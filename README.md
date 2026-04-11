@@ -261,7 +261,7 @@ just db-import <filename.sql>
 - **[Swagger UI Styling Guide](docs/swagger_styling.md)** - Information on customizing the Swagger API docs with dark themes and CSS overrides.
 
 ## LLMS Files
-Included are LLMS files for [FastHTML](docs/llms/fasthtml-llms.txt) and [Pydantic](docs/llms/pydantic-llms.txt), to give large language models better introspection for more useful code assist.
+Included are LLMS files for [Discord](docs/llms/discord-llms.txt), [FastHTML](docs/llms/fasthtml-llms.txt), and [Pydantic](docs/llms/pydantic-llms.txt), to give large language models better introspection for more useful code assist.
 
 
 ## Utilities Extension

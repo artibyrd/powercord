@@ -6,12 +6,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from rich.logging import RichHandler
 
 import app as powercord
 
 powercord.setup_logging()
-logging.getLogger().addHandler(RichHandler(rich_tracebacks=True))
 
 
 import app.common.gsm_loader as gsecrets

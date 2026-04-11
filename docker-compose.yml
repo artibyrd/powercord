@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "5001:80"
     volumes:
       # This named volume persists the PostgreSQL data across container restarts
       - postgres_data:/var/lib/postgresql/data
