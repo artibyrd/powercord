@@ -41,6 +41,26 @@ EXTENSIONS_DIR = Path(__file__).resolve().parents[1] / "extensions"
 # Tests are placed here so they share the framework's conftest fixtures.
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests" / "extensions"
 
+def _update_alembic_ini() -> None:
+    """Dynamically reconstructs version_locations in alembic.ini based on active extensions."""
+    ini_path = EXTENSIONS_DIR.parents[1] / "alembic.ini"
+    if not ini_path.exists():
+        return
+    import configparser
+    config = configparser.ConfigParser()
+    config.read(ini_path)
+    
+    paths = ["%(here)s/alembic/versions"]
+    for d in EXTENSIONS_DIR.iterdir():
+        if d.is_dir() and (d / "alembic" / "versions").exists():
+            paths.append(f"%(here)s/app/extensions/{d.name}/alembic/versions")
+    
+    if "alembic" not in config.sections():
+        config.add_section("alembic")
+    
+    config.set("alembic", "version_locations", " ".join(paths))
+    with open(ini_path, "w", encoding="utf-8") as configfile:
+        config.write(configfile)
 
 # ── Package name helpers ──────────────────────────────────────────────
 
@@ -219,6 +239,7 @@ def install_extension(source_path: str | Path) -> None:
         else:
             print("  🗄️  Running database migrations...")
             target_rev = new_migration_version if new_migration_version else "head"
+            _update_alembic_ini()
             try:
                 subprocess.run(  # noqa: S603
                     [_POETRY_CMD, "run", "alembic", "upgrade", target_rev],  # noqa: S607
@@ -325,6 +346,7 @@ def uninstall_extension(name: str) -> None:
     # 3. Remove extension directory
     shutil.rmtree(dest)
     print(f"  ✅ Removed {dest}")
+    _update_alembic_ini()
 
     # 3b. Remove extension tests from the framework test directory
     test_dest = TESTS_DIR / name

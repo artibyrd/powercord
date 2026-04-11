@@ -34,7 +34,7 @@ if [ -z "$(ls -A $PGDATA_DIR)" ]; then
     fi
 
     echo "Running Alembic migrations..."
-    alembic upgrade head
+    alembic upgrade heads
 
     echo "Database initialized."
 

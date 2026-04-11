@@ -1,4 +1,4 @@
-""""initial_core"
+"""initial_core
 
 Revision ID: 4d30ec975899
 Revises: 
@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+import sqlmodel
 
 
 # revision identifiers, used by Alembic.
