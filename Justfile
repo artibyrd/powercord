@@ -243,28 +243,29 @@ db-import file:
 
 gcp_project := `gcloud config get-value project`
 gcp_bucket := gcp_project + "-tf-state"
+gcp_default_image := "us-central1-docker.pkg.dev/" + gcp_project + "/powercord/powercord-app:latest"
 
-# Run terraform init
+# Run terraform init locally
 [group: "deploy"]
 tf-init:
-    cd terraform && terraform init -backend-config=bucket={{gcp_bucket}}
+    cd terraform && terraform init -backend-config="bucket={{gcp_bucket}}"
 
-# Run terraform plan
+# Run terraform plan locally
 [group: "deploy"]
-tf-plan:
-    cd terraform && terraform plan
+tf-plan docker_image=gcp_default_image:
+    cd terraform && terraform plan -var="project_id={{gcp_project}}" -var="docker_image={{docker_image}}"
 
-# Apply infrastructure changes
+# Apply infrastructure changes locally
 [group: "deploy"]
-[confirm("Are you sure you want to apply Terraform changes to your infrastructure?")]
-tf-apply:
-    cd terraform && terraform apply
+[confirm("Are you sure you want to manually apply Terraform changes locally?")]
+tf-apply docker_image=gcp_default_image:
+    cd terraform && terraform apply -var="project_id={{gcp_project}}" -var="docker_image={{docker_image}}"
 
 # Destroy infrastructure
 [group: "deploy"]
 [confirm("Are you absolutely sure you want to DESTROY all Terraform infrastructure? This process cannot be reversed!")]
-tf-destroy:
-    cd terraform && terraform destroy
+tf-destroy docker_image=gcp_default_image:
+    cd terraform && terraform destroy -var="project_id={{gcp_project}}" -var="docker_image={{docker_image}}"
 
 # Build the Powercord Docker image and trigger the CI deployment pipeline
 [group: "deploy"]
