@@ -11,4 +11,7 @@ class TodoItem(SQLModel, table=True):
     is_completed: bool = Field(default=False)
     user_id: str  # Discord User ID
 
-
+try:
+    engine = init_connection_engine()
+except Exception as e:
+    print(f"Warning: Could not initialize engine for example extension: {e}")
