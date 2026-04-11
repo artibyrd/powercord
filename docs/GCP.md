@@ -130,6 +130,9 @@ echo -n "your_discord_client_secret_here" | gcloud secrets create DISCORD_CLIENT
 # Session Key (Generate a random secure string for UI cookies)
 echo -n "your_random_secure_session_key" | gcloud secrets create SESSION_KEY --replication-policy="automatic" --data-file=-
 
+# Initial Admin Discord User ID (Auto-provisioned on startup)
+echo -n "your_discord_user_id_here" | gcloud secrets create INITIAL_ADMIN_DISCORD_ID --replication-policy="automatic" --data-file=-
+
 # Base URL (e.g., http://<your-instance-external-ip> or your domain name)
 echo -n "http://your_domain_or_ip" | gcloud secrets create BASE_URL --replication-policy="automatic" --data-file=-
 ```

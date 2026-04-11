@@ -150,6 +150,13 @@ run:
     docker compose up --build
 
 
+# Run Powercord locally(containerized) and reset database volume
+[group: "dev"]
+run-clean:
+    docker compose down -v
+    docker compose up --build
+
+
 # Run verification tests for the new dashboard features
 [group: "qa"]
 verify-dashboard:

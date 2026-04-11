@@ -128,11 +128,20 @@ just run
 ```
 Spins up the full stack in Docker containers.
 
+> [!TIP]
+> If you ever need to wipe the Docker database completely clean and start fresh, use:
+> ```bash
+> just run-clean
+> ```
+
 > [!IMPORTANT]
-> The Docker environment uses a **separate** PostgreSQL database.
-> You'll need to run `just db-upgrade` and `just add-admin` inside the
-> container on first run. Use `just db-export` / `just db-import` to
-> migrate data between environments.
+> The Docker environment uses a **separate** PostgreSQL database, but it automatically runs database migrations on startup.
+> **To add your initial global admin:** Simply set `INITIAL_ADMIN_DISCORD_ID=your_id` in your `.env` file before running the container! It will auto-provision on startup.
+> Alternatively, while the container is actively running:
+> ```bash
+> docker compose exec app python app/db/add_admin.py <YOUR_DISCORD_USER_ID> --comment "Initial Admin"
+> ```
+> Use `just db-export` / `just db-import` locally to migrate data between environments.
 
 ---
 

@@ -20,6 +20,16 @@ gsecrets.load_env()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Auto-provision initial admin from environment if specified
+    initial_admin_id = os.environ.get("INITIAL_ADMIN_DISCORD_ID")
+    if initial_admin_id:
+        try:
+            from app.db.add_admin import add_admin
+            add_admin(int(initial_admin_id), comment="Auto-provisioned via INITIAL_ADMIN_DISCORD_ID ENV on startup")
+            logging.info(f"Auto-provisioned {initial_admin_id} as a dashboard admin.")
+        except ValueError:
+            logging.error(f"Invalid INITIAL_ADMIN_DISCORD_ID: {initial_admin_id}. Must be an integer.")
+
     gadget_inspector = GadgetInspector()
     gadget_inspector.load_sprockets(app)
     yield
