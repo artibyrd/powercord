@@ -303,7 +303,7 @@ _tf-init:
 [group: "deploy"]
 [arg("docker_image", long)]
 tf-plan docker_image=gcp_default_image:
-    just _run-with-status _tf-plan "{{docker_image}}"
+    just _run-with-status _tf-plan {{docker_image}}
 
 [private]
 _tf-plan docker_image:
