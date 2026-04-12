@@ -129,6 +129,21 @@ run-clean:
     docker compose down -v
     docker compose up --build
 
+# Clone the framework into a new downstream destination and disable upstream push
+[group: "dev"]
+init-target target_dir:
+    @echo "Cloning core framework downstream securely..."
+    git clone . "{{target_dir}}"
+    git -C "{{target_dir}}" remote set-url --push origin DISABLED
+    @echo "Target initialized. Pull upstream framework updates via 'git pull origin main' inside the target."
+
+# Rebuild containerized environment with a fresh database volume
+[group: "dev"]
+rebuild-target:
+    docker compose down -v
+    docker compose up -d --build
+    @echo "Target core rebuilt. You can now execute 'just ext-install' workflows safely."
+
 # ---------------------------------------------------------------------------- #
 #                                 QA COMMANDS                                  #
 # ---------------------------------------------------------------------------- #
@@ -312,3 +327,4 @@ tf-destroy docker_image=gcp_default_image:
 [group: "deploy"]
 gcp-build:
     gcloud builds submit --config cloudbuild.yaml .
+
