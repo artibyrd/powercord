@@ -42,7 +42,7 @@ def init_connection_engine():
 
 def get_database_url():
     """Constructs the database URL from environment variables."""
-    db_host = os.environ.get("DB_HOST")
+    db_host = os.environ.get("POWERCORD_DB_HOST")
     if not db_host:
         logging.error("DB_HOST environment variable is missing or empty.")
         raise ValueError("DB_HOST environment variable is missing or empty.")
@@ -55,11 +55,11 @@ def get_database_url():
     db_hostname, db_port = host_args[0], int(host_args[1])
     return sqlalchemy.engine.URL.create(
         drivername="postgresql+pg8000",
-        username=os.environ.get("POSTGRES_USER"),
-        password=os.environ.get("POSTGRES_PASSWORD"),
+        username=os.environ.get("POWERCORD_POSTGRES_USER"),
+        password=os.environ.get("POWERCORD_POSTGRES_PASSWORD"),
         host=db_hostname,
         port=db_port,
-        database=os.environ.get("POSTGRES_DB"),
+        database=os.environ.get("POWERCORD_POSTGRES_DB"),
     )
 
 

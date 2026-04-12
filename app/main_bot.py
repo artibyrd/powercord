@@ -160,7 +160,7 @@ for cog_name in bot.cog_report.get("all_cogs", []):
 
 
 if __name__ == "__main__":
-    token = os.getenv("DISCORD_TOKEN")
+    token = os.getenv("POWERCORD_DISCORD_TOKEN")
     if not token:
         logging.error("DISCORD_TOKEN environment variable not set.")
         exit(1)

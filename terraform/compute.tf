@@ -17,7 +17,8 @@ resource "google_compute_instance" "main" {
   }
 
   network_interface {
-    network = "default"
+    network    = "default"
+    subnetwork = "default"
     access_config {
       // Ephemeral public IP
     }

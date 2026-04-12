@@ -24,13 +24,17 @@ if [ -z "$(ls -A $PGDATA_DIR)" ]; then
     sleep 5
 
     # Create user and database from environment variables
-    su - postgres -c "psql -c \"CREATE USER ${POSTGRES_USER} WITH PASSWORD '${POSTGRES_PASSWORD}';\""
-    su - postgres -c "psql -c \"CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER};\""
+    su - postgres -c "psql -c \"CREATE USER ${POWERCORD_POSTGRES_USER} WITH PASSWORD '${POWERCORD_POSTGRES_PASSWORD}';\""
+    su - postgres -c "psql -c \"CREATE DATABASE ${POWERCORD_POSTGRES_DB} OWNER ${POWERCORD_POSTGRES_USER};\""
+
+    # Configure postgres to allow external connections
+    su - postgres -c "echo 'host all all 0.0.0.0/0 password' >> $PGDATA_DIR/pg_hba.conf"
+    su - postgres -c "echo \"listen_addresses = '*'\" >> $PGDATA_DIR/postgresql.conf"
 
     # Run initialization scripts if they exist
     if [ -f /db/init.sql ]; then
         echo "Running database initialization script /db/init.sql..."
-        su - postgres -c "psql -v ON_ERROR_STOP=1 --dbname \"${POSTGRES_DB}\" -f /db/init.sql"
+        su - postgres -c "psql -v ON_ERROR_STOP=1 --dbname \"${POWERCORD_POSTGRES_DB}\" -f /db/init.sql"
     fi
 
     echo "Running Alembic migrations..."

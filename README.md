@@ -93,13 +93,13 @@ Powercord provides two primary methods for running the application locally: Loca
 
 #### Local Development (`just dev`)
 Running `just dev` starts each of the application components (Bot, API, UI) directly on your host machine.
-- **Database**: Connects to the host machine's local PostgreSQL instance (typically `localhost:5432`).
+- **Database**: Connects to the host machine's local PostgreSQL instance (typically `localhost:5433`).
 - **Use Case**: Best for rapid development, testing, and debugging.
 - **System Restarts**: The system restart buttons in the Admin Dashboard rely on an external process manager to restart the services gracefully. When running `just dev` without containerization, terminating a component will stop it, but not automatically restart it. To fully test restart functionality, use `just run`.
 
 #### Containerized Development (`just run`)
 Running `just run` spins up the entire application stack inside Docker containers using Docker Compose.
-- **Database**: Uses a dedicated Docker-managed volume (`postgres_data`). This database is completely separate from your host machine's local database.
+- **Database**: Uses a dedicated Docker-managed volume (`postgres_data`). This database is completely separate from your host machine's local database. It is exposed to the host machine on port `5433` so that local CLI commands (like `just db-upgrade`) function seamlessly using the `.env` file, while internal Dockerized applications securely resolve to the native `5432` port via an environment override.
   - *Note*: If you run `just run` for the first time, the Docker database will be empty. You will need to run the database migrations and manually add your user as an admin again inside the container environment.
 - **Shared Sessions**: Because both `just dev` and `just run` use the same local `.env` file (which contains your `SESSION_KEY`), your browser session cookies remain valid across both environments. If you login during `just dev` and then switch to `just run`, the UI will still recognize your session, but since the Docker database is empty, your admin permissions will be revoked and you'll be redirected to your profile until you add yourself as an admin to the container's database.
 

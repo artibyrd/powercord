@@ -341,7 +341,7 @@ async def start_bot_api(bot):
     """Starts the internal FastAPI server."""
     set_bot_instance(bot)
 
-    port = int(os.getenv("BOT_API_PORT", 8001))
+    port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
     # Force localhost to avoid Windows firewall issues and listen on the loopback interface
     host = "127.0.0.1"
 

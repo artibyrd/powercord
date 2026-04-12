@@ -90,7 +90,7 @@ hdrs = (
 from starlette.staticfiles import StaticFiles
 
 app, rt = fast_app(
-    secret_key=os.getenv("SESSION_KEY"),
+    secret_key=os.getenv("POWERCORD_SESSION_KEY"),
     before=beforeware,
     hdrs=hdrs,
     htmlkw={"data-theme": "synthwave"},

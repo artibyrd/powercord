@@ -7,6 +7,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5001:80"
+      - "5433:5432"
+    environment:
+      - POWERCORD_DB_HOST=localhost:5432
     volumes:
       # This named volume persists the PostgreSQL data across container restarts
       - postgres_data:/var/lib/postgresql/data

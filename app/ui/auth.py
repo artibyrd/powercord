@@ -23,9 +23,9 @@ auth_router = APIRouter()
 
 # Helper to get Discord credentials
 def get_discord_creds():
-    client_id = os.getenv("DISCORD_CLIENT_ID")
-    client_secret = os.getenv("DISCORD_CLIENT_SECRET")
-    bot_token = os.getenv("DISCORD_TOKEN")
+    client_id = os.getenv("POWERCORD_DISCORD_CLIENT_ID")
+    client_secret = os.getenv("POWERCORD_DISCORD_CLIENT_SECRET")
+    bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
     return client_id, client_secret, bot_token
 
 
@@ -88,7 +88,7 @@ def login(req, sess):
         logging.error("DISCORD_CLIENT_ID is not set in environment.")
         return Titled("Error", P("Application configuration error: Missing Client ID."))
 
-    base_url = os.getenv("BASE_URL")
+    base_url = os.getenv("POWERCORD_BASE_URL")
     if base_url:
         redirect_uri = f"{base_url}/auth/discord/callback"
     else:
@@ -170,9 +170,9 @@ async def discord_callback(req, sess, code: str):
     Verifies that the user is an administrator in a guild shared with the bot.
     """
     ADMIN_PERM = 1 << 3  # Administrator permission bit.
-    BOT_TOKEN = os.getenv("DISCORD_TOKEN")
-    CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
-    CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+    BOT_TOKEN = os.getenv("POWERCORD_DISCORD_TOKEN")
+    CLIENT_ID = os.getenv("POWERCORD_DISCORD_CLIENT_ID")
+    CLIENT_SECRET = os.getenv("POWERCORD_DISCORD_CLIENT_SECRET")
 
     if not all([BOT_TOKEN, CLIENT_ID, CLIENT_SECRET]):
         add_toast(sess, "Application is misconfigured (missing Discord credentials).", "error")
@@ -180,7 +180,7 @@ async def discord_callback(req, sess, code: str):
 
     try:
         # The redirect_uri for the token exchange must exactly match the one used to initiate the flow.
-        base_url = os.getenv("BASE_URL")
+        base_url = os.getenv("POWERCORD_BASE_URL")
         if base_url:
             redirect_uri = f"{base_url}/auth/discord/callback"
         else:
@@ -277,9 +277,9 @@ def dev_login(sess):
     automated testing tools (e.g. browser agents) can access /admin.
     """
     # Guard: only allow in development (DEBUG set or running on localhost)
-    base_url = os.getenv("BASE_URL", "http://localhost:5001")
+    base_url = os.getenv("POWERCORD_BASE_URL", "http://localhost:5001")
     is_local = "localhost" in base_url or "127.0.0.1" in base_url
-    if not (os.getenv("DEBUG") or is_local):
+    if not (os.getenv("POWERCORD_DEBUG") or is_local):
         return RedirectResponse("/login", status_code=303)
 
     # Synthetic admin session — no real Discord token

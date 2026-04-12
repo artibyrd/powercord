@@ -20,7 +20,7 @@ steps:
       [
         "build",
         "-t",
-        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$BUILD_ID",
         ".",
       ]
 
@@ -30,7 +30,7 @@ steps:
     args:
       [
         "push",
-        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$BUILD_ID",
       ]
 
   # 3. Initialize Terraform
@@ -47,15 +47,13 @@ steps:
     dir: "terraform"
     env:
       - "TF_VAR_project_id=${PROJECT_ID}"
-      - "TF_VAR_docker_image=us-central1-docker.pkg.dev/${PROJECT_ID}/powercord/powercord-app:${SHORT_SHA}"
+      - "TF_VAR_docker_image=us-central1-docker.pkg.dev/${PROJECT_ID}/powercord/powercord-app:${BUILD_ID}"
     args:
       - "apply"
       - "-auto-approve"
 
 images:
-  - "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$SHORT_SHA"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$BUILD_ID"
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
-serviceAccount: "projects/${PROJECT_ID}/serviceAccounts/cloud-build-packer-sa@${PROJECT_ID}.iam.gserviceaccount.com"

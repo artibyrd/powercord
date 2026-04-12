@@ -94,15 +94,15 @@ def _is_docker_running() -> bool:
 def get_db_credentials():
     """Returns database credentials from the environment."""
     gsm_loader.load_env()
-    host_full = os.environ.get("DB_HOST", "localhost:5432")
+    host_full = os.environ.get("POWERCORD_DB_HOST", "localhost:5432")
     host_parts = host_full.split(":")
     host = host_parts[0]
     port = host_parts[1] if len(host_parts) > 1 else "5432"
 
     return {
-        "user": os.environ.get("POSTGRES_USER", "postgres"),
-        "password": os.environ.get("POSTGRES_PASSWORD", "postgres"),
-        "db": os.environ.get("POSTGRES_DB", "postgres"),
+        "user": os.environ.get("POWERCORD_POSTGRES_USER", "postgres"),
+        "password": os.environ.get("POWERCORD_POSTGRES_PASSWORD", "postgres"),
+        "db": os.environ.get("POWERCORD_POSTGRES_DB", "postgres"),
         "host": host,
         "port": port,
     }

@@ -17,7 +17,7 @@ from app.common.guild_cog import GuildAwareCog
 
 from .blueprint import TodoItem
 
-WEBHOOK_URL = os.environ.get("EXAMPLE_WEBHOOK_URL", "")
+WEBHOOK_URL = os.environ.get("POWERCORD_EXAMPLE_WEBHOOK_URL", "")
 
 
 async def send_to_webhook(url, content):

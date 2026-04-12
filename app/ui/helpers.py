@@ -88,7 +88,7 @@ def remove_dashboard_admin(user_id: int):
 
 async def get_discord_username(user_id: int) -> str:
     """Fetches a Discord username from the API using the bot token."""
-    bot_token = os.getenv("DISCORD_TOKEN")
+    bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
     if not bot_token:
         return "Unknown (No Token)"
 
@@ -310,7 +310,7 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
 async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, dict]:
     """Fetches guilds where the user is an admin or has a DashboardAccessRole and the bot is present."""
     ADMIN_PERM = 1 << 3
-    bot_token = os.getenv("DISCORD_TOKEN")
+    bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
     if not bot_token:
         raise ValueError("DISCORD_TOKEN is not set.")
 
@@ -382,8 +382,8 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
 
 async def notify_api_of_config_change(guild_id: int):
     """Sends a notification to the API to reload its configuration for a specific guild."""
-    api_reload_url = os.getenv("API_RELOAD_URL")
-    api_reload_key = os.getenv("API_RELOAD_KEY")
+    api_reload_url = os.getenv("POWERCORD_API_RELOAD_URL")
+    api_reload_key = os.getenv("POWERCORD_API_RELOAD_KEY")
 
     if not api_reload_url or not api_reload_key:
         logging.warning("API reload URL or key not configured. Skipping notification.")
@@ -402,7 +402,7 @@ async def notify_api_of_config_change(guild_id: int):
 
 async def notify_bot_of_config_change(guild_id: int):
     """Sends a notification to the bot to reload its configuration for a specific guild."""
-    bot_reload_url = os.getenv("BOT_RELOAD_URL", "http://127.0.0.1:8001/config/reload")
+    bot_reload_url = os.getenv("POWERCORD_BOT_RELOAD_URL", "http://127.0.0.1:8001/config/reload")
 
     if not bot_reload_url:
         logging.warning("Bot reload URL or key not configured. Skipping notification.")

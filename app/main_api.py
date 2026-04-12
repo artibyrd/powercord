@@ -21,7 +21,7 @@ gsecrets.load_env()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Auto-provision initial admin from environment if specified
-    initial_admin_id = os.environ.get("INITIAL_ADMIN_DISCORD_ID")
+    initial_admin_id = os.environ.get("POWERCORD_INITIAL_ADMIN_DISCORD_ID")
     if initial_admin_id:
         try:
             from app.db.add_admin import add_admin
