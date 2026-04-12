@@ -30,9 +30,29 @@ We store Terraform state remotely in a Google Cloud Storage bucket. Create the b
 gcloud storage buckets create gs://[YOUR_PROJECT_ID]-tf-state --location=us-central1
 ```
 
-### 1.3. Deploy Infrastructure via Terraform
+### 1.3. Populate Secrets in Secret Manager
 
-Terraform will automatically enable APIs, create your Artifact Registry, provision your Service Accounts, and set up Google Secret Manager for you.
+Powercord securely loads all environment variables directly from Google Secret Manager at runtime. Our Terraform code is now configured to automatically ingest these values from a `.env.prod` file during the deployment plan.
+
+Before running `tf-apply`, make sure to instantiate your production secrets:
+
+1. Copy the template:
+   ```bash
+   cp .env.prod.example .env.prod
+   ```
+2. Open `.env.prod` and carefully fill in your secure strings (ensuring they remain enclosed in quotes). 
+3. When you run `just tf-apply`, Terraform will safely extract these values and automatically instantiate `google_secret_manager_secret_version` components in your GCP project without requiring you to run `gcloud secrets versions add` manually!
+
+### 1.4. Deploy Infrastructure via Terraform (Bootstrap)
+
+Terraform will automatically enable APIs, create your Artifact Registry, provision your Service Accounts, and upload your `.env.prod` secrets.
+
+> [!IMPORTANT]
+> **Bootstrap Requirement (Do not skip)**: You must execute your inaugural `just tf-apply` locally from your machine!
+>
+> You cannot initialize the project by immediately running the `just gcp-build` CI pipeline because of a structural paradox: Cloud Build needs an existing Artifact Registry to store your built Docker image, but your Artifact Registry doesn't exist until Terraform creates it! 
+> 
+> By running `tf-apply` locally first, you securely scaffold all foundational cloud components (including spinning up your Compute VM using a dummy image path). Once the local run succeeds and your Artifact Registry physically exists, the CI pipeline can safely take over subsequent updates.
 
 Run the Just commands to plan and apply the infrastructure:
 
@@ -44,18 +64,6 @@ just tf-apply
 
 _(Note: You will be prompted to confirm the execution before resources are provisioned)._
 
-### 1.4. Populate Secrets in Secret Manager
-
-Powercord securely loads all environment variables directly from Google Secret Manager at runtime. Our Terraform code is now configured to automatically ingest these values from a `.env.prod` file during the deployment plan.
-
-Before running `just tf-apply`, make sure to instantiate your production secrets:
-
-1. Copy the template:
-   ```bash
-   cp .env.prod.example .env.prod
-   ```
-2. Open `.env.prod` and carefully fill in your secure strings (ensuring they remain enclosed in quotes). 
-3. When you run `just tf-apply`, Terraform will safely extract these values and automatically instantiate `google_secret_manager_secret_version` components in your GCP project without requiring you to run `gcloud secrets versions add` manually!
 ---
 
 ## Part 2: Application Updates (CI/CD)
