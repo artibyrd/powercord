@@ -46,18 +46,16 @@ _(Note: You will be prompted to confirm the execution before resources are provi
 
 ### 1.4. Populate Secrets in Secret Manager
 
-Powercord securely loads all environment variables directly from Google Secret Manager at runtime. Our Terraform code created the *structure* for these secrets, but you must define the actual payload values.
+Powercord securely loads all environment variables directly from Google Secret Manager at runtime. Our Terraform code is now configured to automatically ingest these values from a `.env.prod` file during the deployment plan.
 
-For each variable listed in `.example.env`, create a version in Secret Manager using the `gcloud secrets versions add` command.
+Before running `just tf-apply`, make sure to instantiate your production secrets:
 
-Example (Do this for EVERY secret):
-```bash
-echo -n "database_name_here" | gcloud secrets versions add POSTGRES_DB --data-file=-
-echo -n "strong_password_here" | gcloud secrets versions add POSTGRES_PASSWORD --data-file=-
-echo -n "bot_token" | gcloud secrets versions add DISCORD_TOKEN --data-file=-
-# ... continue for all other variables in .example.env
-```
-
+1. Copy the template:
+   ```bash
+   cp .env.prod.example .env.prod
+   ```
+2. Open `.env.prod` and carefully fill in your secure strings (ensuring they remain enclosed in quotes). 
+3. When you run `just tf-apply`, Terraform will safely extract these values and automatically instantiate `google_secret_manager_secret_version` components in your GCP project without requiring you to run `gcloud secrets versions add` manually!
 ---
 
 ## Part 2: Application Updates (CI/CD)
