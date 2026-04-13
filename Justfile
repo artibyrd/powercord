@@ -9,6 +9,8 @@ set export
 set dotenv-load
 set unstable
 
+export PYTHONIOENCODING := "utf8"
+
 
 
 # ---------------------------------------------------------------------------- #
@@ -132,10 +134,11 @@ run-clean:
 # Clone the framework into a new downstream destination and disable upstream push
 [group: "dev"]
 init-target target_dir:
-    @echo "Cloning core framework downstream securely..."
-    git clone . "{{target_dir}}"
-    git -C "{{target_dir}}" remote set-url --push origin DISABLED
-    @echo "Target initialized. Pull upstream framework updates via 'git pull origin main' inside the target."
+    #!powershell
+    Write-Host "Cloning core framework downstream securely..."
+    git clone . '{{target_dir}}'
+    git -C '{{target_dir}}' remote set-url --push origin DISABLED
+    Write-Host "Target initialized. Pull upstream framework updates via 'git pull origin main' inside the target."
 
 # Rebuild containerized environment with a fresh database volume
 [group: "dev"]
