@@ -1,0 +1,9 @@
+# Inherit all standard exclusions from git
+#!include:.gitignore
+
+# EXPLICITLY INCLUDE the production secrets file so Cloud Build can execute Terraform dynamically
+!.env.prod
+
+# Additional Cloud Build specific ignores
+.git/
+.github/
