@@ -16,6 +16,14 @@ just test integration
 just coverage
 ```
 
+## Testing Standalone Extensions
+
+Extensions distributed in separate repositories can run their own test suites independently using the `powercord` framework's centralized testing utility. 
+
+To run extension tests via `just test` within the extension repository, ensure one of the following:
+1. The extension repository is cloned natively as a sibling to the `powercord` core repository.
+2. The `POWERCORD_PATH` environment variable is explicitly set and points to your local `powercord` core repository.
+
 ## Test Organization
 
 Tests are organized by type and live under `tests/`:

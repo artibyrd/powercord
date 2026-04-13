@@ -62,12 +62,12 @@ class TestNormalizePkgName:
 class TestLoadManifest:
     """Tests for the load_manifest() helper."""
 
-    def test_valid_manifest(self, tmp_path: Path) -> None:
+    def test_valid_json_manifest(self, tmp_path: Path) -> None:
         """A well-formed extension.json should load correctly."""
         manifest_data = {
-            "name": "test_ext",
+            "name": "test_ext_json",
             "version": "1.0.0",
-            "description": "A test extension",
+            "description": "A test json extension",
             "python_dependencies": ["some-pkg>=1.0"],
             "discord_permissions": ["manage_channels"],
             "has_migrations": True,
@@ -76,19 +76,43 @@ class TestLoadManifest:
         (tmp_path / "extension.json").write_text(json.dumps(manifest_data))
 
         result = load_manifest(tmp_path)
-        assert result["name"] == "test_ext"
+        assert result["name"] == "test_ext_json"
         assert result["version"] == "1.0.0"
         assert result["python_dependencies"] == ["some-pkg>=1.0"]
         assert result["has_migrations"] is True
 
+    def test_valid_manifest(self, tmp_path: Path) -> None:
+        """A well-formed pyproject.toml should load correctly."""
+        manifest_data = """
+[tool.poetry]
+name = "test_ext"
+version = "1.0.0"
+description = "A test extension"
+
+[tool.poetry.dependencies]
+some-pkg = ">=1.0"
+
+[tool.powercord]
+discord_permissions = ["manage_channels"]
+has_migrations = true
+internal = false
+"""
+        (tmp_path / "pyproject.toml").write_text(manifest_data)
+
+        result = load_manifest(tmp_path)
+        assert result["name"] == "test_ext"
+        assert result["version"] == "1.0.0"
+        assert result["python_dependencies"] == ["some-pkg@>=1.0"]
+        assert result["has_migrations"] is True
+
     def test_missing_manifest_raises(self, tmp_path: Path) -> None:
-        """A directory without extension.json should raise FileNotFoundError."""
-        with pytest.raises(FileNotFoundError, match="No extension.json"):
+        """A directory without pyproject.toml should raise FileNotFoundError."""
+        with pytest.raises(FileNotFoundError, match="No pyproject.toml"):
             load_manifest(tmp_path)
 
     def test_missing_required_keys_raises(self, tmp_path: Path) -> None:
         """A manifest missing 'name' or 'description' should raise ValueError."""
-        (tmp_path / "extension.json").write_text(json.dumps({"version": "1.0.0"}))
+        (tmp_path / "pyproject.toml").write_text('[tool.poetry]\nversion="1.0.0"')
 
         with pytest.raises(ValueError, match="missing required keys"):
             load_manifest(tmp_path)
@@ -105,8 +129,8 @@ class TestGetInstalledExtensions:
         extensions = get_installed_extensions()
         names = [ext["name"] for ext in extensions]
 
-        # At minimum, example and utilities should always be present
-        assert "example" in names
+        # At minimum, custom_content and utilities should always be present
+        assert "custom_content" in names
         assert "utilities" in names
 
     def test_includes_path_key(self) -> None:
@@ -121,7 +145,7 @@ class TestGetInstalledExtensions:
         extensions = get_installed_extensions()
         ext_lookup = {ext["name"]: ext for ext in extensions}
 
-        assert ext_lookup["example"].get("internal") is True
+        assert ext_lookup["custom_content"].get("internal") is True
         assert ext_lookup["utilities"].get("internal") is True
 
 
@@ -137,8 +161,8 @@ class TestInstallExtension:
             install_extension("/nonexistent/path/to/extension")
 
     def test_install_missing_manifest_exits(self, tmp_path: Path) -> None:
-        """Installing an extension without extension.json should raise."""
-        with pytest.raises(FileNotFoundError, match="No extension.json"):
+        """Installing an extension without pyproject.toml should raise."""
+        with pytest.raises(FileNotFoundError, match="No pyproject.toml"):
             install_extension(tmp_path)
 
     @patch("app.common.extension_manager.shutil.copytree")
@@ -147,14 +171,19 @@ class TestInstallExtension:
         self, mock_run: MagicMock, mock_copytree: MagicMock, tmp_path: Path
     ) -> None:
         """Install should copy files and call poetry add for deps."""
-        manifest = {
-            "name": "fake_ext",
-            "version": "1.0.0",
-            "description": "Fake extension for testing",
-            "python_dependencies": ["fake-pkg>=1.0"],
-            "has_migrations": False,
-        }
-        (tmp_path / "extension.json").write_text(json.dumps(manifest))
+        manifest = """
+[tool.poetry]
+name = "fake_ext"
+version = "1.0.0"
+description = "Fake extension for testing"
+
+[tool.poetry.dependencies]
+fake-pkg = ">=1.0"
+
+[tool.powercord]
+has_migrations = false
+"""
+        (tmp_path / "pyproject.toml").write_text(manifest)
 
         dest = EXTENSIONS_DIR / "fake_ext"
         # Make sure target doesn't already exist
@@ -172,9 +201,9 @@ class TestInstallExtension:
 
     def test_install_already_installed_exits(self) -> None:
         """Installing an already-present extension should sys.exit."""
-        # 'example' is always installed
+        # 'utilities' is always installed
         with pytest.raises(SystemExit):
-            install_extension(EXTENSIONS_DIR / "example")
+            install_extension(EXTENSIONS_DIR / "utilities")
 
 
 # ── Uninstall tests ──────────────────────────────────────────────────────
@@ -191,11 +220,11 @@ class TestUninstallExtension:
     @patch("builtins.input", return_value="n")
     def test_uninstall_internal_prompts_and_cancels(self, mock_input: MagicMock) -> None:
         """Uninstalling internal extension should prompt and cancel if user says no."""
-        # 'example' is internal — should prompt
-        uninstall_extension("example")  # Should not actually delete
+        # 'utilities' is internal — should prompt
+        uninstall_extension("utilities")  # Should not actually delete
         mock_input.assert_called_once()
-        # Verify example still exists
-        assert (EXTENSIONS_DIR / "example").exists()
+        # Verify utilities still exists
+        assert (EXTENSIONS_DIR / "utilities").exists()
 
 
 class TestUninstallDependencyRemoval:
@@ -213,18 +242,28 @@ class TestUninstallDependencyRemoval:
         *,
         internal: bool = False,
     ) -> Path:
-        """Create a fake extension directory with an extension.json manifest."""
+        """Create a fake extension directory with a pyproject.toml manifest."""
         ext_dir = tmp_path / name
         ext_dir.mkdir(parents=True, exist_ok=True)
-        manifest = {
-            "name": name,
-            "version": "1.0.0",
-            "description": f"Fake extension {name}",
-            "python_dependencies": deps,
-            "has_migrations": False,
-            "internal": internal,
-        }
-        (ext_dir / "extension.json").write_text(json.dumps(manifest))
+
+        deps_toml = "\n".join(
+            [f'"{d.split(">=")[0]}" = ">={d.split(">=")[1]}"' if ">=" in d else f'"{d}" = "*"' for d in deps]
+        )
+
+        manifest = f"""
+[tool.poetry]
+name = "{name}"
+version = "1.0.0"
+description = "Fake extension {name}"
+
+[tool.poetry.dependencies]
+{deps_toml}
+
+[tool.powercord]
+has_migrations = false
+internal = {"true" if internal else "false"}
+"""
+        (ext_dir / "pyproject.toml").write_text(manifest)
         return ext_dir
 
     @patch("app.common.extension_manager._fire_hook")
@@ -392,7 +431,7 @@ class TestListExtensions:
         # Should contain the header separator
         assert "─" in captured.out
         # Should contain at least the internal extensions
-        assert "example" in captured.out
+        assert "custom_content" in captured.out
         assert "utilities" in captured.out
 
     def test_list_shows_internal_type(self, capsys: pytest.CaptureFixture[str]) -> None:

@@ -270,10 +270,10 @@ db-import file:
 # ---------------------------------------------------------------------------- #
 
 # Import extension justfiles (optional, only loaded when present)
-import? 'app/extensions/midi_library/justfile'
-import? 'app/extensions/honeypot/justfile'
-import? 'app/extensions/example/justfile'
-import? 'app/extensions/utilities/justfile'
+import? 'app/extensions/midi_library/extension.just'
+import? 'app/extensions/honeypot/extension.just'
+import? 'app/extensions/example/extension.just'
+import? 'app/extensions/utilities/extension.just'
 
 # Install a Powercord extension from a local path. Usage: just ext-install <source_path>
 [group: "extensions"]
