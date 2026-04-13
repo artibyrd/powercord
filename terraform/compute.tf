@@ -31,6 +31,7 @@ resource "google_compute_instance" "main" {
 
   metadata = {
     GCE_ENV_TYPE              = "PROD"
+    "google-logging-enabled"  = "true"
     gce-container-declaration = yamlencode({
       spec = {
         containers = [
