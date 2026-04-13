@@ -15,6 +15,8 @@ for k, v in os.environ.items():
 ")
 fi
 
+export POWERCORD_DB_HOST="localhost:5432"
+
 # Define PostgreSQL data directory. This path is what we'll mount as a volume.
 PGDATA_DIR="/var/lib/postgresql/data/pgdata"
 
