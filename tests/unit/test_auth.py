@@ -19,7 +19,7 @@ pytestmark = pytest.mark.unit
 
 def test_get_discord_creds():
     """Verifies that Discord credentials can be fetched from the os environment safely."""
-    with patch.dict(os.environ, {"DISCORD_CLIENT_ID": "1", "DISCORD_CLIENT_SECRET": "2", "DISCORD_TOKEN": "3"}):
+    with patch.dict(os.environ, {"POWERCORD_DISCORD_CLIENT_ID": "1", "POWERCORD_DISCORD_CLIENT_SECRET": "2", "POWERCORD_DISCORD_TOKEN": "3"}):
         assert get_discord_creds() == ("1", "2", "3")
 
 
@@ -124,7 +124,7 @@ async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_
 
     with patch.dict(
         os.environ,
-        {"DISCORD_CLIENT_ID": "1", "DISCORD_CLIENT_SECRET": "2", "DISCORD_TOKEN": "3", "BASE_URL": "http://localhost"},
+        {"POWERCORD_DISCORD_CLIENT_ID": "1", "POWERCORD_DISCORD_CLIENT_SECRET": "2", "POWERCORD_DISCORD_TOKEN": "3", "POWERCORD_BASE_URL": "http://localhost"},
     ):
         req = MagicMock()
         sess = {}
@@ -223,7 +223,7 @@ def test_dev_login_in_debug_mode():
     from app.ui.auth import dev_login
 
     sess = {}
-    with patch.dict(os.environ, {"DEBUG": "1", "BASE_URL": "http://localhost:5001"}):
+    with patch.dict(os.environ, {"POWERCORD_DEBUG": "1", "POWERCORD_BASE_URL": "http://localhost:5001"}):
         res = dev_login(sess)
         assert res.status_code == 303
         assert sess["auth"]["username"] == "DevAdmin"
@@ -235,10 +235,10 @@ def test_dev_login_blocked_in_production():
     from app.ui.auth import dev_login
 
     sess = {}
-    with patch.dict(os.environ, {"BASE_URL": "https://production.example.com"}, clear=False):
+    with patch.dict(os.environ, {"POWERCORD_BASE_URL": "https://production.example.com"}, clear=False):
         # Ensure DEBUG is not set
         env = os.environ.copy()
-        env.pop("DEBUG", None)
+        env.pop("POWERCORD_DEBUG", None)
         with patch.dict(os.environ, env, clear=True):
             res = dev_login(sess)
             assert res.status_code == 303

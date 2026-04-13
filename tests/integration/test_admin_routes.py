@@ -1,7 +1,7 @@
 # Ensure we can import from app
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -33,7 +33,13 @@ def mock_session():
 @patch("app.main_ui.get_guild_sprockets")
 @patch("app.main_ui.get_guild_widgets")
 @patch("app.main_ui.GadgetInspector")
+@patch("app.main_ui.get_widget_settings", return_value={})
+@patch("app.main_ui.is_gadget_enabled", return_value=False)
+@patch("app.main_ui.get_internal_api_client")
+@patch("app.main_ui._render_admin_list", new_callable=AsyncMock, return_value="")
+@patch("app.main_ui.get_widget_name", return_value=None)
 async def test_admin_home_extensions_section(
+    mock_widget_name, mock_admin_list, mock_api_client, mock_is_enabled, mock_widget_settings,
     mock_inspector, mock_get_widgets, mock_get_sprockets, mock_get_cogs, mock_get_guilds, mock_session
 ):
     # Mock data
@@ -45,6 +51,15 @@ async def test_admin_home_extensions_section(
     mock_inspector_instance = MagicMock()
     mock_inspector_instance.inspect_extensions.return_value = {"test_ext": ["cog", "widget"]}
     mock_inspector.return_value = mock_inspector_instance
+
+    # Mock the internal API client context manager to avoid real HTTP calls
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"system": {}, "bot": {}, "logs": []}
+    mock_client_instance = AsyncMock()
+    mock_client_instance.get = AsyncMock(return_value=mock_resp)
+    mock_api_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
+    mock_api_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
     # Call the async route handler directly (admin_home takes sess)
     component = await admin_home(mock_session)
@@ -75,7 +90,15 @@ async def test_admin_home_extensions_section(
 @patch("app.ui.dashboard.get_guild_sprockets")
 @patch("app.ui.dashboard.get_guild_widgets")
 @patch("app.ui.dashboard.GadgetInspector")
+@patch("app.ui.dashboard.is_gadget_enabled", return_value=False)
+@patch("app.ui.dashboard.get_widget_name", return_value=None)
+@patch("app.ui.dashboard.get_installed_extensions", return_value=[])
+@patch("app.ui.dashboard._render_access_roles", new_callable=AsyncMock, return_value="")
 async def test_dashboard_extensions_section(
+    mock_access_roles,
+    mock_installed_exts,
+    mock_widget_name,
+    mock_is_enabled,
     mock_inspector,
     mock_get_widgets,
     mock_get_sprockets,
@@ -102,8 +125,6 @@ async def test_dashboard_extensions_section(
     mock_inspector.return_value = mock_inspector_instance
 
     # Mock stats response to avoid httpx error logging
-    from unittest.mock import AsyncMock
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"system": {}, "bot": {}}

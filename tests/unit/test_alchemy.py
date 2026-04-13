@@ -14,10 +14,10 @@ def test_get_database_url_success():
     with patch.dict(
         os.environ,
         {
-            "POSTGRES_USER": "test_user",
-            "POSTGRES_PASSWORD": "test_password",
-            "POSTGRES_DB": "test_db",
-            "DB_HOST": "localhost:5432",
+            "POWERCORD_POSTGRES_USER": "test_user",
+            "POWERCORD_POSTGRES_PASSWORD": "test_password",
+            "POWERCORD_POSTGRES_DB": "test_db",
+            "POWERCORD_DB_HOST": "localhost:5432",
         },
     ):
         url = get_database_url()
@@ -38,7 +38,7 @@ def test_get_database_url_missing_host():
 
 def test_get_database_url_invalid_format():
     """Test get_database_url with invalid DB_HOST format."""
-    with patch.dict(os.environ, {"DB_HOST": "invalid_format"}):
+    with patch.dict(os.environ, {"POWERCORD_DB_HOST": "invalid_format"}):
         with pytest.raises(ValueError, match="Invalid DB_HOST format"):
             get_database_url()
 

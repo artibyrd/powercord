@@ -141,6 +141,7 @@ def test_model_set_content_sanitizes():
 # ── Dynamic widget injection (unchanged) ─────────────────────────────
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_dynamic_widget_injection():
     """Custom content items should be injected as widget functions."""

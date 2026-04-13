@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import nextcord
 import pytest
 from fastapi import HTTPException
@@ -5,11 +7,13 @@ from fastapi import HTTPException
 from app.api.dependencies import get_current_api_user
 from app.api.responses import ErrorResponse, StandardResponse
 from app.bot.embeds import EmbedFactory
-from app.db.db_tools import get_or_create_internal_key
 from app.ui.components import Card, PrimaryButton
 
 # All tests in this module are unit tests.
 pytestmark = pytest.mark.unit
+
+# Fake internal key used across API auth unit tests
+_FAKE_INTERNAL_KEY = "test_internal_key_12345"
 
 
 # API Tests
@@ -27,8 +31,9 @@ def test_error_response():
 
 
 @pytest.mark.asyncio
-async def test_get_current_api_user():
-    internal_key = get_or_create_internal_key()
+@patch("app.api.dependencies.get_or_create_internal_key", return_value=_FAKE_INTERNAL_KEY)
+async def test_get_current_api_user(mock_get_key):
+    internal_key = _FAKE_INTERNAL_KEY
 
     class MockState:
         user_identity = None
