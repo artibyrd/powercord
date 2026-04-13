@@ -176,7 +176,7 @@ alias c := check
 _check:
     poetry run mypy .
 
-# Run tests. Usage: just test [--type unit]
+# Run tests. Usage: just test [--type unit|integration|all]
 [group: "qa"]
 [arg("type", long)]
 test type="":
@@ -186,7 +186,11 @@ alias t := test
 [private]
 [arg("type", long)]
 _test type="":
-    poetry run pytest tests {{ if type != "" { "-m " + type } else { "" } }}
+    #!powershell
+    if ("{{type}}" -eq "all") { poetry run pytest tests }
+    elseif ("{{type}}" -ne "") { poetry run pytest tests -m "{{type}}" }
+    else { poetry run pytest tests -m "not integration" }
+    exit $LASTEXITCODE
 
 # Run tests and generate coverage report
 [group: "qa"]
