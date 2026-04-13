@@ -44,13 +44,13 @@ def get_database_url():
     """Constructs the database URL from environment variables."""
     db_host = os.environ.get("POWERCORD_DB_HOST")
     if not db_host:
-        logging.error("DB_HOST environment variable is missing or empty.")
-        raise ValueError("DB_HOST environment variable is missing or empty.")
+        logging.error("POWERCORD_DB_HOST environment variable is missing or empty.")
+        raise ValueError("POWERCORD_DB_HOST environment variable is missing or empty.")
 
     host_args = db_host.split(":")
     if len(host_args) != 2:
-        logging.error(f"Invalid DB_HOST format: {db_host}. Expected hostname:port")
-        raise ValueError(f"Invalid DB_HOST format: {db_host}. Expected hostname:port")
+        logging.error(f"Invalid POWERCORD_DB_HOST format: {db_host}. Expected hostname:port")
+        raise ValueError(f"Invalid POWERCORD_DB_HOST format: {db_host}. Expected hostname:port")
 
     db_hostname, db_port = host_args[0], int(host_args[1])
     return sqlalchemy.engine.URL.create(

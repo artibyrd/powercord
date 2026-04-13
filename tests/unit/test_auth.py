@@ -19,7 +19,10 @@ pytestmark = pytest.mark.unit
 
 def test_get_discord_creds():
     """Verifies that Discord credentials can be fetched from the os environment safely."""
-    with patch.dict(os.environ, {"POWERCORD_DISCORD_CLIENT_ID": "1", "POWERCORD_DISCORD_CLIENT_SECRET": "2", "POWERCORD_DISCORD_TOKEN": "3"}):
+    with patch.dict(
+        os.environ,
+        {"POWERCORD_DISCORD_CLIENT_ID": "1", "POWERCORD_DISCORD_CLIENT_SECRET": "2", "POWERCORD_DISCORD_TOKEN": "3"},
+    ):
         assert get_discord_creds() == ("1", "2", "3")
 
 
@@ -124,7 +127,12 @@ async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_
 
     with patch.dict(
         os.environ,
-        {"POWERCORD_DISCORD_CLIENT_ID": "1", "POWERCORD_DISCORD_CLIENT_SECRET": "2", "POWERCORD_DISCORD_TOKEN": "3", "POWERCORD_BASE_URL": "http://localhost"},
+        {
+            "POWERCORD_DISCORD_CLIENT_ID": "1",
+            "POWERCORD_DISCORD_CLIENT_SECRET": "2",
+            "POWERCORD_DISCORD_TOKEN": "3",
+            "POWERCORD_BASE_URL": "http://localhost",
+        },
     ):
         req = MagicMock()
         sess = {}

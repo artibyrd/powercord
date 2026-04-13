@@ -30,16 +30,16 @@ def test_get_database_url_success():
 
 
 def test_get_database_url_missing_host():
-    """Test get_database_url when DB_HOST is missing."""
+    """Test get_database_url when POWERCORD_DB_HOST is missing."""
     with patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(ValueError, match="DB_HOST environment variable is missing or empty"):
+        with pytest.raises(ValueError, match="POWERCORD_DB_HOST environment variable is missing or empty"):
             get_database_url()
 
 
 def test_get_database_url_invalid_format():
-    """Test get_database_url with invalid DB_HOST format."""
+    """Test get_database_url with invalid POWERCORD_DB_HOST format."""
     with patch.dict(os.environ, {"POWERCORD_DB_HOST": "invalid_format"}):
-        with pytest.raises(ValueError, match="Invalid DB_HOST format"):
+        with pytest.raises(ValueError, match="Invalid POWERCORD_DB_HOST format"):
             get_database_url()
 
 

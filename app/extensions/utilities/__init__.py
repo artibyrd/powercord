@@ -1,10 +1,9 @@
-from sqlmodel import Session, SQLModel, col, delete
+from sqlmodel import Session, col, delete
 
 from app.common.alchemy import init_connection_engine
 from app.common.extension_hooks import register_hook
 from app.db.models import DiscordChannel as DiscordChannel  # Register with SQLModel.metadata
 from app.db.models import DiscordRole as DiscordRole
-
 
 
 def _delete_guild_data(guild_id: int) -> None:

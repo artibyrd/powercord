@@ -3,6 +3,15 @@ import os
 import sys
 from pathlib import Path
 
+# Provide required environment variables for tests before modules are imported.
+# This prevents ValueError crashes when blueprints or widgets try to initialize DB connections at the module level.
+os.environ.setdefault("POWERCORD_DB_HOST", "localhost:5433")
+os.environ.setdefault("POWERCORD_POSTGRES_USER", "test_user")
+os.environ.setdefault("POWERCORD_POSTGRES_PASSWORD", "test_pass")
+os.environ.setdefault("POWERCORD_POSTGRES_DB", "test_db")
+os.environ.setdefault("POWERCORD_DISCORD_TOKEN", "dummy_token")
+os.environ.setdefault("POWERCORD_SESSION_KEY", "dummy_session")
+
 import pytest
 
 # Add project root to sys.path

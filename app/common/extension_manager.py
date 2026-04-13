@@ -41,26 +41,29 @@ EXTENSIONS_DIR = Path(__file__).resolve().parents[1] / "extensions"
 # Tests are placed here so they share the framework's conftest fixtures.
 TESTS_DIR = Path(__file__).resolve().parents[2] / "tests" / "extensions"
 
+
 def _update_alembic_ini() -> None:
     """Dynamically reconstructs version_locations in alembic.ini based on active extensions."""
     ini_path = EXTENSIONS_DIR.parents[1] / "alembic.ini"
     if not ini_path.exists():
         return
     import configparser
+
     config = configparser.ConfigParser()
     config.read(ini_path)
-    
+
     paths = ["%(here)s/alembic/versions"]
     for d in EXTENSIONS_DIR.iterdir():
         if d.is_dir() and (d / "alembic" / "versions").exists():
             paths.append(f"%(here)s/app/extensions/{d.name}/alembic/versions")
-    
+
     if "alembic" not in config.sections():
         config.add_section("alembic")
-    
+
     config.set("alembic", "version_locations", " ".join(paths))
     with open(ini_path, "w", encoding="utf-8") as configfile:
         config.write(configfile)
+
 
 # ── Package name helpers ──────────────────────────────────────────────
 
@@ -363,10 +366,15 @@ def uninstall_extension(name: str) -> None:
         if old_migration_version:
             try:
                 from sqlalchemy import text
+
                 from app.common.alchemy import init_connection_engine
+
                 engine = init_connection_engine()
                 with engine.begin() as conn:
-                    conn.execute(text(f"DELETE FROM alembic_version WHERE version_num = '{old_migration_version}'"))
+                    conn.execute(
+                        text("DELETE FROM alembic_version WHERE version_num = :version"),
+                        {"version": old_migration_version},
+                    )
                 print(f"  ✅ Cleared revision {old_migration_version} from database history.")
             except Exception as e:
                 print(f"  ⚠️  Failed to clear revision history: {e}")

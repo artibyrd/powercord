@@ -39,8 +39,17 @@ def mock_session():
 @patch("app.main_ui._render_admin_list", new_callable=AsyncMock, return_value="")
 @patch("app.main_ui.get_widget_name", return_value=None)
 async def test_admin_home_extensions_section(
-    mock_widget_name, mock_admin_list, mock_api_client, mock_is_enabled, mock_widget_settings,
-    mock_inspector, mock_get_widgets, mock_get_sprockets, mock_get_cogs, mock_get_guilds, mock_session
+    mock_widget_name,
+    mock_admin_list,
+    mock_api_client,
+    mock_is_enabled,
+    mock_widget_settings,
+    mock_inspector,
+    mock_get_widgets,
+    mock_get_sprockets,
+    mock_get_cogs,
+    mock_get_guilds,
+    mock_session,
 ):
     # Mock data
     mock_get_guilds.return_value = {}

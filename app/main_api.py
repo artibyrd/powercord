@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
     if initial_admin_id:
         try:
             from app.db.add_admin import add_admin
+
             add_admin(int(initial_admin_id), comment="Auto-provisioned via INITIAL_ADMIN_DISCORD_ID ENV on startup")
             logging.info(f"Auto-provisioned {initial_admin_id} as a dashboard admin.")
         except ValueError:

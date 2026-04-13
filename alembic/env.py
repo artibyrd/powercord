@@ -11,15 +11,15 @@ from alembic import context
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.common.alchemy import get_database_url
-from app.db import models  # noqa: F401
-
 # Dynamically import all installed extension blueprints so Alembic's
 # autogenerate can detect their SQLModel tables.  Only extensions that
 # are currently installed under app/extensions/ will be picked up.
 # We also automatically mount any extension's isolated alembic/versions
 # folder to facilitate localized decoupled schema migrations.
 import os
+
+from app.common.alchemy import get_database_url
+from app.db import models  # noqa: F401
 
 _extensions_dir = Path(__file__).resolve().parents[1] / "app" / "extensions"
 _version_locations = [str(Path(__file__).resolve().parent / "versions")]
@@ -28,7 +28,7 @@ for _ext_path in sorted(_extensions_dir.iterdir()):
     if _ext_path.is_dir():
         if (_ext_path / "blueprint.py").exists():
             importlib.import_module(f"app.extensions.{_ext_path.name}.blueprint")
-        
+
         _ext_versions = _ext_path / "alembic" / "versions"
         if _ext_versions.exists():
             _version_locations.append(str(_ext_versions))
