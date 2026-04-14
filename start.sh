@@ -17,6 +17,17 @@ fi
 
 export POWERCORD_DB_HOST="localhost:5432"
 
+# Provision SSL
+if [ -n "$POWERCORD_SSL_CERT" ] && [ -n "$POWERCORD_SSL_KEY" ]; then
+    echo "Using provided SSL certificates from environment..."
+    echo "$POWERCORD_SSL_CERT" > /etc/nginx/cert.pem
+    echo "$POWERCORD_SSL_KEY" > /etc/nginx/key.pem
+else
+    echo "Generating temporary self-signed SSL certificate..."
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/key.pem -out /etc/nginx/cert.pem -subj "/CN=proxy"
+fi
+chmod 600 /etc/nginx/cert.pem /etc/nginx/key.pem
+
 # Define PostgreSQL data directory. This path is what we'll mount as a volume.
 PGDATA_DIR="/var/lib/postgresql/data/pgdata"
 

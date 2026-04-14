@@ -37,11 +37,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies for Nginx, Supervisor, and PostgreSQL
+# Install system dependencies for Nginx, Supervisor, PostgreSQL, and OpenSSL
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     supervisor \
     postgresql \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual environment and application code from the builder stage
@@ -60,8 +61,9 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Expose the port Nginx will run on
+# Expose the ports Nginx will run on
 EXPOSE 80
+EXPOSE 443
 
 # Define the volume for PostgreSQL data
 VOLUME /var/lib/postgresql/data

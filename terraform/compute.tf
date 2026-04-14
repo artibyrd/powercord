@@ -3,7 +3,7 @@ resource "google_compute_instance" "main" {
   machine_type = "e2-small"
   zone         = var.zone
   project      = var.project_id
-  tags         = ["http-server"]
+  tags         = ["http-server", "https-server"]
 
   boot_disk {
     initialize_params {
