@@ -16,3 +16,15 @@ resource "google_project_iam_member" "compute_artifact_reader" {
   role    = "roles/artifactregistry.reader"
   member  = "serviceAccount:${google_service_account.compute_sa.email}"
 }
+
+resource "google_project_iam_member" "compute_log_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.compute_sa.email}"
+}
+
+resource "google_project_iam_member" "compute_metric_writer" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+  member  = "serviceAccount:${google_service_account.compute_sa.email}"
+}

@@ -4,7 +4,9 @@ locals {
     "compute.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
-    "iam.googleapis.com"
+    "iam.googleapis.com",
+    "logging.googleapis.com",
+    "monitoring.googleapis.com"
   ]
 
   env_prod_content = fileexists("${path.module}/../.env.prod") ? file("${path.module}/../.env.prod") : ""
