@@ -43,28 +43,30 @@ if [ -z "$(ls -A $PGDATA_DIR 2>/dev/null)" ]; then
     # Initialize the database cluster as the postgres user
     su - postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA_DIR"
 
-    # Start PostgreSQL temporarily to create the user and database
-    su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
-    sleep 5
-
-    # Create user and database from environment variables
-    su - postgres -c "psql -c \"CREATE USER ${POWERCORD_POSTGRES_USER} WITH PASSWORD '${POWERCORD_POSTGRES_PASSWORD}';\""
-    su - postgres -c "psql -c \"CREATE DATABASE ${POWERCORD_POSTGRES_DB} OWNER ${POWERCORD_POSTGRES_USER};\""
-
     # Configure postgres to allow external connections
     su - postgres -c "echo 'host all all 0.0.0.0/0 password' >> $PGDATA_DIR/pg_hba.conf"
     su - postgres -c "echo \"listen_addresses = '*'\" >> $PGDATA_DIR/postgresql.conf"
 
-    # Run initialization scripts if they exist
-    if [ -f /db/init.sql ]; then
-        echo "Running database initialization script /db/init.sql..."
-        su - postgres -c "psql -v ON_ERROR_STOP=1 --dbname \"${POWERCORD_POSTGRES_DB}\" -f /db/init.sql"
-    fi
+    # Start PostgreSQL temporarily
+    su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
+    sleep 5
+    FRESH_INIT=true
 else
     # Always start it temporarily for migrations if database is already initialized
-    echo "Starting PostgreSQL temporarily for Alembic migrations..."
+    echo "Starting PostgreSQL temporarily for initialization checks..."
     su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
     sleep 3
+    FRESH_INIT=false
+fi
+
+# Ensure user and database exist (idempotent)
+su - postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='${POWERCORD_POSTGRES_USER}'\" | grep -q 1 || psql -c \"CREATE USER ${POWERCORD_POSTGRES_USER} WITH PASSWORD '${POWERCORD_POSTGRES_PASSWORD}';\""
+su - postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='${POWERCORD_POSTGRES_DB}'\" | grep -q 1 || psql -c \"CREATE DATABASE ${POWERCORD_POSTGRES_DB} OWNER ${POWERCORD_POSTGRES_USER};\""
+
+# Run initialization scripts if they exist and this is a fresh database
+if [ "$FRESH_INIT" = true ] && [ -f /db/init.sql ]; then
+    echo "Running database initialization script /db/init.sql..."
+    su - postgres -c "psql -v ON_ERROR_STOP=1 --dbname \"${POWERCORD_POSTGRES_DB}\" -f /db/init.sql"
 fi
 
 echo "Running Alembic migrations..."
