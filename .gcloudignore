@@ -4,6 +4,9 @@
 # EXPLICITLY INCLUDE the production secrets file so Cloud Build can execute Terraform dynamically
 !.env.prod
 
+# EXPLICITLY INCLUDE extensions installed locally so they are deployed to Cloud Build
+!app/extensions/**
+
 # Additional Cloud Build specific ignores
 .git/
 .github/
