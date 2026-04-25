@@ -334,4 +334,6 @@ tf-destroy docker_image=gcp_default_image:
 [group: "deploy"]
 gcp-build:
     gcloud builds submit --config cloudbuild.yaml .
+    @echo "Resetting the VM instance to pull the new image..."
+    gcloud compute instances reset powercord-instance --zone us-central1-a
 
