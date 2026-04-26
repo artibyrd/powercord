@@ -1,6 +1,6 @@
 # --- Build Stage ---
 # Use an official Python runtime as a parent image
-FROM python:3.12-slim as builder
+FROM python:3.12-slim-bookworm as builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -33,7 +33,7 @@ RUN poetry install --without dev,test
 
 
 # --- Final Stage ---
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
