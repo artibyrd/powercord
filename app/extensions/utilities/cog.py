@@ -138,7 +138,11 @@ class UtilitiesCog(commands.Cog):
             except Exception as e:
                 await ctx.send(f"❌ Audit failed: {e}")
 
-    @nextcord.slash_command(name="audit", description="Triggers the server permission auditor.")
+    @nextcord.slash_command(
+        name="audit",
+        description="Triggers the server permission auditor.",
+        default_member_permissions=nextcord.Permissions(administrator=True),
+    )
     async def slash_audit(self, interaction: nextcord.Interaction):
         """Slash command to trigger the audit."""
         if not interaction.guild or not isinstance(interaction.user, nextcord.Member):
