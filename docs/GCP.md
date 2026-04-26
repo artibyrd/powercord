@@ -126,3 +126,37 @@ docker exec -it <CONTAINER_ID> python app/db/db_tools.py import /app/your_dump_f
 
 *(Note: Once the process completes, you can safely delete `your_dump_file.sql` from both the container and the VM to free up disk space).*
 
+---
+
+## Part 4: Production Operations
+
+Because the production Docker image is lightweight and lacks development tools like `just` and `poetry`, you must execute Python scripts and internal modules directly using the virtual environment path inside the running container (`/app/.venv/bin/python`).
+
+### Executing Database Scripts and Administrative Tasks
+
+If you need to run specific database management tools (like adding an API key manually) or execute module-level scripts (like rescoring the MIDI database), use `docker exec` against the running container ID.
+
+**1. SSH into your Compute Engine instance:**
+```bash
+gcloud compute ssh powercord-instance --zone us-central1-a
+```
+
+**2. Find your container ID:**
+```bash
+docker ps
+```
+
+**3. Execute your Python module/script:**
+Run the script using the full path to the container's virtual environment python executable.
+
+**Example: Adding an API Key Manually**
+```bash
+docker exec <CONTAINER_ID> /app/.venv/bin/python app/db/manage_api_keys.py add "Example Legacy Key" --scopes '["midi_library"]' --key "your-hardcoded-key-here"
+```
+
+**Example: Running a Module (e.g., MIDI Rescore)**
+*(Note: Some scripts might require specific environment variable overrides if they connect directly to external services or local ports differently than the main app.)*
+```bash
+docker exec -e POWERCORD_DB_HOST=localhost:5432 <CONTAINER_ID> /app/.venv/bin/python -m app.extensions.midi_library.rescore
+```
+
