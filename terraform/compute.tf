@@ -8,6 +8,7 @@ resource "google_compute_instance" "main" {
   boot_disk {
     initialize_params {
       image = "cos-cloud/cos-stable"
+      size  = 30
     }
   }
 
