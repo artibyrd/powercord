@@ -24,9 +24,14 @@ if [ -n "$POWERCORD_SSL_CERT" ] && [ -n "$POWERCORD_SSL_KEY" ]; then
     echo "$POWERCORD_SSL_KEY" > /etc/nginx/key.pem
 else
     echo "Generating temporary self-signed SSL certificate..."
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/key.pem -out /etc/nginx/cert.pem -subj "/CN=proxy"
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/key.pem -out /etc/nginx/cert.pem -subj "/CN=proxy" || echo "Warning: openssl generation failed"
 fi
-chmod 600 /etc/nginx/cert.pem /etc/nginx/key.pem
+
+if [ -f "/etc/nginx/cert.pem" ] && [ -f "/etc/nginx/key.pem" ]; then
+    chmod 600 /etc/nginx/cert.pem /etc/nginx/key.pem
+else
+    echo "Warning: SSL certificates not found at /etc/nginx/cert.pem and key.pem. Nginx may fail to start."
+fi
 
 # Define PostgreSQL data directory. This path is what we'll mount as a volume.
 PGDATA_DIR="/var/lib/postgresql/data/pgdata"
@@ -41,20 +46,21 @@ if [ -z "$(ls -A $PGDATA_DIR 2>/dev/null)" ]; then
     echo "Initializing PostgreSQL database..."
 
     # Initialize the database cluster as the postgres user
-    su - postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA_DIR -E UTF8 --locale=C.UTF-8"
+    su - postgres -c "/usr/lib/postgresql/*/bin/initdb -D $PGDATA_DIR -E UTF8 --locale=C.UTF-8"
 
     # Configure postgres to allow external connections
     su - postgres -c "echo 'host all all 0.0.0.0/0 password' >> $PGDATA_DIR/pg_hba.conf"
     su - postgres -c "echo \"listen_addresses = '*'\" >> $PGDATA_DIR/postgresql.conf"
 
     # Start PostgreSQL temporarily
-    su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
+    su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
     sleep 5
     FRESH_INIT=true
 else
     # Always start it temporarily for migrations if database is already initialized
     echo "Starting PostgreSQL temporarily for initialization checks..."
-    su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
+    rm -f $PGDATA_DIR/postmaster.pid
+    su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
     sleep 3
     FRESH_INIT=false
 fi
@@ -74,7 +80,7 @@ alembic upgrade heads || echo "Warning: Migrations failed. Continuing..."
 echo "Database initialized."
 
 # Stop the temporary PostgreSQL server
-su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA_DIR stop"
+su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $PGDATA_DIR stop"
 sleep 2
 
 # Start all services via supervisord
