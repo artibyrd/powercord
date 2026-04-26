@@ -41,7 +41,7 @@ if [ -z "$(ls -A $PGDATA_DIR 2>/dev/null)" ]; then
     echo "Initializing PostgreSQL database..."
 
     # Initialize the database cluster as the postgres user
-    su - postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA_DIR"
+    su - postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA_DIR -E UTF8 --locale=C.UTF-8"
 
     # Configure postgres to allow external connections
     su - postgres -c "echo 'host all all 0.0.0.0/0 password' >> $PGDATA_DIR/pg_hba.conf"
@@ -61,7 +61,7 @@ fi
 
 # Ensure user and database exist (idempotent)
 su - postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='${POWERCORD_POSTGRES_USER}'\" | grep -q 1 || psql -c \"CREATE USER ${POWERCORD_POSTGRES_USER} WITH PASSWORD '${POWERCORD_POSTGRES_PASSWORD}';\""
-su - postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='${POWERCORD_POSTGRES_DB}'\" | grep -q 1 || psql -c \"CREATE DATABASE ${POWERCORD_POSTGRES_DB} OWNER ${POWERCORD_POSTGRES_USER};\""
+su - postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='${POWERCORD_POSTGRES_DB}'\" | grep -q 1 || psql -c \"CREATE DATABASE ${POWERCORD_POSTGRES_DB} OWNER ${POWERCORD_POSTGRES_USER} ENCODING 'UTF8';\""
 
 # Run initialization scripts if they exist and this is a fresh database
 if [ "$FRESH_INIT" = true ] && [ -f /db/init.sql ]; then
