@@ -1,4 +1,6 @@
 import argparse
+import datetime
+import gzip
 import logging
 import os
 import secrets
@@ -108,7 +110,7 @@ def get_db_credentials():
     }
 
 
-def export_database(output_file: str):
+def export_database(output_file: str, is_migration: bool = False):
     """Exports the database to a SQL file."""
     creds = get_db_credentials()
     output_path = Path(output_file.strip("\"'")).resolve()
@@ -132,15 +134,20 @@ def export_database(output_file: str):
                 "-U",
                 creds["user"],
                 "-h",
-                creds["host"],
+                "localhost",
                 "-p",
-                creds["port"],
-                "--clean",  # Include DROP statements
-                "--if-exists",  # Don't error on DROP if missing
-                "--no-owner",  # Skip ownership reassignment issues
-                "-d",
-                creds["db"],
+                "5432",
             ]
+
+            if is_migration:
+                # For migration, we typically want data-only with inserts to avoid schema conflicts
+                # in a destination that has already been provisioned with Alembic.
+                cmd.extend(["--data-only", "--inserts", "--no-owner"])
+            else:
+                # Standard full backup
+                cmd.extend(["--clean", "--if-exists", "--no-owner"])
+
+            cmd.extend(["-d", creds["db"]])
 
             with open(output_path, "w", encoding="utf-8") as f:
                 subprocess.run(cmd, cwd=str(project_root), stdout=f, check=True)  # noqa: S603, S607
@@ -160,27 +167,100 @@ def export_database(output_file: str):
                 creds["host"],
                 "-p",
                 creds["port"],
-                "--clean",
-                "--if-exists",
-                "--no-owner",
-                "-d",
-                creds["db"],
-                "-f",
-                str(output_path),
             ]
+
+            if is_migration:
+                cmd.extend(["--data-only", "--inserts", "--no-owner"])
+            else:
+                cmd.extend(["--clean", "--if-exists", "--no-owner"])
+
+            cmd.extend(["-d", creds["db"], "-f", str(output_path)])
             subprocess.run(cmd, env=env, check=True)  # noqa: S603
 
         logging.info(f"Successfully exported database to {output_path}")
 
     except FileNotFoundError as e:
         logging.error(f"Missing required executable. Please ensure PostgreSQL tools (pg_dump) are installed. {e}")
-        sys.exit(1)
+        raise RuntimeError("Missing pg_dump executable") from e
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to export database. Command exited with code {e.returncode}")
-        sys.exit(1)
+        raise RuntimeError("pg_dump command failed") from e
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
-        sys.exit(1)
+        raise RuntimeError("Unexpected error during export") from e
+
+
+class BackupService:
+    BACKUP_DIR = Path("/var/lib/postgresql/data/backups")
+    RETENTION_DAYS = 7
+
+    @classmethod
+    def create_daily_backup(cls):
+        """Creates a database backup with the current date."""
+        # Use local dir if not in docker
+        if not _is_docker_running():
+            cls.BACKUP_DIR = project_root / "backups"
+
+        cls.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        backup_file = cls.BACKUP_DIR / f"powercord_db_backup_{date_str}.sql"
+        gz_backup_file = cls.BACKUP_DIR / f"powercord_db_backup_{date_str}.sql.gz"
+
+        logging.info(f"Starting daily database backup to {gz_backup_file}")
+        try:
+            export_database(str(backup_file))
+            with open(backup_file, "rb") as f_in:
+                with gzip.open(gz_backup_file, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            backup_file.unlink()
+            logging.info("Daily database backup completed successfully.")
+            cls.prune_old_backups()
+        except Exception as e:
+            logging.error(f"Daily database backup failed: {e}")
+
+    @classmethod
+    def prune_old_backups(cls):
+        """Removes backups older than RETENTION_DAYS."""
+        logging.info(f"Pruning database backups older than {cls.RETENTION_DAYS} days in {cls.BACKUP_DIR}")
+        if not cls.BACKUP_DIR.exists():
+            return
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        retention_td = datetime.timedelta(days=cls.RETENTION_DAYS)
+
+        for file in cls.BACKUP_DIR.glob("powercord_db_backup_*.sql.gz"):
+            try:
+                # Get file modification time
+                mtime = datetime.datetime.fromtimestamp(file.stat().st_mtime, tz=datetime.timezone.utc)
+                if now - mtime > retention_td:
+                    logging.info(f"Removing old backup file: {file.name}")
+                    file.unlink()
+            except Exception as e:
+                logging.error(f"Failed to process old backup {file.name}: {e}")
+
+    scheduler = None
+
+    @classmethod
+    def start_scheduler(cls):
+        """Starts the APScheduler for daily backups."""
+        if cls.scheduler is not None:
+            return
+
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        cls.scheduler = AsyncIOScheduler()
+        # Schedule to run every day at 03:00 UTC
+        cls.scheduler.add_job(cls.create_daily_backup, trigger="cron", hour=3, minute=0, id="daily_database_backup")
+        cls.scheduler.start()
+        logging.info("APScheduler started: Daily database backup scheduled for 03:00 UTC.")
+
+    @classmethod
+    def stop_scheduler(cls):
+        """Stops the APScheduler."""
+        if cls.scheduler:
+            cls.scheduler.shutdown()
+            cls.scheduler = None
+            logging.info("APScheduler stopped.")
 
 
 def import_database(input_file: str):
@@ -207,9 +287,9 @@ def import_database(input_file: str):
                 "-U",
                 creds["user"],
                 "-h",
-                creds["host"],
+                "localhost",
                 "-p",
-                creds["port"],
+                "5432",
                 "-d",
                 creds["db"],
             ]
@@ -243,23 +323,35 @@ def import_database(input_file: str):
 
     except FileNotFoundError as e:
         logging.error(f"Missing required executable. Please ensure PostgreSQL tools (psql) are installed. {e}")
-        sys.exit(1)
+        raise RuntimeError("Missing psql executable") from e
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to import database. Command exited with code {e.returncode}")
-        sys.exit(1)
+        raise RuntimeError("psql command failed") from e
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
-        sys.exit(1)
+        raise RuntimeError("Unexpected error during import") from e
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Powercord Database Export/Import Tool")
-    parser.add_argument("action", choices=["export", "import"], help="Action to perform (export or import)")
-    parser.add_argument("file", type=str, help="Path to the SQL file")
+    parser = argparse.ArgumentParser(description="Powercord Database Export/Import/Backup Tool")
+    parser.add_argument(
+        "action", choices=["export", "import", "backup"], help="Action to perform (export, import, or backup)"
+    )
+    parser.add_argument("file", type=str, nargs="?", help="Path to the SQL file (required for export/import)")
+    parser.add_argument("--migration", action="store_true", help="Use migration format (data-only inserts)")
 
     args = parser.parse_args()
 
-    if args.action == "export":
-        export_database(args.file)
-    elif args.action == "import":
-        import_database(args.file)
+    try:
+        if args.action == "export":
+            if not args.file:
+                parser.error("The 'export' action requires a file path.")
+            export_database(args.file, is_migration=args.migration)
+        elif args.action == "import":
+            if not args.file:
+                parser.error("The 'import' action requires a file path.")
+            import_database(args.file)
+        elif args.action == "backup":
+            BackupService.create_daily_backup()
+    except Exception:
+        sys.exit(1)

@@ -250,7 +250,12 @@ To create a SQL backup of your current database:
 ```bash
 just db-export [filename.sql]
 ```
-*(If no filename is provided, it defaults to `powercord-export.sql`)*
+*(If no filename is provided, it defaults to `powercord-export.sql`. Use the `--migration` flag if exporting data to an environment that already has initialized database schema tables.)*
+
+To manually trigger the background daily backup process (creates a timestamped backup file in `/var/lib/postgresql/data/backups`):
+```bash
+just db-backup
+```
 
 To restore a database back into the system from a SQL file:
 ```bash

@@ -141,7 +141,7 @@ Spins up the full stack in Docker containers.
 > ```bash
 > docker compose exec app python app/db/add_admin.py <YOUR_DISCORD_USER_ID> --comment "Initial Admin"
 > ```
-> Use `just db-export` / `just db-import` locally to migrate data between environments.
+> Use `just db-export` / `just db-import` locally to migrate data between environments. Note that if migrating data into an already-initialized Docker database, you should use `just db-export <file> --migration` to generate an INSERT-only data dump.
 
 ---
 
@@ -243,5 +243,6 @@ Repeat for each extension you want to update.
 | `just ext-install <path>` | Install an extension |
 | `just ext-uninstall <name>` | Uninstall an extension |
 | `just ext-list` | List installed extensions |
-| `just db-export [file]` | Export database to SQL |
+| `just db-export [file] [--migration]` | Export database to SQL |
 | `just db-import <file>` | Import database from SQL |
+| `just db-backup` | Trigger automated backup |

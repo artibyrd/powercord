@@ -59,6 +59,33 @@ resource "google_compute_instance" "main" {
         restartPolicy = "Always"
       }
     })
+    startup-script = <<-EOT
+      #!/bin/bash
+      cat << 'EOF' > /etc/systemd/system/backup-sync.service
+      [Unit]
+      Description=Sync database backups to GCS
+
+      [Service]
+      Type=oneshot
+      # Run a container to sync the backups to GCS, accessing the same volume as the powercord container
+      ExecStart=/usr/bin/docker run --rm --volumes-from=powercord gcr.io/google.com/cloudsdktool/cloud-sdk:slim sh -c "gsutil cp /var/lib/postgresql/data/backups/*.sql gs://bgml_backup/ || true"
+      EOF
+
+      cat << 'EOF' > /etc/systemd/system/backup-sync.timer
+      [Unit]
+      Description=Run backup sync daily
+
+      [Timer]
+      OnCalendar=daily
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+      EOF
+
+      systemctl daemon-reload
+      systemctl enable --now backup-sync.timer
+    EOT
   }
 
   lifecycle {

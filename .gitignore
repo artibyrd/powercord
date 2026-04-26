@@ -23,9 +23,8 @@ build/
 *.egg-info/
 
 # SQL Dumps
-bgml-data.sql
-*-export.sql
-
+/*.sql
+/*.sql.gz
 # External extensions (installed via `just ext-install`)
 # Internal extensions (example, utilities) are tracked by git.
 app/extensions/honeypot/

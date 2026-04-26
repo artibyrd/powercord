@@ -33,7 +33,16 @@ async def lifespan(app: FastAPI):
 
     gadget_inspector = GadgetInspector()
     gadget_inspector.load_sprockets(app)
+
+    # Start the automated daily database backup scheduler
+    from app.db.db_tools import BackupService
+
+    BackupService.start_scheduler()
+
     yield
+
+    # Clean up on shutdown
+    BackupService.stop_scheduler()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)

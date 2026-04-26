@@ -80,3 +80,49 @@ just gcp-build
 3. It natively executes `terraform apply -auto-approve`, identifying the newly built image hash, and rolling the Compute Engine instance automatically!
 
 Downtime is kept to a minimum as the new Instance uses `create_before_destroy` lifecycle rules.
+
+---
+
+## Part 3: Database Management in Production
+
+The production environment is configured to automatically and securely manage your database backups. Because the production Docker image is built to be lightweight, it does not include development tools like `just` or `poetry`. Instead, database management relies on built-in automated systems and direct container commands.
+
+### Automated Daily Backups
+The core Powercord application runs a scheduled background task that automatically creates a full database backup (`.sql` file) every 24 hours.
+- **Location:** Backups are stored in the persistent volume mapped to `/var/lib/postgresql/data/backups`.
+- **Retention:** The system automatically prunes backups older than 7 days to conserve disk space.
+- **Cloud Sync:** The host Google Compute Engine VM runs a daily `systemd` timer (configured via Terraform) that seamlessly syncs these local backups to your `bgml_backup` Cloud Storage bucket. This ensures your data is safely stored off-instance without coupling the core Python application to GCP-specific logic.
+
+### Restoring a Database
+If you need to restore the database from a backup (e.g., migrating from a legacy system or recovering from a failure), follow this standard procedure:
+
+#### 1. Transfer the Data File
+Upload your `.sql` dump file from your local machine to the Compute Engine instance:
+```bash
+gcloud compute scp your_dump_file.sql powercord-instance:~ --zone us-central1-a
+```
+
+#### 2. SSH into the Instance and Find the Container
+Connect to the virtual machine:
+```bash
+gcloud compute ssh powercord-instance --zone us-central1-a
+```
+Find the running Powercord Docker container's ID (or name):
+```bash
+docker ps
+```
+
+#### 3. Copy the File into the Container
+Copy the dump file from the VM's home directory directly into the running container's `/app` directory:
+```bash
+docker cp your_dump_file.sql <CONTAINER_ID>:/app/your_dump_file.sql
+```
+
+#### 4. Execute the Restore Command
+Run the database import script directly inside the Docker container:
+```bash
+docker exec -it <CONTAINER_ID> python app/db/db_tools.py import /app/your_dump_file.sql
+```
+
+*(Note: Once the process completes, you can safely delete `your_dump_file.sql` from both the container and the VM to free up disk space).*
+

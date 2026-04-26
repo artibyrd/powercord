@@ -7,8 +7,8 @@ from .bootstrap import setup_project_root
 # This must be done before any local application imports.
 setup_project_root()
 
-from app.common.logger import config_logging
 from app.common.gsm_loader import check_gce_metadata
+from app.common.logger import config_logging
 
 
 def setup_logging(name=None):

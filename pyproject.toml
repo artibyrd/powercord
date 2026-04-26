@@ -24,6 +24,7 @@ fastsql = "^2.1.2"
 psutil = "^7.2.2"
 nh3 = "^0.3.3"
 markdown = "^3.10.2"
+apscheduler = "^3.11.2"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^9.0.2"
@@ -49,6 +50,7 @@ omit = [
     "app/ui/dashboard.py",
     "app/ui/helpers.py",
 ]
+
 
 
 

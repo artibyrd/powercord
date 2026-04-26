@@ -43,6 +43,18 @@ _run-with-status recipe *args:
     @echo '{{ GREEN }}✓ {{ recipe }} completed{{ NORMAL }}'
 alias rws := _run-with-status
 
+# Ensures the database service is running via Docker Compose
+[private]
+_ensure-db:
+    #!powershell
+    $running = docker compose ps --services --filter status=running 2>$null
+    if ($running -notmatch "app") {
+        Write-Host "Starting database service..."
+        docker compose up -d
+        Write-Host "Waiting for database to be ready..."
+        Start-Sleep -Seconds 5
+    }
+
 
 # ---------------------------------------------------------------------------- #
 #                                 DEV COMMANDS                                 #
@@ -182,7 +194,7 @@ _check:
 # Run tests. Usage: just test [--type unit|integration|all]
 [group: "qa"]
 [arg("type", long)]
-test type="":
+test type="": _ensure-db
     just _run-with-status _test {{ if type != "" { "--type " + type } else { "" } }}
 alias t := test
 
@@ -197,12 +209,12 @@ _test type="":
 
 # Run tests and generate coverage report
 [group: "qa"]
-coverage:
+coverage: _ensure-db
     poetry run pytest --cov=app --cov-report=term-missing
 
 # Run verification tests for the new dashboard features
 [group: "qa"]
-verify-dashboard:
+verify-dashboard: _ensure-db
     poetry run pytest tests/unit/test_internal_server.py tests/unit/test_ui_components.py tests/integration/test_admin_routes.py tests/integration/test_public_home.py
 
 # ---------------------------------------------------------------------------- #
@@ -211,62 +223,68 @@ verify-dashboard:
 
 # Upgrade the database to the latest version
 [group: "db"]
-db-upgrade:
+db-upgrade: _ensure-db
     poetry run alembic upgrade head
 
 # Create a new migration revision
 [group: "db"]
-db-revision message:
+db-revision message: _ensure-db
     poetry run alembic revision --autogenerate -m "{{message}}"
 
 # Test connectivity to PostgreSQL
 [group: "db"]
-postgres:
+postgres: _ensure-db
     poetry run python app/common/alchemy.py
 alias db-connect := postgres
 
 # Resets Dashboard Admins (Clears the admin_users table)
 [group: "db"]
-reset-admins:
+reset-admins: _ensure-db
     poetry run python app/db/reset_dashboard_admins.py
 
 # Add a dashboard admin. Usage: just add-admin <user_id> [--comment "Added via CLI"]
 [group: "db"]
 [arg("comment", long)]
-add-admin user_id comment="Added via CLI":
+add-admin user_id comment="Added via CLI": _ensure-db
     poetry run python app/db/add_admin.py {{user_id}} --comment "{{comment}}"
 
 # Remove a dashboard admin. Usage: just remove-admin <user_id>
 [group: "db"]
-remove-admin user_id:
+remove-admin user_id: _ensure-db
     poetry run python app/db/remove_admin.py {{user_id}}
 
 # Add a third-party API key. Usage: just add-api-key <name> [--scopes '["global"]']
 [group: "db"]
 [arg("scopes", long)]
-add-api-key name scopes='["global"]':
+add-api-key name scopes='["global"]': _ensure-db
     poetry run python app/db/manage_api_keys.py add {{name}} --scopes '{{scopes}}'
 
 # Revoke a third-party API key. Usage: just revoke-api-key <id>
 [group: "db"]
-revoke-api-key id:
+revoke-api-key id: _ensure-db
     poetry run python app/db/manage_api_keys.py revoke {{id}}
 
 # List all third-party API keys
 [group: "db"]
-list-api-keys:
+list-api-keys: _ensure-db
     poetry run python app/db/manage_api_keys.py list
 
-# Export the database to a file. Usage: just db-export [--file "powercord-export.sql"]
+# Export the database to a file. Usage: just db-export [--file "powercord-export.sql"] [--migration]
 [group: "db"]
 [arg("file", long)]
-db-export file="powercord-export.sql":
-    poetry run python app/db/db_tools.py export "{{file}}"
+[arg("migration", long, value="true")]
+db-export file="powercord-export.sql" migration="false": _ensure-db
+    poetry run python app/db/db_tools.py export "{{file}}" {{ if migration == "true" { "--migration" } else { "" } }}
 
 # Import the database from a file. Usage: just db-import <file>
 [group: "db"]
-db-import file:
+db-import file: _ensure-db
     poetry run python app/db/db_tools.py import "{{file}}"
+
+# Run an automated database backup
+[group: "db"]
+db-backup: _ensure-db
+    poetry run python app/db/db_tools.py backup
 
 # ---------------------------------------------------------------------------- #
 #                                 EXTENSIONS                                   #
