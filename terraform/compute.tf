@@ -1,3 +1,8 @@
+resource "google_compute_address" "powercord_ip" {
+  name   = "powercord-ip"
+  region = "us-central1"
+}
+
 resource "google_compute_instance" "main" {
   name         = "powercord-instance"
   machine_type = "e2-small"
@@ -17,11 +22,12 @@ resource "google_compute_instance" "main" {
     device_name = "powercord-data-disk"
   }
 
+
   network_interface {
     network    = "default"
     subnetwork = "default"
     access_config {
-      // Ephemeral public IP
+      nat_ip = google_compute_address.powercord_ip.address
     }
   }
 
