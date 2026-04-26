@@ -12,8 +12,8 @@ resource "google_compute_disk" "main" {
   depends_on = [google_project_service.main]
 }
 
-resource "google_storage_bucket" "bgml_backup" {
-  name          = "bgml_backup"
+resource "google_storage_bucket" "db_backup" {
+  name          = "powercord-db-backups-${var.project_id}"
   location      = "US" # Modify as needed
   force_destroy = false
   project       = var.project_id
@@ -29,7 +29,7 @@ resource "google_storage_bucket" "bgml_backup" {
 }
 
 resource "google_storage_bucket_iam_member" "compute_backup_writer" {
-  bucket = google_storage_bucket.bgml_backup.name
+  bucket = google_storage_bucket.db_backup.name
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${google_service_account.compute_sa.email}"
 }

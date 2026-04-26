@@ -91,7 +91,7 @@ The production environment is configured to automatically and securely manage yo
 The core Powercord application runs a scheduled background task that automatically creates a full database backup (`.sql` file) every 24 hours.
 - **Location:** Backups are stored in the persistent volume mapped to `/var/lib/postgresql/data/backups`.
 - **Retention:** The system automatically prunes backups older than 7 days to conserve disk space.
-- **Cloud Sync:** The host Google Compute Engine VM runs a daily `systemd` timer (configured via Terraform) that seamlessly syncs these local backups to your `bgml_backup` Cloud Storage bucket. This ensures your data is safely stored off-instance without coupling the core Python application to GCP-specific logic.
+- **Cloud Sync:** The host Google Compute Engine VM runs a daily `systemd` timer (configured via Terraform) that seamlessly syncs these local backups to your `powercord-db-backups-<your-project-id>` Cloud Storage bucket. This ensures your data is safely stored off-instance without coupling the core Python application to GCP-specific logic.
 
 ### Restoring a Database
 If you need to restore the database from a backup (e.g., migrating from a legacy system or recovering from a failure), follow this standard procedure:

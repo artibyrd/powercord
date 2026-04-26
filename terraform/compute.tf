@@ -68,7 +68,7 @@ resource "google_compute_instance" "main" {
       [Service]
       Type=oneshot
       # Run a container to sync the backups to GCS, accessing the same volume as the powercord container
-      ExecStart=/usr/bin/docker run --rm --volumes-from=powercord gcr.io/google.com/cloudsdktool/cloud-sdk:slim sh -c "gsutil cp /var/lib/postgresql/data/backups/*.sql gs://bgml_backup/ || true"
+      ExecStart=/usr/bin/docker run --rm --volumes-from=powercord gcr.io/google.com/cloudsdktool/cloud-sdk:slim sh -c "gsutil cp /var/lib/postgresql/data/backups/*.sql gs://powercord-db-backups-${var.project_id}/ || true"
       EOF
 
       cat << 'EOF' > /etc/systemd/system/backup-sync.timer
