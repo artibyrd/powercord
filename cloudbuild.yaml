@@ -21,6 +21,8 @@ steps:
         "build",
         "-t",
         "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$BUILD_ID",
+        "-t",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:latest",
         ".",
       ]
 
@@ -30,7 +32,8 @@ steps:
     args:
       [
         "push",
-        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app:$BUILD_ID",
+        "--all-tags",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app",
       ]
 
   # 3. Initialize Terraform

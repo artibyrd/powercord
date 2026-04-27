@@ -18,4 +18,5 @@ variable "zone" {
 variable "docker_image" {
   description = "The Docker image tag to deploy for Container-Optimized OS"
   type        = string
+  default     = ""
 }

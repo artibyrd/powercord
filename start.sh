@@ -51,6 +51,8 @@ if [ -z "$(ls -A $PGDATA_DIR 2>/dev/null)" ]; then
     # Configure postgres to allow external connections
     su - postgres -c "echo 'host all all 0.0.0.0/0 password' >> $PGDATA_DIR/pg_hba.conf"
     su - postgres -c "echo \"listen_addresses = '*'\" >> $PGDATA_DIR/postgresql.conf"
+    su - postgres -c "echo \"max_wal_size = '2GB'\" >> $PGDATA_DIR/postgresql.conf"
+    su - postgres -c "echo \"autovacuum = on\" >> $PGDATA_DIR/postgresql.conf"
 
     # Start PostgreSQL temporarily
     su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
@@ -59,6 +61,11 @@ if [ -z "$(ls -A $PGDATA_DIR 2>/dev/null)" ]; then
 else
     # Always start it temporarily for migrations if database is already initialized
     echo "Starting PostgreSQL temporarily for initialization checks..."
+    
+    # Apply Database Maintenance Tuning (Idempotent)
+    grep -q "max_wal_size = '2GB'" $PGDATA_DIR/postgresql.conf || su - postgres -c "echo \"max_wal_size = '2GB'\" >> $PGDATA_DIR/postgresql.conf"
+    grep -q "autovacuum = on" $PGDATA_DIR/postgresql.conf || su - postgres -c "echo \"autovacuum = on\" >> $PGDATA_DIR/postgresql.conf"
+
     rm -f $PGDATA_DIR/postmaster.pid
     su - postgres -c "/usr/lib/postgresql/*/bin/pg_ctl -D $PGDATA_DIR -l /tmp/logfile start"
     sleep 3

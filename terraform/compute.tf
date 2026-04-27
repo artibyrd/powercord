@@ -37,14 +37,14 @@ resource "google_compute_instance" "main" {
   }
 
   metadata = {
-    GCE_ENV_TYPE              = "PROD"
-    "google-logging-enabled"  = "true"
+    GCE_ENV_TYPE             = "PROD"
+    "google-logging-enabled" = "true"
     gce-container-declaration = yamlencode({
       spec = {
         containers = [
           {
             name  = "powercord"
-            image = var.docker_image
+            image = var.docker_image != "" ? var.docker_image : "us-central1-docker.pkg.dev/${var.project_id}/powercord/powercord-app:latest"
             volumeMounts = [
               {
                 name      = "data-disk"
@@ -68,6 +68,10 @@ resource "google_compute_instance" "main" {
     })
     startup-script = <<-EOT
       #!/bin/bash
+      
+      # Auto-resize the persistent data disk if it was expanded
+      resize2fs /dev/sdb || true
+
       cat << 'EOF' > /etc/systemd/system/backup-sync.service
       [Unit]
       Description=Sync database backups to GCS
