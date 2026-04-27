@@ -28,3 +28,9 @@ resource "google_project_iam_member" "compute_metric_writer" {
   role    = "roles/monitoring.metricWriter"
   member  = "serviceAccount:${google_service_account.compute_sa.email}"
 }
+
+resource "google_project_iam_member" "compute_storage_viewer" {
+  project = var.project_id
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.compute_sa.email}"
+}
