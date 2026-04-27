@@ -2,7 +2,7 @@ resource "google_compute_disk" "main" {
   name    = "powercord-data-disk"
   type    = "pd-standard"
   zone    = var.zone
-  size    = 10
+  size    = 50
   project = var.project_id
 
   lifecycle {
