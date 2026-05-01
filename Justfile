@@ -43,14 +43,20 @@ _run-with-status recipe *args:
     @echo '{{ GREEN }}✓ {{ recipe }} completed{{ NORMAL }}'
 alias rws := _run-with-status
 
-# Ensures the database service is running via Docker Compose
+# Ensures the database service is running via Docker
 [private]
 _ensure-db:
     #!powershell
-    $running = docker compose ps --services --filter status=running 2>$null
-    if ($running -notmatch "app") {
-        Write-Host "Starting database service..."
-        docker compose up -d
+    $running = docker ps -q -f name=powercord-pg-dev -f status=running
+    if (-not $running) {
+        Write-Host "Starting local dev database container..."
+        docker rm -f powercord-pg-dev 2>$null | Out-Null
+        docker run -d --name powercord-pg-dev -p 5433:5432 `
+            -e POSTGRES_USER=$env:POWERCORD_POSTGRES_USER `
+            -e POSTGRES_PASSWORD=$env:POWERCORD_POSTGRES_PASSWORD `
+            -e POSTGRES_DB=$env:POWERCORD_POSTGRES_DB `
+            -v powercord_pg_dev_data:/var/lib/postgresql/data `
+            postgres:15 | Out-Null
         Write-Host "Waiting for database to be ready..."
         Start-Sleep -Seconds 5
     }
@@ -117,13 +123,21 @@ ui debug="false":
 
 # Run Powercord stack locally.
 [group: "dev"]
-[parallel]
-dev: _dev_message bot api ui
+dev: db-upgrade
+    @just _dev_parallel
 
 # Run Powercord stack locally in debug mode.
 [group: "dev"]
+dev-debug: db-upgrade
+    @just _dev_debug_parallel
+
+[private]
 [parallel]
-dev-debug: (_dev_message "true") (bot "--debug") (api "--debug") (ui "--debug")
+_dev_parallel: _dev_message bot api ui
+
+[private]
+[parallel]
+_dev_debug_parallel: (_dev_message "true") (bot "--debug") (api "--debug") (ui "--debug")
 
 # Restart only the UI frontend (kills stale process first)
 [group: "dev"]

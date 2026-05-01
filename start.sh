@@ -36,6 +36,18 @@ fi
 # Define PostgreSQL data directory. This path is what we'll mount as a volume.
 PGDATA_DIR="/var/lib/postgresql/data/pgdata"
 
+# Ensure app/data is persisted to the mounted volume
+if [ ! -L "/app/data" ]; then
+    echo "Symlinking /app/data to persistent storage..."
+    mkdir -p /var/lib/postgresql/data/app_data
+    # If /app/data exists and is a directory, copy its contents
+    if [ -d "/app/data" ]; then
+        cp -a /app/data/. /var/lib/postgresql/data/app_data/ || true
+        rm -rf /app/data
+    fi
+    ln -s /var/lib/postgresql/data/app_data /app/data
+fi
+
 # Create the data directory and set permissions for the 'postgres' user
 mkdir -p $PGDATA_DIR
 chown -R postgres:postgres "$(dirname "$PGDATA_DIR")"

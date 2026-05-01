@@ -61,6 +61,25 @@ class Bot(commands.Bot):
         self.persistent_modals_added = False
         self.persistent_views_added = False
 
+    async def close(self):
+        import asyncio
+
+        if getattr(self, "bot_api_server", None):
+            logging.info("Signaling Bot Internal API to shut down...")
+            self.bot_api_server.should_exit = True
+
+        if getattr(self, "bot_api_task", None):
+            try:
+                # Give Uvicorn a moment to clean up gracefully
+                await asyncio.wait_for(self.bot_api_task, timeout=3.0)
+            except asyncio.TimeoutError:
+                logging.warning("Bot Internal API shutdown timed out, cancelling task...")
+                self.bot_api_task.cancel()
+            except Exception as e:
+                logging.error(f"Error during Bot Internal API shutdown: {e}")
+
+        await super().close()
+
     async def rollout_application_commands(self):
         """Syncs application commands to all guilds."""
         logging.info("Rolling out application commands...")
@@ -164,4 +183,19 @@ if __name__ == "__main__":
     if not token:
         logging.error("DISCORD_TOKEN environment variable not set.")
         exit(1)
+
+    # Suppress asyncio errors when the loop is closed.
+    # This prevents the noisy 'sys.meta_path is None' ImportError caused by
+    # rich attempting to log unclosed transport warnings during interpreter shutdown.
+    import asyncio
+
+    loop = asyncio.get_event_loop_policy().get_event_loop()
+
+    def silence_event_loop_closed(loop, context):
+        if loop.is_closed():
+            return
+        loop.default_exception_handler(context)
+
+    loop.set_exception_handler(silence_event_loop_closed)
+
     bot.run(token)
