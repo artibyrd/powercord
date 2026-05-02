@@ -238,7 +238,7 @@ verify-dashboard: _ensure-db
 # Upgrade the database to the latest version
 [group: "db"]
 db-upgrade: _ensure-db
-    poetry run alembic upgrade head
+    poetry run alembic upgrade heads
 
 # Create a new migration revision
 [group: "db"]
