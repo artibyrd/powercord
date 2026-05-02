@@ -346,9 +346,7 @@ async def start_bot_api(bot):
     host = "127.0.0.1"
 
     # We use loop="none" because we are already running inside the Nextcord event loop
-    config = Config(
-        app=api, host=host, port=port, log_level="warning", access_log=False, loop="none", install_signal_handlers=False
-    )
+    config = Config(app=api, host=host, port=port, log_level="warning", access_log=False, loop="none")
     server = Server(config)
     bot.bot_api_server = server
 
