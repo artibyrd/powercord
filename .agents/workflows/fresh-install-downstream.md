@@ -1,19 +1,30 @@
 ---
 description: Seamlessly clones the Powercord framework into a new downstream deployment, provisions the container environment, and natively configures core extensions.
 ---
+
 # Fresh Install Downstream Deployment
 
 This workflow sets up a fresh downstream deployment from the upstream core framework. 
 
 ## Pre-requisite: Teardown
-If updating an existing target directory, completely wipe it first to avoid artifacts.
+If updating an existing target directory, completely wipe it first to avoid artifacts. We preserve `.sql`, `.dump`, and `.env` files in a temporary stash before wiping.
 ```powershell
 // turbo
+$targetDir = "a:\Dev\Google\bards-guild-midi-project-3"
+$tempStash = "a:\Dev\Google\powercord-stash-temp"
+
 # Stop running containers and destroy the old database volume
-cd "a:\Dev\Google\bards-guild-midi-project-3"
-if (Test-Path "docker-compose.yml") { docker compose down -v }
-cd ..
-Remove-Item -Recurse -Force "a:\Dev\Google\bards-guild-midi-project-3"
+if (Test-Path $targetDir) {
+    cd $targetDir
+    if (Test-Path "docker-compose.yml") { docker compose down -v }
+    cd ..
+    
+    # Stash files to preserve
+    New-Item -ItemType Directory -Force -Path $tempStash | Out-Null
+    Get-ChildItem -Path $targetDir -File | Where-Object { $_.Extension -eq '.sql' -or $_.Extension -eq '.dump' -or $_.Name -like '.env*' } | Copy-Item -Destination $tempStash -Force
+    
+    Remove-Item -Recurse -Force $targetDir
+}
 ```
 
 ## Steps
@@ -23,13 +34,25 @@ Remove-Item -Recurse -Force "a:\Dev\Google\bards-guild-midi-project-3"
 // turbo
 cd "a:\Dev\Google\powercord"
 just init-target "a:\Dev\Google\bards-guild-midi-project-3"
+
+# Restore preserved files
+$tempStash = "a:\Dev\Google\powercord-stash-temp"
+$targetDir = "a:\Dev\Google\bards-guild-midi-project-3"
+if (Test-Path $tempStash) {
+    Copy-Item -Path "$tempStash\*" -Destination $targetDir -Force
+    Remove-Item -Recurse -Force $tempStash
+}
 ```
 
 2. **Migrate Secrets:** Copy your internal security profiles.
 ```powershell
 // turbo
-Copy-Item -Path "a:\Dev\Google\powercord\.env" -Destination "a:\Dev\Google\bards-guild-midi-project-3\.env" -Force
-Copy-Item -Path "a:\Dev\Google\powercord\.env.prod" -Destination "a:\Dev\Google\bards-guild-midi-project-3\.env.prod" -Force
+if (-not (Test-Path "a:\Dev\Google\bards-guild-midi-project-3\.env")) {
+    Copy-Item -Path "a:\Dev\Google\powercord\.env" -Destination "a:\Dev\Google\bards-guild-midi-project-3\.env" -Force
+}
+if (-not (Test-Path "a:\Dev\Google\bards-guild-midi-project-3\.env.prod")) {
+    Copy-Item -Path "a:\Dev\Google\powercord\.env.prod" -Destination "a:\Dev\Google\bards-guild-midi-project-3\.env.prod" -Force
+}
 ```
 
 3. **Dependency Seeding:** Install Python requirements in the new target to generate the `.venv`.
@@ -61,7 +84,16 @@ cd "a:\Dev\Google\bards-guild-midi-project-3"
 just rebuild-target
 ```
 
-7. **Validation:** Ensure clean startup via `docker compose logs`. Verify that Uvicorn logs `Application startup complete.` and extension components mounted natively.
+7. **Database Restore:** If a `powercord-export.sql` file was preserved, import it to restore the database state.
+```powershell
+// turbo
+cd "a:\Dev\Google\bards-guild-midi-project-3"
+if (Test-Path "powercord-export.sql") {
+    just db-import "powercord-export.sql"
+}
+```
+
+8. **Validation:** Ensure clean startup via `docker compose logs`. Verify that Uvicorn logs `Application startup complete.` and extension components mounted natively.
 ```powershell
 // turbo
 cd "a:\Dev\Google\bards-guild-midi-project-3"

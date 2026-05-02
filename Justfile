@@ -47,8 +47,8 @@ alias rws := _run-with-status
 [private]
 _ensure-db:
     #!powershell
-    $running = docker ps -q -f name=powercord-pg-dev -f status=running
-    if (-not $running) {
+    $portInUse = Get-NetTCPConnection -LocalPort 5433 -State Listen -ErrorAction SilentlyContinue
+    if (-not $portInUse) {
         Write-Host "Starting local dev database container..."
         docker rm -f powercord-pg-dev 2>$null | Out-Null
         docker run -d --name powercord-pg-dev -p 5433:5432 `
