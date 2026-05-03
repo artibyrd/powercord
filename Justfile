@@ -12,7 +12,6 @@ set unstable
 export PYTHONIOENCODING := "utf8"
 
 
-
 # ---------------------------------------------------------------------------- #
 #                                 CONSTANTS                                    #
 # ---------------------------------------------------------------------------- #
@@ -21,45 +20,14 @@ gcp_project := `gcloud config get-value project`
 gcp_bucket := gcp_project + "-tf-state"
 gcp_default_image := "us-central1-docker.pkg.dev/" + gcp_project + "/powercord/powercord-app:latest"
 
+
 # ---------------------------------------------------------------------------- #
-#                                 HELPERS                                      #
+#                               DEFAULT RECIPE                                 #
 # ---------------------------------------------------------------------------- #
 
 # Default: List available just commands
 default:
     @just --list --unsorted
-
-# A recipe to show the startup message for the dev environment
-[private]
-_dev_message debug='false':
-    @echo "Powercord is {{ if debug == "true" { "running in DEBUG mode" } else { "starting" } }}! Please wait ~1 minute for all services to start.  Use Ctrl+C to exit."
-
-# Status reporter for nested jobs.
-[private]
-_run-with-status recipe *args:
-    @echo ""
-    @echo '{{ CYAN }}→ Running {{ recipe }}...{{ NORMAL }}'
-    @just {{ recipe }} {{ args }}
-    @echo '{{ GREEN }}✓ {{ recipe }} completed{{ NORMAL }}'
-alias rws := _run-with-status
-
-# Ensures the database service is running via Docker
-[private]
-_ensure-db:
-    #!powershell
-    $portInUse = Get-NetTCPConnection -LocalPort 5433 -State Listen -ErrorAction SilentlyContinue
-    if (-not $portInUse) {
-        Write-Host "Starting local dev database container..."
-        docker rm -f powercord-pg-dev 2>$null | Out-Null
-        docker run -d --name powercord-pg-dev -p 5433:5432 `
-            -e POSTGRES_USER=$env:POWERCORD_POSTGRES_USER `
-            -e POSTGRES_PASSWORD=$env:POWERCORD_POSTGRES_PASSWORD `
-            -e POSTGRES_DB=$env:POWERCORD_POSTGRES_DB `
-            -v powercord_pg_dev_data:/var/lib/postgresql/data `
-            postgres:15 | Out-Null
-        Write-Host "Waiting for database to be ready..."
-        Start-Sleep -Seconds 5
-    }
 
 
 # ---------------------------------------------------------------------------- #
@@ -148,12 +116,12 @@ restart-ui debug="false":
 
 # Run Powercord locally(containerized)
 [group: "dev"]
-run:
+run: _teardown-dev-db
     docker compose up --build
 
 # Run Powercord locally(containerized) and reset database volume
 [group: "dev"]
-run-clean:
+run-clean: _teardown-dev-db
     docker compose down -v
     docker compose up --build
 
@@ -172,6 +140,7 @@ rebuild-target:
     docker compose down -v
     docker compose up -d --build
     @echo "Target core rebuilt. You can now execute 'just ext-install' workflows safely."
+
 
 # ---------------------------------------------------------------------------- #
 #                                 QA COMMANDS                                  #
@@ -230,6 +199,7 @@ coverage: _ensure-db
 [group: "qa"]
 verify-dashboard: _ensure-db
     poetry run pytest tests/unit/test_internal_server.py tests/unit/test_ui_components.py tests/integration/test_admin_routes.py tests/integration/test_public_home.py
+
 
 # ---------------------------------------------------------------------------- #
 #                                 DB COMMANDS                                  #
@@ -300,6 +270,7 @@ db-import file: _ensure-db
 db-backup: _ensure-db
     poetry run python app/db/db_tools.py backup
 
+
 # ---------------------------------------------------------------------------- #
 #                                 EXTENSIONS                                   #
 # ---------------------------------------------------------------------------- #
@@ -324,6 +295,7 @@ ext-uninstall name:
 [group: "extensions"]
 ext-list:
     poetry run python -m app.common.extension_manager list
+
 
 # ---------------------------------------------------------------------------- #
 #                                 DEPLOYMENT                                   #
@@ -369,3 +341,47 @@ gcp-build:
     @echo "Resetting the VM instance to pull the new image..."
     gcloud compute instances reset powercord-instance --zone us-central1-a
 
+
+
+# ---------------------------------------------------------------------------- #
+#                                 HELPERS                                      #
+# ---------------------------------------------------------------------------- #
+
+# A recipe to show the startup message for the dev environment
+[private]
+_dev_message debug='false':
+    @echo "Powercord is {{ if debug == "true" { "running in DEBUG mode" } else { "starting" } }}! Please wait ~1 minute for all services to start.  Use Ctrl+C to exit."
+
+# Status reporter for nested jobs.
+[private]
+_run-with-status recipe *args:
+    @echo ""
+    @echo '{{ CYAN }}→ Running {{ recipe }}...{{ NORMAL }}'
+    @just {{ recipe }} {{ args }}
+    @echo '{{ GREEN }}✓ {{ recipe }} completed{{ NORMAL }}'
+alias rws := _run-with-status
+
+# Stops the standalone local dev database container if it's running
+[private]
+_teardown-dev-db:
+    #!powershell
+    docker rm -f powercord-pg-dev 2>$null | Out-Null
+    exit 0
+
+# Ensures the database service is running via Docker
+[private]
+_ensure-db:
+    #!powershell
+    $portInUse = Get-NetTCPConnection -LocalPort 5433 -State Listen -ErrorAction SilentlyContinue
+    if (-not $portInUse) {
+        Write-Host "Starting local dev database container..."
+        docker rm -f powercord-pg-dev 2>$null | Out-Null
+        docker run -d --name powercord-pg-dev -p 5433:5432 `
+            -e POSTGRES_USER=$env:POWERCORD_POSTGRES_USER `
+            -e POSTGRES_PASSWORD=$env:POWERCORD_POSTGRES_PASSWORD `
+            -e POSTGRES_DB=$env:POWERCORD_POSTGRES_DB `
+            -v powercord_pg_dev_data:/var/lib/postgresql/data `
+            postgres:15 | Out-Null
+        Write-Host "Waiting for database to be ready..."
+        Start-Sleep -Seconds 5
+    }
