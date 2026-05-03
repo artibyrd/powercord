@@ -14,7 +14,8 @@ from sqlmodel import Session, select
 from app.common.alchemy import init_connection_engine
 from app.db.models import ApiKey
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+# Remove logging config
+
 
 
 def add_api_key(name: str, scopes: str, specific_key: str | None = None):
@@ -23,17 +24,17 @@ def add_api_key(name: str, scopes: str, specific_key: str | None = None):
         # Check if name exists
         existing = session.exec(select(ApiKey).where(ApiKey.name == name)).first()
         if existing:
-            logging.error(f"API Key with name '{name}' already exists.")
+            print(f"ERROR: API Key with name '{name}' already exists.")
             sys.exit(1)
 
         new_key = specific_key if specific_key else f"pc_{secrets.token_urlsafe(32)}"
         api_key = ApiKey(key=new_key, name=name, scopes=scopes, is_active=True)
         session.add(api_key)
         session.commit()
-        logging.info("API Key created successfully.")
-        logging.info(f"Name:   {name}")
-        logging.info(f"Key:    {new_key}")
-        logging.info(f"Scopes: {scopes}")
+        print("API Key created successfully.")
+        print(f"Name:   {name}")
+        print(f"Key:    {new_key}")
+        print(f"Scopes: {scopes}")
 
 
 def revoke_api_key(key_id: int):
@@ -41,13 +42,13 @@ def revoke_api_key(key_id: int):
     with Session(engine) as session:
         api_key = session.get(ApiKey, key_id)
         if not api_key:
-            logging.error(f"API Key with ID {key_id} not found.")
+            print(f"ERROR: API Key with ID {key_id} not found.")
             sys.exit(1)
 
         api_key.is_active = False
         session.add(api_key)
         session.commit()
-        logging.info(f"API Key '{api_key.name}' (ID: {key_id}) has been revoked.")
+        print(f"API Key '{api_key.name}' (ID: {key_id}) has been revoked.")
 
 
 def list_api_keys():
@@ -55,14 +56,14 @@ def list_api_keys():
     with Session(engine) as session:
         keys = session.exec(select(ApiKey)).all()
         if not keys:
-            logging.info("No API Keys found.")
+            print("No API Keys found.")
             return
 
-        logging.info(f"{'ID':<5} | {'Name':<20} | {'Active':<8} | {'Scopes'}")
-        logging.info("-" * 60)
+        print(f"{'ID':<5} | {'Name':<20} | {'Active':<8} | {'Scopes'}")
+        print("-" * 60)
         for k in keys:
             active = "Yes" if k.is_active else "No"
-            logging.info(f"{k.id:<5} | {k.name:<20} | {active:<8} | {k.scopes}")
+            print(f"{k.id:<5} | {k.name:<20} | {active:<8} | {k.scopes}")
 
 
 if __name__ == "__main__":

@@ -237,11 +237,22 @@ add-admin user_id comment="Added via CLI": _ensure-db
 remove-admin user_id: _ensure-db
     poetry run python app/db/remove_admin.py {{user_id}}
 
-# Add a third-party API key. Usage: just add-api-key <name> [--scopes '["global"]']
+# Add a third-party API key. Usage: just add-api-key <name> [--scopes '["global"]'] [--key <legacy_key>]
 [group: "db"]
 [arg("scopes", long)]
-add-api-key name scopes='["global"]': _ensure-db
-    poetry run python app/db/manage_api_keys.py add {{name}} --scopes '{{scopes}}'
+[arg("key", long)]
+add-api-key name scopes='["global"]' key="": _ensure-db
+    #!powershell
+    $name = '{{name}}'
+    $scopes = '{{scopes}}'
+    $key = '{{key}}'
+    # Escape double quotes for external executable argument parsing on Windows
+    $scopes_escaped = $scopes -replace '"', '\"'
+    if ($key -ne "") {
+        poetry run python app/db/manage_api_keys.py add "$name" --scopes "$scopes_escaped" --key "$key"
+    } else {
+        poetry run python app/db/manage_api_keys.py add "$name" --scopes "$scopes_escaped"
+    }
 
 # Revoke a third-party API key. Usage: just revoke-api-key <id>
 [group: "db"]
