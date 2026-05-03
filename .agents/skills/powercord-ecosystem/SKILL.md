@@ -92,5 +92,5 @@ just dev
 | Establishing deployment environment vars| Create `.env` exclusively in the staging project directory |
 
 ## Common Failure Patterns to Avoid
-- **Environment Shadowing / Contamination:** Generating `.env` files, `.sqlite` databases, or stray compilation artifacts directly inside the `powercord` source directory. These must solely exist inside a fresh project directory.
+- **Environment Shadowing / Contamination:** Generating `.env` files or stray compilation artifacts directly inside the `powercord` source directory. These must solely exist inside a fresh project directory.
 - **Dependency Desync:** Using manual pip installations which override production lockfiles. Always use `just ext-install` to guarantee stable local editable references for testbed evaluation.

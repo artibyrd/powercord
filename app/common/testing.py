@@ -3,6 +3,70 @@ import sys
 import types
 from importlib.machinery import ModuleSpec, SourceFileLoader
 
+# The canonical test database name — tests MUST never write to the dev database.
+TEST_DB_NAME = "powercord_test"
+
+
+def ensure_test_database() -> None:
+    """Create the dedicated test database and enable required extensions.
+
+    Connects to the PostgreSQL server's maintenance database (``postgres``)
+    and creates ``powercord_test`` if it doesn't exist.  This function also
+    enables ``pg_trgm`` in the test database so that trigram-based search
+    queries work identically to production.
+
+    This should be called **once per test session** from a session-scoped
+    fixture in ``conftest.py``.  It is safe to call multiple times — the
+    ``CREATE DATABASE`` and ``CREATE EXTENSION`` statements use ``IF NOT
+    EXISTS`` guards.
+
+    Environment variables consumed (must be set before calling):
+        ``POWERCORD_DB_HOST``
+        ``POWERCORD_POSTGRES_USER``
+        ``POWERCORD_POSTGRES_PASSWORD``
+    """
+    import sqlalchemy
+    from sqlalchemy import text
+    from sqlmodel import create_engine
+
+    db_host = os.environ["POWERCORD_DB_HOST"]
+    host_parts = db_host.split(":")
+
+    # 1. Connect to the maintenance DB to create the test database.
+    maintenance_url = sqlalchemy.engine.URL.create(
+        drivername="postgresql+pg8000",
+        username=os.environ["POWERCORD_POSTGRES_USER"],
+        password=os.environ["POWERCORD_POSTGRES_PASSWORD"],
+        host=host_parts[0],
+        port=int(host_parts[1]),
+        database="postgres",
+    )
+    maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+    with maint_engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+            {"db_name": TEST_DB_NAME},
+        ).fetchone()
+        if not exists:
+            # CREATE DATABASE cannot be parameterized — the name is a
+            # compile-time constant (TEST_DB_NAME) so this is safe.
+            conn.execute(text(f"CREATE DATABASE {TEST_DB_NAME}"))  # noqa: S608
+    maint_engine.dispose()
+
+    # 2. Connect to the test database and enable pg_trgm.
+    test_url = sqlalchemy.engine.URL.create(
+        drivername="postgresql+pg8000",
+        username=os.environ["POWERCORD_POSTGRES_USER"],
+        password=os.environ["POWERCORD_POSTGRES_PASSWORD"],
+        host=host_parts[0],
+        port=int(host_parts[1]),
+        database=TEST_DB_NAME,
+    )
+    test_engine = create_engine(test_url, isolation_level="AUTOCOMMIT")
+    with test_engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+    test_engine.dispose()
+
 
 def setup_extension_test_env(extension_name: str, conftest_file_path: str):
     """
