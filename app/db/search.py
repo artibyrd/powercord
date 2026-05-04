@@ -16,8 +16,9 @@ Usage example::
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import func, or_
-from sqlalchemy.orm import InstrumentedAttribute
 from sqlmodel.sql.expression import SelectOfScalar
 
 # Default trigram similarity threshold — the PostgreSQL default is 0.3.
@@ -28,7 +29,7 @@ DEFAULT_SIMILARITY_THRESHOLD: float = 0.3
 
 def build_trigram_query(
     stmt: SelectOfScalar,
-    columns: list[InstrumentedAttribute],
+    columns: list[Any],
     search_term: str,
     *,
     threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
