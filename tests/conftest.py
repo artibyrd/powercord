@@ -63,7 +63,7 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def _create_test_db():
     """Auto-create the isolated test database and enable pg_trgm.
 

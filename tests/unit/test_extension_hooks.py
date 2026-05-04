@@ -85,6 +85,7 @@ def test_hook_exception_is_swallowed():
 # ── Core Settings Cleanup Tests ───────────────────────────────────────
 
 
+@pytest.mark.integration
 def test_core_settings_cleanup(session):
     """Running delete_guild_data cleans up GuildExtensionSettings and WidgetSettings."""
     guild_id = 555
@@ -140,6 +141,7 @@ def test_core_settings_cleanup(session):
 # ── Utilities Hook Integration Test ──────────────────────────────────
 
 
+@pytest.mark.integration
 def test_utilities_delete_guild_data(session):
     """The utilities extension hook deletes all guild-specific audit rows."""
     from app.db.models import DiscordChannel, DiscordRole
