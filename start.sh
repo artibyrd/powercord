@@ -86,6 +86,8 @@ fi
 
 # Ensure user and database exist (idempotent)
 su - postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='${POWERCORD_POSTGRES_USER}'\" | grep -q 1 || psql -c \"CREATE USER ${POWERCORD_POSTGRES_USER} WITH PASSWORD '${POWERCORD_POSTGRES_PASSWORD}';\""
+# Ensure the user has CREATEDB privileges so that test suites can provision test databases
+su - postgres -c "psql -c \"ALTER USER ${POWERCORD_POSTGRES_USER} CREATEDB;\""
 su - postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='${POWERCORD_POSTGRES_DB}'\" | grep -q 1 || psql -c \"CREATE DATABASE ${POWERCORD_POSTGRES_DB} OWNER ${POWERCORD_POSTGRES_USER} ENCODING 'UTF8';\""
 
 # Run initialization scripts if they exist and this is a fresh database

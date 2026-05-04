@@ -94,3 +94,4 @@ just dev
 ## Common Failure Patterns to Avoid
 - **Environment Shadowing / Contamination:** Generating `.env` files or stray compilation artifacts directly inside the `powercord` source directory. These must solely exist inside a fresh project directory.
 - **Dependency Desync:** Using manual pip installations which override production lockfiles. Always use `just ext-install` to guarantee stable local editable references for testbed evaluation.
+- **Discord Client Caching (Phantom Bugs):** If slash commands are not appearing in the Discord server after a restart or deployment, **investigate client caching problems BEFORE writing diagnostic tests or debugging code**. Discord clients heavily cache slash commands. Always advise the user to force-refresh their Discord client (e.g., `Ctrl+R`) or check on another device before assuming the bot's command registration failed.
