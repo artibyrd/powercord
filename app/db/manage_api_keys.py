@@ -1,5 +1,4 @@
 import argparse
-import logging
 import secrets
 import sys
 from pathlib import Path
