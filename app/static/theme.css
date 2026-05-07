@@ -86,9 +86,19 @@ a {
     transition: all 0.2s ease;
 }
 
+/* Body-content links: visible underline + glow so they stand out from text.
+   Excludes buttons, nav items, and gallery tiles that happen to be <a> tags. */
+a:not(.btn):not(.navbar a):not(.midi-gallery-tile) {
+    text-decoration: underline;
+    text-decoration-color: rgba(88, 199, 243, 0.5);
+    text-underline-offset: 3px;
+    text-shadow: 0 0 4px rgba(88, 199, 243, 0.3);
+}
+
 a:hover {
     color: var(--p);
     text-shadow: 0 0 8px var(--p);
+    text-decoration-color: var(--p);
 }
 
 /* Component Overrides with Borders and Glow */
