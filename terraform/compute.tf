@@ -72,27 +72,33 @@ resource "google_compute_instance" "main" {
       # Auto-resize the persistent data disk if it was expanded
       resize2fs /dev/sdb || true
 
-      cat << 'EOF' > /etc/systemd/system/backup-sync.service
+      cat << 'SERVICEEOF' > /etc/systemd/system/backup-sync.service
       [Unit]
       Description=Sync database backups to GCS
 
       [Service]
       Type=oneshot
-      # Run a container to sync the backups to GCS, accessing the same volume as the powercord container
-      ExecStart=/usr/bin/docker run --rm --volumes-from=powercord gcr.io/google.com/cloudsdktool/cloud-sdk:slim sh -c "gsutil cp /var/lib/postgresql/data/backups/*.sql gs://powercord-db-backups-${var.project_id}/ || true"
-      EOF
+      ExecStart=/bin/bash -c '\
+        CONTAINER_ID=$(docker ps --filter "label=io.kubernetes.container.name=powercord" --format "{{.ID}}" | head -1); \
+        if [ -z "$CONTAINER_ID" ]; then echo "ERROR: No powercord container found" >&2; exit 1; fi; \
+        echo "Syncing backups from container $CONTAINER_ID..."; \
+        docker run --rm --volumes-from="$CONTAINER_ID" gcr.io/google.com/cloudsdktool/cloud-sdk:slim \
+          sh -c "gsutil cp /var/lib/postgresql/data/backups/*.sql.gz gs://powercord-db-backups-${var.project_id}/" \
+        && echo "Backup sync to GCS completed successfully." \
+        || { echo "ERROR: Backup sync to GCS failed" >&2; exit 1; }'
+      SERVICEEOF
 
-      cat << 'EOF' > /etc/systemd/system/backup-sync.timer
+      cat << 'TIMEREOF' > /etc/systemd/system/backup-sync.timer
       [Unit]
       Description=Run backup sync daily
 
       [Timer]
-      OnCalendar=daily
+      OnCalendar=*-*-* 04:00:00
       Persistent=true
 
       [Install]
       WantedBy=timers.target
-      EOF
+      TIMEREOF
 
       systemctl daemon-reload
       systemctl enable --now backup-sync.timer
