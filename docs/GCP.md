@@ -88,10 +88,13 @@ Downtime is kept to a minimum as the new Instance uses `create_before_destroy` l
 The production environment is configured to automatically and securely manage your database backups. Because the production Docker image is built to be lightweight, it does not include development tools like `just` or `poetry`. Instead, database management relies on built-in automated systems and direct container commands.
 
 ### Automated Daily Backups
-The core Powercord application runs a scheduled background task that automatically creates a full database backup (`.sql` file) every 24 hours.
+The core Powercord application runs a scheduled background task that automatically creates a compressed database backup (`.sql.gz` file) every 24 hours at **03:00 UTC**.
 - **Location:** Backups are stored in the persistent volume mapped to `/var/lib/postgresql/data/backups`.
 - **Retention:** The system automatically prunes backups older than 7 days to conserve disk space.
-- **Cloud Sync:** The host Google Compute Engine VM runs a daily `systemd` timer (configured via Terraform) that seamlessly syncs these local backups to your `powercord-db-backups-<your-project-id>` Cloud Storage bucket. This ensures your data is safely stored off-instance without coupling the core Python application to GCP-specific logic.
+- **Cloud Sync:** The host Google Compute Engine VM runs a daily `systemd` timer at **04:00 UTC** (configured via Terraform) that syncs these local backups to your `powercord-db-backups-<your-project-id>` Cloud Storage bucket. The one-hour offset ensures the backup file is fully written before the sync runs.
+
+> [!NOTE]
+> For complete backup behavior across all deployment environments (including non-GCP and local development), see the [Automated Backups](db.md#automated-backups) section in the Database Documentation.
 
 ### Restoring a Database
 If you need to restore the database from a backup (e.g., migrating from a legacy system or recovering from a failure), follow this standard procedure:

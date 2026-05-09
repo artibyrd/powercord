@@ -252,7 +252,7 @@ just db-export [filename.sql]
 ```
 *(If no filename is provided, it defaults to `powercord-export.sql`. Use the `--migration` flag if exporting data to an environment that already has initialized database schema tables.)*
 
-To manually trigger the background daily backup process (creates a timestamped backup file in `/var/lib/postgresql/data/backups`):
+To manually trigger the automated daily backup process (creates a timestamped `.sql.gz` file — see [Automated Backups](docs/db.md#automated-backups) for where files are stored in each environment):
 ```bash
 just db-backup
 ```

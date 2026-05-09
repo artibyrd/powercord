@@ -78,9 +78,15 @@ def _get_executable_path(executable_name: str) -> str:
 
 
 def _is_docker_running() -> bool:
-    """Checks if the Powercord docker container is currently running."""
+    """Checks if a local docker-compose Powercord container is currently running.
+
+    This is for LOCAL DEVELOPMENT use only — it checks for a running
+    docker-compose service named 'app'. It will always return False
+    inside a production container (where the docker CLI is not installed).
+    For detecting whether the code itself is running inside a container,
+    use ``_is_containerized()`` instead.
+    """
     try:
-        # Check if any container with the name 'app' or project name is running
         result = subprocess.run(
             ["docker", "compose", "ps", "--services", "--filter", "status=running"],  # noqa: S603, S607
             cwd=str(project_root),
@@ -91,6 +97,17 @@ def _is_docker_running() -> bool:
         return "app" in result.stdout
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
+
+
+def _is_containerized() -> bool:
+    """Detects whether the current process is running inside a Docker container.
+
+    Uses the presence of ``/.dockerenv`` (created by the Docker runtime) as
+    the indicator.  This is the correct check for choosing persistent-volume
+    paths in production, as opposed to ``_is_docker_running()`` which probes
+    for a docker-compose CLI on the *host*.
+    """
+    return Path("/.dockerenv").exists()
 
 
 def get_db_credentials():
@@ -196,9 +213,16 @@ class BackupService:
 
     @classmethod
     def create_daily_backup(cls):
-        """Creates a database backup with the current date."""
-        # Use local dir if not in docker
-        if not _is_docker_running():
+        """Creates a compressed database backup with the current date.
+
+        In a containerized environment (production), backups are written to
+        the persistent volume at ``/var/lib/postgresql/data/backups`` so the
+        host-level systemd timer can sync them to GCS.
+
+        In local development, backups are written to a ``backups/`` directory
+        relative to the project root.
+        """
+        if not _is_containerized():
             cls.BACKUP_DIR = project_root / "backups"
 
         cls.BACKUP_DIR.mkdir(parents=True, exist_ok=True)

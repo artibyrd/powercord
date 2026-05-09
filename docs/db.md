@@ -133,6 +133,51 @@ by changing `DEFAULT_SIMILARITY_THRESHOLD` in `app/db/search.py`.
 Lower values return more results with weaker matches; higher values filter
 more aggressively.
 
+## Automated Backups
+
+Powercord includes an automated backup system (`BackupService` in `app/db/db_tools.py`) that creates compressed daily database snapshots via APScheduler and prunes old backups automatically.
+
+### How It Works
+
+The backup pipeline has two layers:
+
+1. **Application Layer**: The `BackupService` runs inside the Powercord process. An APScheduler cron job fires `create_daily_backup()` every day at **03:00 UTC**. This creates a `pg_dump` export, compresses it to `.sql.gz`, and removes backups older than **7 days**.
+2. **Infrastructure Layer** *(GCP only)*: A host-level `systemd` timer (provisioned via Terraform) syncs the backup files from the persistent volume to a Google Cloud Storage bucket at **04:00 UTC** — one hour after creation to ensure the file is fully written.
+
+### Backup Directory by Environment
+
+The `BackupService` uses container detection (`/.dockerenv`) to determine the correct storage path. This ensures backups are always written to the appropriate location regardless of how Powercord is deployed:
+
+| Environment | Detection | Backup Directory | Notes |
+|---|---|---|---|
+| **Bare-metal local dev** (`just dev`) | Not containerized | `<project_root>/backups/` | Backups stored alongside project files |
+| **Docker Compose local dev** (`just run`) | Containerized | `/var/lib/postgresql/data/backups/` | Backups persist on the Docker volume |
+| **Self-hosted Docker** (no GCP) | Containerized | `/var/lib/postgresql/data/backups/` | Backups persist on the mounted volume |
+| **GCP production** | Containerized | `/var/lib/postgresql/data/backups/` | Backups synced to GCS by systemd timer |
+
+### Manual Backup
+
+You can trigger a backup manually at any time:
+```bash
+just db-backup
+```
+This runs the same `create_daily_backup()` logic used by the scheduler.
+
+### Configuration
+
+| Setting | Value | Location |
+|---|---|---|
+| Schedule | Daily at 03:00 UTC | `BackupService.start_scheduler()` |
+| Retention | 7 days | `BackupService.RETENTION_DAYS` |
+| Format | `.sql.gz` (gzip-compressed SQL) | `BackupService.create_daily_backup()` |
+| GCS sync schedule | Daily at 04:00 UTC | `terraform/compute.tf` (systemd timer) |
+
+> [!IMPORTANT]
+> **Self-hosted users without GCS**: Your backups are stored only on the Docker volume. If you run `docker compose down -v`, both the database **and** the backups will be deleted. Consider configuring your own off-host sync (e.g., a cron job with `rsync`, `rclone`, or cloud CLI tools) to protect against volume loss.
+
+> [!TIP]
+> The `just db-export` command is a separate, on-demand export tool that writes to a user-specified file path. It is independent of the automated backup system and useful for creating migration dumps or ad-hoc snapshots.
+
 ## Usage in Code
 
 To interact with the database, inject the session dependency:
