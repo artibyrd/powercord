@@ -111,12 +111,28 @@ def _is_containerized() -> bool:
 
 
 def get_db_credentials():
-    """Returns database credentials from the environment."""
+    """Returns database credentials from the environment.
+
+    In a containerized environment, PostgreSQL runs locally as a supervised
+    process on the default port ``5432``.  The ``POWERCORD_DB_HOST`` env var
+    loaded from Secret Manager may contain the host-mapped dev port (``5433``),
+    which is only correct for host → container connections.  This function
+    normalises the port to ``5432`` when running inside a container so that
+    callers invoked via ``docker exec`` (which do not inherit the ``start.sh``
+    override) connect correctly.
+    """
     gsm_loader.load_env()
     host_full = os.environ.get("POWERCORD_DB_HOST", "localhost:5432")
     host_parts = host_full.split(":")
     host = host_parts[0]
     port = host_parts[1] if len(host_parts) > 1 else "5432"
+
+    # Inside a container, PostgreSQL is always on the default port.
+    # The env var may carry the host-mapped dev port (5433) from
+    # Secret Manager; start.sh overrides it for supervised processes,
+    # but docker-exec invocations miss that override.
+    if _is_containerized():
+        port = "5432"
 
     return {
         "user": os.environ.get("POWERCORD_POSTGRES_USER", "postgres"),
