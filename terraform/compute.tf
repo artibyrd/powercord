@@ -66,9 +66,11 @@ resource "google_compute_instance" "main" {
         restartPolicy = "Always"
       }
     })
-    startup-script = <<-EOT
+    # replace() strips Windows \r characters that cause "bad interpreter"
+    # errors when GCE delivers the script to a Linux VM.
+    startup-script = replace(<<-EOT
       #!/bin/bash
-      
+
       # Auto-resize the persistent data disk if it was expanded
       resize2fs /dev/sdb || true
 
@@ -79,8 +81,8 @@ resource "google_compute_instance" "main" {
       [Service]
       Type=oneshot
       ExecStart=/bin/bash -c '\
-        CONTAINER_ID=$(docker ps --filter "label=io.kubernetes.container.name=powercord" --format "{{.ID}}" | head -1); \
-        if [ -z "$CONTAINER_ID" ]; then echo "ERROR: No powercord container found" >&2; exit 1; fi; \
+        CONTAINER_ID=$(docker ps -q | head -1); \
+        if [ -z "$CONTAINER_ID" ]; then echo "ERROR: No running container found" >&2; exit 1; fi; \
         echo "Syncing backups from container $CONTAINER_ID..."; \
         docker run --rm --volumes-from="$CONTAINER_ID" gcr.io/google.com/cloudsdktool/cloud-sdk:slim \
           sh -c "gsutil cp /var/lib/postgresql/data/backups/*.sql.gz gs://powercord-db-backups-${var.project_id}/" \
@@ -103,6 +105,7 @@ resource "google_compute_instance" "main" {
       systemctl daemon-reload
       systemctl enable --now backup-sync.timer
     EOT
+    , "\r", "")
   }
 
   lifecycle {
