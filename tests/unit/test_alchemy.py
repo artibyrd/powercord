@@ -53,15 +53,16 @@ def test_init_connection_engine(mock_tcp):
     original_engine = alchemy_module._engine
     alchemy_module._engine = None
     try:
-        init_connection_engine()
-        mock_tcp.assert_called_once()
-        args, kwargs = mock_tcp.call_args
-        assert args[0]["pool_size"] == 5
-        assert args[0]["max_overflow"] == 2
+        with patch.dict(os.environ, {"POWERCORD_DB_POOL_SIZE": "15", "POWERCORD_DB_MAX_OVERFLOW": "5"}):
+            init_connection_engine()
+            mock_tcp.assert_called_once()
+            args, kwargs = mock_tcp.call_args
+            assert args[0]["pool_size"] == 15
+            assert args[0]["max_overflow"] == 5
 
-        # Calling again should reuse the cached engine (no second call)
-        init_connection_engine()
-        mock_tcp.assert_called_once()  # still only one call
+            # Calling again should reuse the cached engine (no second call)
+            init_connection_engine()
+            mock_tcp.assert_called_once()  # still only one call
     finally:
         # Restore original state to avoid polluting other tests
         alchemy_module._engine = original_engine

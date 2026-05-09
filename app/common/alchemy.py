@@ -30,10 +30,10 @@ def init_connection_engine():
         return _engine
     logging.debug("Init database connection...")
     db_config = {
-        "pool_size": 5,
-        "max_overflow": 2,
-        "pool_timeout": 30,
-        "pool_recycle": 1800,
+        "pool_size": int(os.environ.get("POWERCORD_DB_POOL_SIZE", 20)),
+        "max_overflow": int(os.environ.get("POWERCORD_DB_MAX_OVERFLOW", 10)),
+        "pool_timeout": int(os.environ.get("POWERCORD_DB_POOL_TIMEOUT", 30)),
+        "pool_recycle": int(os.environ.get("POWERCORD_DB_POOL_RECYCLE", 1800)),
         "pool_pre_ping": True,
     }
     _engine = init_tcp_connection_engine(db_config)

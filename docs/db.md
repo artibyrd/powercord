@@ -45,6 +45,11 @@ See [TESTING.md](TESTING.md) for full testing documentation.
 
 - **Models**: Defined in `app/db/models.py`.
 - **Connection**: Managed in `app/common/alchemy.py`.
+  - **Connection Pooling**: To optimize performance under high load, the SQLAlchemy connection pool can be tuned via optional environment variables. If omitted, they default to safe production values:
+    - `POWERCORD_DB_POOL_SIZE` (default: 20) - The number of connections kept persistently open in the pool.
+    - `POWERCORD_DB_MAX_OVERFLOW` (default: 10) - The maximum number of extra connections created during traffic spikes (over the `pool_size`).
+    - `POWERCORD_DB_POOL_TIMEOUT` (default: 30) - Seconds to wait for an available connection before raising an error.
+    - `POWERCORD_DB_POOL_RECYCLE` (default: 1800) - Seconds a connection can remain active before being recycled (prevents stale connections).
 - **Search**: Trigram fuzzy search utilities in `app/db/search.py`.
 - **Migrations**: 
   - **Core Migrations**: Stored in the root `alembic/versions/`. This tracks essential framework tables (users, roles, API security models) and PostgreSQL extensions (e.g., `pg_trgm`).
