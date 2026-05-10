@@ -101,35 +101,39 @@ The `powercord/devkit.just` module centralizes reusable `just` recipes that exte
 | `_ensure-db` | Starts a local PostgreSQL 15 Docker container on port 5433 if one isn't already running. Uses PowerShell `Get-NetTCPConnection` for port detection. |
 | `_teardown-dev-db` | Stops and removes the `powercord-pg-dev` container. |
 
-### How Extensions Import It
+### How Extensions Resolve It
 
-Extensions use `import?` with a relative path to optionally import the devkit:
+Extensions include a self-resolving `_ensure-db` recipe that discovers and delegates to `devkit.just` at runtime:
 
 ```just
-import? "../../powercord/devkit.just"
-set allow-duplicate-recipes
-
-# No-op fallback if devkit is not found
 [private]
 _ensure-db:
+    #!powershell
+    $pcPath = if ($env:POWERCORD_PATH) { $env:POWERCORD_PATH } else { "../../powercord" }
+    $devkit = Join-Path $pcPath "devkit.just"
+    if (Test-Path $devkit) {
+        just --justfile $devkit _ensure-db
+    } else {
+        Write-Host "[devkit] powercord/devkit.just not found - skipping DB provisioning" -ForegroundColor Yellow
+    }
 ```
 
-**Key mechanics:**
-- The `import?` directive (with `?`) means the justfile does NOT fail if `devkit.just` is missing (e.g., in CI).
-- `set allow-duplicate-recipes` allows the no-op fallback `_ensure-db` to be silently overridden by the imported version.
-- This pattern requires the standard workspace layout where `powercord/` and `powercord-extensions/` are siblings.
+**Resolution order:**
+1. `POWERCORD_PATH` environment variable (explicit override — same var used by `conftest.py`)
+2. `../../powercord` relative path (standard sibling layout)
+3. Warning message if neither resolves (CI pipelines, non-standard layouts)
 
 ### When to Use vs. When It's Skipped
 
 | Context | `_ensure-db` Resolution |
 | --- | --- |
-| Extension repo cloned next to `powercord/` | ✅ Devkit imported — Docker DB auto-provisioned |
-| Extension repo cloned standalone (no sibling `powercord/`) | ⚠️ Falls back to no-op — assumes DB is managed externally |
+| Extension repo cloned next to `powercord/` | ✅ Devkit found via relative path — Docker DB auto-provisioned |
+| Extension repo in non-standard location | ✅ Set `POWERCORD_PATH` to resolve |
 | Inside a downstream project (e.g., `bards-guild-midi-project-3`) | ✅ Project-level Justfile has its own `_ensure-db` via `import 'powercord/devkit.just'` |
-| CI pipelines | ⚠️ No-op fallback — CI manages its own DB services |
+| CI pipelines / no powercord checkout | ⚠️ Warning printed — CI manages its own DB services |
 
 ## Common Failure Patterns to Avoid
 - **Environment Shadowing / Contamination:** Generating `.env` files or stray compilation artifacts directly inside the `powercord` source directory. These must solely exist inside a fresh project directory.
 - **Dependency Desync:** Using manual pip installations which override production lockfiles. Always use `just ext-install` to guarantee stable local editable references for testbed evaluation.
 - **Discord Client Caching (Phantom Bugs):** If slash commands are not appearing in the Discord server after a restart or deployment, **investigate client caching problems BEFORE writing diagnostic tests or debugging code**. Discord clients heavily cache slash commands. Always advise the user to force-refresh their Discord client (e.g., `Ctrl+R`) or check on another device before assuming the bot's command registration failed.
-- **Missing `devkit.just` Errors:** If an extension's `just test` silently skips DB provisioning, verify the workspace layout has `powercord/` as a sibling directory. The no-op fallback means `just test` will run but tests will fail at import time with database connection errors.
+- **Missing `devkit.just` Warnings:** If an extension's `just test` prints a yellow `[devkit]` warning, set `POWERCORD_PATH` or ensure the standard sibling layout. Without DB provisioning, tests will fail with database connection errors.

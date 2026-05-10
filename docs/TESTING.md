@@ -68,31 +68,31 @@ Extensions that require a database for testing use the shared
 provides the `_ensure-db` recipe, which automatically starts a local PostgreSQL
 Docker container on port 5433 if one isn't already running.
 
-Extension standalone justfiles import the devkit using an optional relative path:
+Extension standalone justfiles include a self-resolving `_ensure-db` recipe that
+discovers `devkit.just` at runtime and delegates to it:
 
 ```just
-import? "../../powercord/devkit.just"
+[private]
+_ensure-db:
+    #!powershell
+    $pcPath = if ($env:POWERCORD_PATH) { $env:POWERCORD_PATH } else { "../../powercord" }
+    $devkit = Join-Path $pcPath "devkit.just"
+    if (Test-Path $devkit) {
+        just --justfile $devkit _ensure-db
+    } else {
+        Write-Host "[devkit] powercord/devkit.just not found - skipping DB provisioning" -ForegroundColor Yellow
+    }
 ```
 
-This relies on the standard workspace layout where extensions sit alongside the
-`powercord` source repository:
-
-```
-workspace/
-├── powercord/              ← framework (contains devkit.just)
-└── powercord-extensions/
-    ├── midi_library/       ← import? "../../powercord/devkit.just"
-    └── honeypot/           ← import? "../../powercord/devkit.just"
-```
-
-A local no-op fallback `_ensure-db` recipe is defined in each extension's
-standalone justfile (with `set allow-duplicate-recipes`) so that the justfile
-still parses in environments where the devkit path doesn't exist (e.g., CI).
+**Resolution order:**
+1. `POWERCORD_PATH` environment variable (explicit override)
+2. `../../powercord` relative path (standard sibling layout)
+3. Warning message if neither resolves (e.g., CI pipelines)
 
 > [!TIP]
-> Extension justfiles also set `dotenv-load` and `export`, so you can create
-> a `.env` file in your extension directory with database credentials. If no
-> `.env` exists, the settings are silently ignored.
+> Extension justfiles set `dotenv-load` and `export`, so the database
+> credentials from `.env` are automatically forwarded to the child `just`
+> process that runs `devkit.just`.
 
 ### Extension Credential Loading
 

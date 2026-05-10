@@ -40,9 +40,9 @@ git clone <MIDI_LIBRARY_REPO_URL> powercord-extensions/midi_library
 
 ## 2. Directory Layout for Extension Development
 
-Extensions rely on a standard workspace layout where the `powercord` framework
-and the `powercord-extensions/` directory are siblings. This is required for
-the shared `devkit.just` module to be discovered at runtime:
+By default, extension justfiles expect the `powercord` framework to be a
+sibling directory so that `devkit.just` (shared dev recipes like database
+provisioning) can be discovered automatically:
 
 ```
 workspace/
@@ -50,14 +50,14 @@ workspace/
 │   ├── devkit.just           # Shared dev recipes (_ensure-db, etc.)
 │   └── Justfile
 └── powercord-extensions/
-    ├── midi_library/         # Extension — imports ../../powercord/devkit.just
-    └── honeypot/             # Extension — imports ../../powercord/devkit.just
+    ├── midi_library/         # Resolves ../../powercord/devkit.just
+    └── honeypot/             # Resolves ../../powercord/devkit.just
 ```
 
-> [!NOTE]
-> The `devkit.just` module provides shared development automation (like
-> database provisioning via Docker). Extensions import it using the
-> `import?` directive, which gracefully degrades if the path is not found.
+> [!TIP]
+> If your workspace doesn't follow this layout, set the `POWERCORD_PATH`
+> environment variable to point to your `powercord` directory. Extensions
+> check this variable first before falling back to the relative path.
 > See [TESTING.md](TESTING.md) for full details on how this works.
 
 ---
