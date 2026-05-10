@@ -152,14 +152,39 @@ class Bot(commands.Bot):
         self.cog_logger()
 
 
+def _parse_guild_ids() -> list[int]:
+    """Parse POWERCORD_DEFAULT_GUILD_IDS from env (comma-separated integers).
+
+    Returns an empty list when unset, which tells nextcord to register
+    commands globally instead of per-guild.
+    """
+    raw = os.environ.get("POWERCORD_DEFAULT_GUILD_IDS", "")
+    if not raw.strip():
+        return []
+    try:
+        return [int(gid.strip()) for gid in raw.split(",") if gid.strip()]
+    except ValueError:
+        logging.warning(
+            "POWERCORD_DEFAULT_GUILD_IDS contains non-integer values; "
+            "falling back to global command registration."
+        )
+        return []
+
+
 gadget_inspector = GadgetInspector()
+
+_guild_ids = _parse_guild_ids()
+if _guild_ids:
+    logging.info(f"Registering commands to guilds: {_guild_ids}")
+else:
+    logging.info("No guild IDs configured; commands will register globally.")
 
 bot = Bot(
     command_prefix=get_prefix,
     intents=intents,
     description="Powercord Powerbot",
     gadget_inspector=gadget_inspector,
-    default_guild_ids=[256838244027727872],  # Force commands to be guild-specific for dev
+    default_guild_ids=_guild_ids or None,
 )
 
 # Load the powerloader cog first, as it's a core part of the bot
