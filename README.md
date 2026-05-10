@@ -37,7 +37,7 @@ Powercord provides a framework for building full featured web applications with 
 - **[Packer](https://www.docker.com/)**
     - Packer is used to build a Google Compute Engine virtual machine server image that runs Powercord as a containerized workload.
 - **[Just](https://just.systems/)**
-    - Just is a command runner that makes it easy to interact with this project by running simple `just` recipes.  All commands to test, run, and deploy Powercord are located in the [Justfile](Justfile).  Install [just](https://just.systems/man/en/packages.html) and run `just` from the command line in the root folder of this project to see a list of available just recipes.
+    - Just is a command runner that makes it easy to interact with this project by running simple `just` recipes.  All commands to test, run, and deploy Powercord are located in the [Justfile](Justfile).  Shared development recipes (e.g., database provisioning) are extracted into [`devkit.just`](devkit.just) so that extensions can import them for standalone use.  Install [just](https://just.systems/man/en/packages.html) and run `just` from the command line in the root folder of this project to see a list of available just recipes.
 
 
 ## Installation
@@ -271,7 +271,7 @@ just db-import <filename.sql>
 - **[About Powercord Cog Hotloading](docs/cogs.md)** - Details on the dynamic hotloading and unloading of Discord cogs.
 - **[Database Documentation](docs/db.md)** - Reference for database management, models, and migrations.
 - **[Core Utilities Documentation](docs/utilities.md)** - Overview of reusable components available across the API, Bot, and UI layers.
-- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing guide covering execution, coverage targets, and test organization.
+- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing guide covering execution, coverage targets, test organization, and database provisioning via `devkit.just`.
 - **[Swagger UI Styling Guide](docs/swagger_styling.md)** - Information on customizing the Swagger API docs with dark themes and CSS overrides.
 
 ## LLMS Files

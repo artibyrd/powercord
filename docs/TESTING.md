@@ -41,8 +41,8 @@ by the test configuration.
 > [!IMPORTANT]
 > The PostgreSQL Docker container **must be running** before tests execute.
 > The `just test` recipe handles this automatically via the `_ensure-db`
-> dependency, but if you run `pytest` directly, start the container first
-> with `just _ensure-db`.
+> dependency (provided by [`devkit.just`](../devkit.just)), but if you run
+> `pytest` directly, start the container first with `just _ensure-db`.
 
 ### Why Not SAVEPOINT Rollbacks?
 
@@ -61,12 +61,44 @@ To run extension tests via `just test` within the extension repository, ensure o
 1. The extension repository is cloned natively as a sibling to the `powercord` core repository.
 2. The `POWERCORD_PATH` environment variable is explicitly set and points to your local `powercord` core repository.
 
+### Database Provisioning via `devkit.just`
+
+Extensions that require a database for testing use the shared
+[`devkit.just`](../devkit.just) module from the Powercord framework. This file
+provides the `_ensure-db` recipe, which automatically starts a local PostgreSQL
+Docker container on port 5433 if one isn't already running.
+
+Extension standalone justfiles import the devkit using an optional relative path:
+
+```just
+import? "../../powercord/devkit.just"
+```
+
+This relies on the standard workspace layout where extensions sit alongside the
+`powercord` source repository:
+
+```
+workspace/
+├── powercord/              ← framework (contains devkit.just)
+└── powercord-extensions/
+    ├── midi_library/       ← import? "../../powercord/devkit.just"
+    └── honeypot/           ← import? "../../powercord/devkit.just"
+```
+
+A local no-op fallback `_ensure-db` recipe is defined in each extension's
+standalone justfile (with `set allow-duplicate-recipes`) so that the justfile
+still parses in environments where the devkit path doesn't exist (e.g., CI).
+
+> [!TIP]
+> Extension justfiles also set `dotenv-load` and `export`, so you can create
+> a `.env` file in your extension directory with database credentials. If no
+> `.env` exists, the settings are silently ignored.
+
 ### Extension Credential Loading
 
 Extension `conftest.py` files read the core repository's `.env` file to load
 database credentials (`POWERCORD_DB_HOST`, `POWERCORD_POSTGRES_PASSWORD`,
-etc.) that match the running Docker container. This is necessary because
-extension Justfiles do not use `dotenv-load`. If the `.env` is missing (e.g.,
+etc.) that match the running Docker container. If the `.env` is missing (e.g.,
 in CI), hardcoded fallback defaults are used.
 
 ## Test Organization

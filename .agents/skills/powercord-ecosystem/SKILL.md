@@ -91,7 +91,45 @@ just dev
 | Validating overall functionality | `cd /project-dir` followed by `just ext-install ../path` |
 | Establishing deployment environment vars| Create `.env` exclusively in the staging project directory |
 
+## Shared Development Recipes (`devkit.just`)
+
+The `powercord/devkit.just` module centralizes reusable `just` recipes that extensions and the framework itself depend on during development. This eliminates duplication across repositories.
+
+### What It Provides
+| Recipe | Purpose |
+| --- | --- |
+| `_ensure-db` | Starts a local PostgreSQL 15 Docker container on port 5433 if one isn't already running. Uses PowerShell `Get-NetTCPConnection` for port detection. |
+| `_teardown-dev-db` | Stops and removes the `powercord-pg-dev` container. |
+
+### How Extensions Import It
+
+Extensions use `import?` with a relative path to optionally import the devkit:
+
+```just
+import? "../../powercord/devkit.just"
+set allow-duplicate-recipes
+
+# No-op fallback if devkit is not found
+[private]
+_ensure-db:
+```
+
+**Key mechanics:**
+- The `import?` directive (with `?`) means the justfile does NOT fail if `devkit.just` is missing (e.g., in CI).
+- `set allow-duplicate-recipes` allows the no-op fallback `_ensure-db` to be silently overridden by the imported version.
+- This pattern requires the standard workspace layout where `powercord/` and `powercord-extensions/` are siblings.
+
+### When to Use vs. When It's Skipped
+
+| Context | `_ensure-db` Resolution |
+| --- | --- |
+| Extension repo cloned next to `powercord/` | ✅ Devkit imported — Docker DB auto-provisioned |
+| Extension repo cloned standalone (no sibling `powercord/`) | ⚠️ Falls back to no-op — assumes DB is managed externally |
+| Inside a downstream project (e.g., `bards-guild-midi-project-3`) | ✅ Project-level Justfile has its own `_ensure-db` via `import 'powercord/devkit.just'` |
+| CI pipelines | ⚠️ No-op fallback — CI manages its own DB services |
+
 ## Common Failure Patterns to Avoid
 - **Environment Shadowing / Contamination:** Generating `.env` files or stray compilation artifacts directly inside the `powercord` source directory. These must solely exist inside a fresh project directory.
 - **Dependency Desync:** Using manual pip installations which override production lockfiles. Always use `just ext-install` to guarantee stable local editable references for testbed evaluation.
 - **Discord Client Caching (Phantom Bugs):** If slash commands are not appearing in the Discord server after a restart or deployment, **investigate client caching problems BEFORE writing diagnostic tests or debugging code**. Discord clients heavily cache slash commands. Always advise the user to force-refresh their Discord client (e.g., `Ctrl+R`) or check on another device before assuming the bot's command registration failed.
+- **Missing `devkit.just` Errors:** If an extension's `just test` silently skips DB provisioning, verify the workspace layout has `powercord/` as a sibling directory. The no-op fallback means `just test` will run but tests will fail at import time with database connection errors.

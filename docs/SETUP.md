@@ -38,7 +38,31 @@ git clone <MIDI_LIBRARY_REPO_URL> powercord-extensions/midi_library
 
 ---
 
-## 2. Configure Environment
+## 2. Directory Layout for Extension Development
+
+Extensions rely on a standard workspace layout where the `powercord` framework
+and the `powercord-extensions/` directory are siblings. This is required for
+the shared `devkit.just` module to be discovered at runtime:
+
+```
+workspace/
+├── powercord/                # Framework — contains devkit.just
+│   ├── devkit.just           # Shared dev recipes (_ensure-db, etc.)
+│   └── Justfile
+└── powercord-extensions/
+    ├── midi_library/         # Extension — imports ../../powercord/devkit.just
+    └── honeypot/             # Extension — imports ../../powercord/devkit.just
+```
+
+> [!NOTE]
+> The `devkit.just` module provides shared development automation (like
+> database provisioning via Docker). Extensions import it using the
+> `import?` directive, which gracefully degrades if the path is not found.
+> See [TESTING.md](TESTING.md) for full details on how this works.
+
+---
+
+## 3. Configure Environment
 
 ```bash
 cd powercord
@@ -54,7 +78,7 @@ cp .example.env .env
 
 ---
 
-## 3. Install Framework Dependencies
+## 4. Install Framework Dependencies
 
 ```bash
 just install
@@ -64,7 +88,7 @@ This runs `poetry install` and sets up pre-commit hooks.
 
 ---
 
-## 4. Initialize the Database
+## 5. Initialize the Database
 
 ```bash
 # Run Alembic migrations to create all core tables
@@ -76,7 +100,7 @@ just add-admin <YOUR_DISCORD_USER_ID> "Initial Admin"
 
 ---
 
-## 5. Install Extensions
+## 6. Install Extensions
 
 Use `just ext-install` to install each external extension. This copies the
 extension files into the framework, installs its Python dependencies, and
@@ -112,7 +136,7 @@ utilities            1.0.0      internal   Administrative tools for server analy
 
 ---
 
-## 6. Run Powercord
+## 7. Run Powercord
 
 ### Option A: Local Development (recommended for dev)
 ```bash
@@ -145,9 +169,9 @@ Spins up the full stack in Docker containers.
 
 ---
 
-## 7. Legacy Migrations (Optional)
+## 8. Legacy Migrations (Optional)
 
-### 7.1. Import Legacy MIDI Data
+### 8.1. Import Legacy MIDI Data
 
 If you have a legacy MIDI database SQL dump:
 
@@ -158,7 +182,7 @@ just midi-migrate <path_to_dump.sql>
 This recipe is provided by the `midi_library` extension's own justfile
 and is automatically available after installation.
 
-### 7.2. Migrating Legacy API Keys (V2 to V3)
+### 8.2. Migrating Legacy API Keys (V2 to V3)
 
 If you have an existing application using the older V2 of Powercord (e.g., `bards-guild-midi-project-2`), its legacy API keys are not automatically supported in the new V3 database. You will need to explicitly register the existing key string so that existing integrations won't break.
 
@@ -173,7 +197,7 @@ This bypasses the internal secure generation and uses your specified key, ensuri
 
 ---
 
-## 8. Run QA
+## 9. Run QA
 
 ```bash
 just qa        # lint + format check + type check + tests
