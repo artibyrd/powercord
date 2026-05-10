@@ -45,13 +45,13 @@ rg "LEGACY" --type-add 'config:*.conf' --type-add 'just:Justfile,*.just' -t py -
 
 | Variable | Where Used | Description |
 |---|---|---|
-| `LUTEBOT_LEGACY_API_KEY` | `legacy_compat.py` | The exact legacy API key value. If unset, all legacy requests are rejected (safe default). |
+| `POWERCORD_LUTEBOT_LEGACY_API_KEY` | `legacy_compat.py` | The exact legacy API key value. If unset, all legacy requests are rejected (safe default). |
 
 ### Database Records
 
 | Table | Record | Description |
 |---|---|---|
-| `api_keys` | LuteBot key entry | A third-party API key row with `midi_library` scope, inserted via `just add-api-key`. The key value matches `LUTEBOT_LEGACY_API_KEY`. |
+| `api_keys` | LuteBot key entry | A third-party API key row with `midi_library` scope, inserted via `just add-api-key`. The key value matches `POWERCORD_LUTEBOT_LEGACY_API_KEY`. |
 
 ---
 
@@ -67,7 +67,7 @@ checklist to cleanly remove all v2 migration artifacts:
 - [ ] **`midi_library/legacy_compat.py`** — Delete the file entirely
 - [ ] **`midi_library/tests/test_legacy_compat.py`** — Delete the file entirely
 - [ ] **`midi_library/LUTEBOT_MIGRATION.md`** — Delete the file entirely
-- [ ] **Environment** — Remove `LUTEBOT_LEGACY_API_KEY` from `.env.prod` and Terraform secrets
+- [ ] **Environment** — Remove `POWERCORD_LUTEBOT_LEGACY_API_KEY` from `.env.prod` and Terraform secrets
 - [ ] **Database** — Revoke the LuteBot API key: `just revoke-api-key <id>`
 - [ ] **DNS** — Remove or redirect the `api.bardsguild.life` A record in Cloudflare
 - [ ] **This document** — Delete `docs/LEGACY_V2_MIGRATION.md` itself
