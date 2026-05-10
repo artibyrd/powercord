@@ -32,6 +32,7 @@ rg "LEGACY" --type-add 'config:*.conf' --type-add 'just:Justfile,*.just' -t py -
 | [`nginx.conf`](file:///a:/Dev/Google/powercord/nginx.conf#L54-L79) | `BEGIN LEGACY` block | Adds an `api.bardsguild.life` server block that rewrites root-path requests to `/midi_library/legacy/` on FastAPI. |
 | [`app/db/db_tools.py`](file:///a:/Dev/Google/powercord/app/db/db_tools.py#L146) | `BEGIN LEGACY` + inline | The `is_migration` parameter on `export_database()` and its two code paths (Docker and local host). Produces data-only INSERT dumps for importing v2 data into a v3 Alembic-managed schema. Also includes the `--migration` CLI arg at the bottom of the file. |
 | [`Justfile`](file:///a:/Dev/Google/powercord/Justfile#L272) | Inline comment | The `--migration` flag on the `db-export` recipe. Passes through to `db_tools.py`'s migration export mode. |
+| [`.example.env`](file:///a:/Dev/Google/powercord/.example.env#L46-L48) | `BEGIN LEGACY` block | Manifest entry for `POWERCORD_LUTEBOT_LEGACY_API_KEY`. Required by `gsm_loader.py` to fetch the secret from Secret Manager at container startup. |
 
 ### Extension (midi_library)
 
