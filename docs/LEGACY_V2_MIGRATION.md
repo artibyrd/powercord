@@ -56,6 +56,51 @@ rg "LEGACY" --type-add 'config:*.conf' --type-add 'just:Justfile,*.just' -t py -
 
 ---
 
+## Migration Phases
+
+### Phase 0 — Compatibility Shim (✅ Complete)
+- Implemented `legacy_compat.py` in the `midi_library` extension
+- Mounted the router in `main_api.py` with `ImportError` guard
+- Added nginx rewrite block for `api.bardsguild.life`
+- Inserted the LuteBot API key into the production database
+
+### Phase 1 — DNS Cutover (✅ Complete)
+- Pointed `api.bardsguild.life` DNS to the v3 instance IP
+- Verified end-to-end: `?key=...&find=test` returns `200 OK` with results
+
+> [!IMPORTANT]
+> **Secret loader gotcha:** `gsm_loader.py` uses `.example.env` as a **manifest**.
+> Only secrets listed in `.example.env` are fetched from Secret Manager.
+> The `POWERCORD_` prefix is also required for `start.sh` to export the var.
+
+### Phase 2 — Bot Identity Swap (✅ Complete)
+- Swapped `POWERCORD_DISCORD_TOKEN` to the production bot token
+- Re-invited the bot with `bot` + `applications.commands` OAuth2 scopes
+
+> [!WARNING]
+> **All three Discord secrets must be updated together.** They must all
+> belong to the same Discord Application:
+>
+> | Secret | Source (Developer Portal) |
+> |---|---|
+> | `POWERCORD_DISCORD_TOKEN` | Bot → Token |
+> | `POWERCORD_DISCORD_CLIENT_ID` | OAuth2 → Client ID |
+> | `POWERCORD_DISCORD_CLIENT_SECRET` | OAuth2 → Client Secret |
+>
+> If only the token is swapped, the bot connects but slash commands fail
+> with `403 Missing Access`, and OAuth2 web logins break.
+
+### Phase 3 — 48-Hour Soak Period (⏳ Pending)
+- Monitor API, Discord bot, and LuteBot traffic for stability
+- After 48 hours with no issues, proceed to Phase 4
+
+### Phase 4 — Legacy Decommission (⏳ Pending)
+- Stop and snapshot the legacy `bardbot-2-4-10` VM
+- Follow the Removal Checklist below
+- Shut down the legacy VM
+
+---
+
 ## Removal Checklist
 
 When the LuteBot maintainer has migrated (or the legacy domain is decommissioned), follow this
@@ -68,6 +113,7 @@ checklist to cleanly remove all v2 migration artifacts:
 - [ ] **`midi_library/legacy_compat.py`** — Delete the file entirely
 - [ ] **`midi_library/tests/test_legacy_compat.py`** — Delete the file entirely
 - [ ] **`midi_library/LUTEBOT_MIGRATION.md`** — Delete the file entirely
+- [ ] **`powercord/.example.env`** — Remove the `BEGIN LEGACY` → `END LEGACY` block (the `POWERCORD_LUTEBOT_LEGACY_API_KEY` manifest entry)
 - [ ] **Environment** — Remove `POWERCORD_LUTEBOT_LEGACY_API_KEY` from `.env.prod` and Terraform secrets
 - [ ] **Database** — Revoke the LuteBot API key: `just revoke-api-key <id>`
 - [ ] **DNS** — Remove or redirect the `api.bardsguild.life` A record in Cloudflare
