@@ -74,6 +74,10 @@ resource "google_compute_instance" "main" {
       # Auto-resize the persistent data disk if it was expanded
       resize2fs /dev/sdb || true
 
+      # Prune stale Docker images to prevent boot disk exhaustion.
+      # On COS, each deploy pulls a new image; old ones accumulate.
+      docker system prune -a -f --filter "until=24h" || true
+
       cat << 'SERVICEEOF' > /etc/systemd/system/backup-sync.service
       [Unit]
       Description=Sync database backups to GCS
