@@ -16,7 +16,6 @@ from app.db.models import ApiKey
 # Remove logging config
 
 
-
 def add_api_key(name: str, scopes: str, specific_key: str | None = None):
     engine = init_connection_engine()
     with Session(engine) as session:
@@ -82,7 +81,7 @@ if __name__ == "__main__":
         "--key",
         type=str,
         default=None,
-        help="Specific exact key to insert (useful for migrating existing legacy keys). If omitted, a secure key is generated.",
+        help="Specific exact key to insert (e.g. for pre-shared partner keys). If omitted, a secure key is generated.",
     )
 
     # REVOKE

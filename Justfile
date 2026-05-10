@@ -269,7 +269,7 @@ list-api-keys: _ensure-db
 # Export the database to a file. Usage: just db-export [--file "powercord-export.sql"] [--migration]
 [group: "db"]
 [arg("file", long)]
-[arg("migration", long, value="true")]
+[arg("migration", long, value="true")]  # BEGIN LEGACY: v2 data migration flag — see docs/LEGACY_V2_MIGRATION.md
 db-export file="powercord-export.sql" migration="false": _ensure-db
     poetry run python app/db/db_tools.py export "{{file}}" {{ if migration == "true" { "--migration" } else { "" } }}
 

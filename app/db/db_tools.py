@@ -143,6 +143,8 @@ def get_db_credentials():
     }
 
 
+# BEGIN LEGACY: The is_migration parameter supports v2→v3 data migration.
+# See docs/LEGACY_V2_MIGRATION.md for context and removal guide.
 def export_database(output_file: str, is_migration: bool = False):
     """Exports the database to a SQL file."""
     creds = get_db_credentials()
@@ -172,7 +174,7 @@ def export_database(output_file: str, is_migration: bool = False):
                 "5432",
             ]
 
-            if is_migration:
+            if is_migration:  # LEGACY: v2→v3 data migration path
                 # For migration, we typically want data-only with inserts to avoid schema conflicts
                 # in a destination that has already been provisioned with Alembic.
                 cmd.extend(["--data-only", "--inserts", "--no-owner"])
@@ -202,7 +204,7 @@ def export_database(output_file: str, is_migration: bool = False):
                 creds["port"],
             ]
 
-            if is_migration:
+            if is_migration:  # LEGACY: v2→v3 data migration path
                 cmd.extend(["--data-only", "--inserts", "--no-owner"])
             else:
                 cmd.extend(["--clean", "--if-exists", "--no-owner"])
@@ -378,6 +380,7 @@ if __name__ == "__main__":
         "action", choices=["export", "import", "backup"], help="Action to perform (export, import, or backup)"
     )
     parser.add_argument("file", type=str, nargs="?", help="Path to the SQL file (required for export/import)")
+    # LEGACY: v2→v3 data migration flag — see docs/LEGACY_V2_MIGRATION.md
     parser.add_argument("--migration", action="store_true", help="Use migration format (data-only inserts)")
 
     args = parser.parse_args()

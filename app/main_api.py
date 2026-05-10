@@ -34,6 +34,20 @@ async def lifespan(app: FastAPI):
     gadget_inspector = GadgetInspector()
     gadget_inspector.load_sprockets(app)
 
+    # ── BEGIN LEGACY: v2 BardBot API Migration ───────────────────────
+    # See docs/LEGACY_V2_MIGRATION.md for context and removal guide.
+    # Mounted outside the sprocket system because the legacy endpoint uses
+    # its own query-parameter key auth (LuteBot-only) and cannot be wrapped
+    # with the standard api_scope_required dependency.
+    try:
+        from app.extensions.midi_library.legacy_compat import router as legacy_router
+
+        app.include_router(legacy_router, prefix="/midi_library/legacy")
+        logging.info("Mounted legacy LuteBot compatibility shim at /midi_library/legacy")
+    except ImportError:
+        logging.debug("midi_library extension not installed — legacy compat shim not loaded.")
+    # ── END LEGACY ──────────────────────────────────────────────────
+
     # Start the automated daily database backup scheduler
     from app.db.db_tools import BackupService
 
