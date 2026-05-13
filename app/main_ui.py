@@ -56,11 +56,14 @@ beforeware = Beforeware(
         "/auth/discord/callback",
         r"/static/.*",
         r"/favicon\.ico",
-        r"/midi/gallery",
-        r"/midi/detail/.*",
-        r"/midi/proxy/.*",
     ],
 )
+
+# Dynamically collect public-facing paths declared by installed extensions.
+# Each extension can define a PUBLIC_PATHS list[str] in its routes.py module
+# to register auth-bypass patterns without modifying this file.
+_route_inspector = GadgetInspector()
+beforeware.skip.extend(_route_inspector.collect_public_paths())
 
 # Setup app with session middleware and include auth routes.
 hdrs = (
@@ -1038,7 +1041,6 @@ async def extension_details_route(extension_name: str, req):
 # Auto-register any routes.py files found in installed extensions.
 # Each extension can define a register_routes(rt) function that
 # receives the FastHTML route decorator and registers its own routes.
-_route_inspector = GadgetInspector()
 _route_inspector.load_routes(rt)
 
 

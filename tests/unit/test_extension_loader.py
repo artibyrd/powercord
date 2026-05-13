@@ -240,3 +240,92 @@ class TestInspectWidgets:
         with patch("importlib.import_module", side_effect=ImportError("test")):
             result = inspector.inspect_widgets()
             assert "broken_widget" not in result
+
+
+# ── collect_public_paths tests ───────────────────────────────────────
+
+
+class TestCollectPublicPaths:
+    """Tests for GadgetInspector.collect_public_paths() auth-skip collection."""
+
+    def test_returns_declared_public_paths(self) -> None:
+        """Extensions with PUBLIC_PATHS in routes.py should have them collected."""
+        inspector = GadgetInspector()
+        mock_module = MagicMock()
+        mock_module.PUBLIC_PATHS = [r"/test/public.*", r"/test/open/.*"]
+
+        with patch("importlib.import_module", return_value=mock_module):
+            # Point at a temp dir with a single extension that has routes.py
+            import tempfile
+            from pathlib import Path
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ext_dir = Path(tmpdir) / "test_ext"
+                ext_dir.mkdir()
+                (ext_dir / "routes.py").write_text("PUBLIC_PATHS = []\n")
+
+                inspector.extensions_dir = Path(tmpdir)
+                result = inspector.collect_public_paths()
+
+                assert r"/test/public.*" in result
+                assert r"/test/open/.*" in result
+                assert len(result) == 2
+
+    def test_skips_extensions_without_public_paths(self) -> None:
+        """Extensions without PUBLIC_PATHS should contribute nothing."""
+        inspector = GadgetInspector()
+        mock_module = MagicMock(spec=[])  # No PUBLIC_PATHS attribute
+        # Ensure getattr returns None for missing attributes
+        del mock_module.PUBLIC_PATHS
+
+        with patch("importlib.import_module", return_value=mock_module):
+            import tempfile
+            from pathlib import Path
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ext_dir = Path(tmpdir) / "no_public"
+                ext_dir.mkdir()
+                (ext_dir / "routes.py").write_text("# no public paths\n")
+
+                inspector.extensions_dir = Path(tmpdir)
+                result = inspector.collect_public_paths()
+
+                assert result == []
+
+    def test_handles_import_error_gracefully(self) -> None:
+        """ImportError during routes import should be logged, not raised."""
+        inspector = GadgetInspector()
+
+        with patch("importlib.import_module", side_effect=ImportError("missing dep")):
+            import tempfile
+            from pathlib import Path
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ext_dir = Path(tmpdir) / "broken_ext"
+                ext_dir.mkdir()
+                (ext_dir / "routes.py").write_text("PUBLIC_PATHS = []\n")
+
+                inspector.extensions_dir = Path(tmpdir)
+                # Should not raise
+                result = inspector.collect_public_paths()
+                assert result == []
+
+    def test_skips_non_list_public_paths(self) -> None:
+        """PUBLIC_PATHS that is not a list should be skipped with a warning."""
+        inspector = GadgetInspector()
+        mock_module = MagicMock()
+        mock_module.PUBLIC_PATHS = "/not/a/list"  # Wrong type — string instead of list
+
+        with patch("importlib.import_module", return_value=mock_module):
+            import tempfile
+            from pathlib import Path
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ext_dir = Path(tmpdir) / "bad_type_ext"
+                ext_dir.mkdir()
+                (ext_dir / "routes.py").write_text("PUBLIC_PATHS = 'wrong'\n")
+
+                inspector.extensions_dir = Path(tmpdir)
+                result = inspector.collect_public_paths()
+                assert result == []
+

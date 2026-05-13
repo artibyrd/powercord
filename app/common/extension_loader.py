@@ -211,3 +211,50 @@ class GadgetInspector:
                     logging.warning(f"Extension '{extension_name}' has routes.py but no register_routes() function.")
             except ImportError as e:
                 logging.error(f"Could not import routes for extension '{extension_name}': {e}")
+
+    def collect_public_paths(self) -> list[str]:
+        """Collect authentication-skip regex patterns declared by extensions.
+
+        Scans each installed extension's ``routes.py`` for a module-level
+        ``PUBLIC_PATHS`` constant — a ``list[str]`` of regex patterns that
+        should bypass the ``Beforeware`` authentication middleware.
+
+        This allows extensions to self-declare their public-facing routes
+        instead of requiring hardcoded entries in the core framework.
+
+        Returns:
+            Combined list of regex pattern strings from all extensions.
+        """
+        collected: list[str] = []
+        for extension_path in sorted(self.extensions_dir.iterdir()):
+            if not extension_path.is_dir():
+                continue
+            routes_file = extension_path / "routes.py"
+            if not routes_file.is_file():
+                continue
+
+            extension_name = extension_path.name
+            module_path = f"app.extensions.{extension_name}.routes"
+            try:
+                module = importlib.import_module(module_path)
+                public_paths = getattr(module, "PUBLIC_PATHS", None)
+                if public_paths is not None:
+                    if not isinstance(public_paths, list):
+                        logging.warning(
+                            "Extension '%s' has PUBLIC_PATHS but it is not a list — skipping.",
+                            extension_name,
+                        )
+                        continue
+                    collected.extend(public_paths)
+                    logging.info(
+                        "Collected %d public path(s) from extension '%s'.",
+                        len(public_paths),
+                        extension_name,
+                    )
+            except ImportError as e:
+                logging.error(
+                    "Could not import routes for extension '%s': %s",
+                    extension_name,
+                    e,
+                )
+        return collected
