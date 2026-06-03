@@ -7,10 +7,10 @@
 just test
 
 # Run only unit tests (fast, no external dependencies)
-just test unit
+just test --type unit
 
 # Run only integration tests (may need database or network)
-just test integration
+just test --type integration
 
 # Run tests with coverage report
 just coverage
@@ -71,17 +71,17 @@ Docker container on port 5433 if one isn't already running.
 Extension standalone justfiles include a self-resolving `_ensure-db` recipe that
 discovers `devkit.just` at runtime and delegates to it:
 
-```just
+```bash
 [private]
 _ensure-db:
-    #!powershell
-    $pcPath = if ($env:POWERCORD_PATH) { $env:POWERCORD_PATH } else { "../../powercord" }
-    $devkit = Join-Path $pcPath "devkit.just"
-    if (Test-Path $devkit) {
-        just --justfile $devkit _ensure-db
-    } else {
-        Write-Host "[devkit] powercord/devkit.just not found - skipping DB provisioning" -ForegroundColor Yellow
-    }
+    #!/usr/bin/env bash
+    pc_path="${POWERCORD_PATH:-../../powercord}"
+    devkit="$pc_path/devkit.just"
+    if [ -f "$devkit" ]; then
+      just --justfile "$devkit" _ensure-db
+    else
+      echo "[devkit] powercord/devkit.just not found - skipping DB provisioning"
+    fi
 ```
 
 **Resolution order:**

@@ -31,9 +31,9 @@ git clone <MIDI_LIBRARY_REPO_URL> powercord-extensions/midi_library
 > [!NOTE]
 > If cloning from local repos (e.g. on the same machine), use file paths:
 > ```bash
-> git clone "a:\Dev\Google\powercord" powercord
-> git clone "a:\Dev\Google\powercord-extensions\honeypot" powercord-extensions/honeypot
-> git clone "a:\Dev\Google\powercord-extensions\midi_library" powercord-extensions/midi_library
+> git clone /path/to/local/powercord powercord
+> git clone /path/to/local/powercord-extensions/honeypot powercord-extensions/honeypot
+> git clone /path/to/local/powercord-extensions/midi_library powercord-extensions/midi_library
 > ```
 
 ---
@@ -212,7 +212,7 @@ This bypasses the internal secure generation and uses your specified key, ensuri
 
 ```bash
 just qa        # lint + format check + type check + tests
-just qa fix    # same, but auto-fix lint and formatting issues
+just qa --fix  # same, but auto-fix lint and formatting issues
 ```
 
 ---
@@ -273,7 +273,7 @@ Repeat for each extension you want to update.
 | `just install` | Install Python deps via Poetry |
 | `just dev` | Run locally (Bot + API + UI) |
 | `just run` | Run in Docker containers |
-| `just qa fix` | Lint, format, type check, test |
+| `just qa --fix` | Lint, format, type check, test |
 | `just db-upgrade` | Apply database migrations |
 | `just ext-install <path>` | Install an extension |
 | `just ext-uninstall <name>` | Uninstall an extension |

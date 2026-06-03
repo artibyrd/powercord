@@ -4,10 +4,10 @@
 #                                 SETTINGS                                     #
 # ---------------------------------------------------------------------------- #
 
-set shell := ["cmd.exe", "/c"]
+set shell := ["bash", "-cu"]
 set export
 set dotenv-load
-set unstable
+set unstable  # required for [parallel] (lines 105, 109)
 
 import 'devkit.just'
 
@@ -45,8 +45,8 @@ install:
 [group: "dev"]
 dev-clean:
     @echo "Cleaning up..."
-    for /d /r . %d in (__pycache__ .pytest_cache .mypy_cache) do @if exist "%d" rd /s /q "%d"
-    @if exist ".venv" rd /s /q ".venv"
+    find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache \) -exec rm -rf {} +
+    [ -d .venv ] && rm -rf .venv || true
     @echo "Cleanup complete!"
 
 # Kill any process listening on a given port (safe no-op if port is free)
@@ -54,11 +54,11 @@ dev-clean:
 [no-exit-message]
 [private]
 _kill_port port:
-    #!powershell
-    $connections = Get-NetTCPConnection -LocalPort {{port}} -State Listen -ErrorAction SilentlyContinue
-    if ($connections) {
-        $connections | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-    }
+    #!/usr/bin/env bash
+    pids=$(lsof -ti :{{port}} 2>/dev/null)
+    if [ -n "$pids" ]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+    fi
 
 # Kill all dev server ports (5001=UI, 8000=API, 8001=Bot)
 [group: "dev"]
@@ -75,7 +75,7 @@ alias kill := kill-dev
 [arg("debug", long, value="true")]
 bot debug="false":
     @just _kill_port 8001
-    {{ if debug == "true" { "set DEBUG=1&& " } else { "" } }}poetry run python app/main_bot.py
+    {{ if debug == "true" { "DEBUG=1 " } else { "" } }}poetry run python app/main_bot.py
 
 # Run the FastAPI server
 [group: "dev"]
@@ -89,7 +89,7 @@ api debug="false":
 [arg("debug", long, value="true")]
 ui debug="false":
     @just _kill_port 5001
-    {{ if debug == "true" { "set DEBUG=1&& " } else { "" } }}poetry run python app/main_ui.py
+    {{ if debug == "true" { "DEBUG=1 " } else { "" } }}poetry run python app/main_ui.py
 
 # Run Powercord stack locally.
 [group: "dev"]
@@ -130,11 +130,11 @@ run-clean: _teardown-dev-db
 # Clone the framework into a new downstream destination and disable upstream push
 [group: "dev"]
 init-target target_dir:
-    #!powershell
-    Write-Host "Cloning core framework downstream securely..."
+    #!/usr/bin/env bash
+    echo "Cloning core framework downstream securely..."
     git clone . '{{target_dir}}'
     git -C '{{target_dir}}' remote set-url --push origin DISABLED
-    Write-Host "Target initialized. Pull upstream framework updates via 'git pull origin main' inside the target."
+    echo "Target initialized. Pull upstream framework updates via 'git pull origin main' inside the target."
 
 # Rebuild containerized environment with a fresh database volume
 [group: "dev"]
@@ -186,11 +186,14 @@ alias t := test
 [private]
 [arg("type", long)]
 _test type="":
-    #!powershell
-    if ("{{type}}" -eq "all") { poetry run pytest tests }
-    elseif ("{{type}}" -ne "") { poetry run pytest tests -m "{{type}}" }
-    else { poetry run pytest tests -m "not integration" }
-    exit $LASTEXITCODE
+    #!/usr/bin/env bash
+    if [ "{{type}}" = "all" ]; then
+      poetry run pytest tests
+    elif [ "{{type}}" != "" ]; then
+      poetry run pytest tests -m "{{type}}"
+    else
+      poetry run pytest tests -m "not integration"
+    fi
 
 # Run tests and generate coverage report
 [group: "qa"]
@@ -244,17 +247,12 @@ remove-admin user_id: _ensure-db
 [arg("scopes", long)]
 [arg("key", long)]
 add-api-key name scopes='["global"]' key="": _ensure-db
-    #!powershell
-    $name = '{{name}}'
-    $scopes = '{{scopes}}'
-    $key = '{{key}}'
-    # Escape double quotes for external executable argument parsing on Windows
-    $scopes_escaped = $scopes -replace '"', '\"'
-    if ($key -ne "") {
-        poetry run python app/db/manage_api_keys.py add "$name" --scopes "$scopes_escaped" --key "$key"
-    } else {
-        poetry run python app/db/manage_api_keys.py add "$name" --scopes "$scopes_escaped"
-    }
+    #!/usr/bin/env bash
+    if [ -n "{{key}}" ]; then
+      poetry run python app/db/manage_api_keys.py add "{{name}}" --scopes '{{scopes}}' --key "{{key}}"
+    else
+      poetry run python app/db/manage_api_keys.py add "{{name}}" --scopes '{{scopes}}'
+    fi
 
 # Revoke a third-party API key. Usage: just revoke-api-key <id>
 [group: "db"]
