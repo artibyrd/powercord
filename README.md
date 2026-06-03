@@ -26,7 +26,7 @@ Powercord provides a framework for building full featured web applications with 
 - **[Postgresql](https://www.postgresql.org/docs/current/)** — Relational database for long-term data storage and advanced querying.
 - **[Nginx](https://nginx.org/en/docs/index.html)** — Reverse proxy for the frontend and API.
 - **[Docker](https://www.docker.com/)** — Single container image for local and cloud deployment.
-- **[Packer](https://www.packer.io/)** — Builds GCE VM server images for containerized workloads.
+- **[Terraform](https://www.terraform.io/)** — Infrastructure-as-code for provisioning and managing GCP resources.
 - **[Just](https://just.systems/)** — Command runner for all project recipes.  Run `just` from the project root to see available commands.
 
 ## Quick Start
