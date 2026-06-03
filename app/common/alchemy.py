@@ -64,7 +64,7 @@ def get_database_url():
 
 
 def init_tcp_connection_engine(db_config):
-    logging.debug("Connecting to localhost DB instance...")
+    logging.debug("Connecting to DB instance...")
     url = get_database_url()
 
     # Use SQLModel's create_engine

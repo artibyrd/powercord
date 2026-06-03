@@ -84,7 +84,7 @@ cp .example.env .env
 just install
 ```
 
-This runs `poetry install` and sets up pre-commit hooks.
+This runs `poetry install` to set up all Python dependencies.
 
 ---
 
@@ -259,7 +259,7 @@ Repeat for each extension you want to update.
 
 | Command | Description |
 |---------|-------------|
-| `just install` | Install Python deps + pre-commit hooks |
+| `just install` | Install Python deps via Poetry |
 | `just dev` | Run locally (Bot + API + UI) |
 | `just run` | Run in Docker containers |
 | `just qa fix` | Lint, format, type check, test |

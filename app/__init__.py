@@ -12,7 +12,7 @@ from app.common.logger import config_logging
 
 
 def setup_logging(name=None):
-    # Configure logging. Use DEBUG level if the DEBUG env var is set.
+    # Configure logging. Use DEBUG level if the POWERCORD_DEBUG env var is set.
     log_level = logging.DEBUG if os.getenv("POWERCORD_DEBUG", "").lower() in ("true", "1", "yes") else logging.INFO
 
     # Check if we are in GCP (GCE_ENV_TYPE metadata exists)

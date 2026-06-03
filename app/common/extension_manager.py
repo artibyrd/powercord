@@ -85,7 +85,7 @@ def _normalize_pkg_name(dep: str) -> str:
 def load_manifest(extension_path: Path) -> dict[str, Any]:
     """Load and validate an extension's metadata from ``pyproject.toml`` or ``extension.json``.
 
-    Raises ``FileNotFoundError`` if neither manifest is missing, or
+    Raises ``FileNotFoundError`` if no manifest file is found, or
     ``ValueError`` if required keys are absent.
     """
     toml_file = extension_path / "pyproject.toml"

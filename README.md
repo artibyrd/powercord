@@ -126,7 +126,6 @@ app
 └── extensions
     └── example         # Folder with extension name
         ├── README.md       # Include documentation for your extensions!
-        ├── __init__.py     # Do init stuff here if you're into that
         ├── blueprint.py    # Main functionality goes here, then imported into other files
         ├── cog.py          # Automatically loaded by bot
         ├── sprocket.py     # Automatically loaded by API

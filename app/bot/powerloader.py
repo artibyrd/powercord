@@ -38,7 +38,8 @@ class ConfirmDeleteView(nextcord.ui.View):
 
 
 class AppPowerLoader(commands.Cog):
-    """Updated cog loader using slash commands"""
+    """Core management cog providing slash commands for extension lifecycle
+    (load/unload/reload), server data deletion, and API access role management."""
 
     def __init__(self, bot: Bot):
         self.bot = bot

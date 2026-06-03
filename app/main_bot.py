@@ -206,7 +206,7 @@ for cog_name in bot.cog_report.get("all_cogs", []):
 if __name__ == "__main__":
     token = os.getenv("POWERCORD_DISCORD_TOKEN")
     if not token:
-        logging.error("DISCORD_TOKEN environment variable not set.")
+        logging.error("POWERCORD_DISCORD_TOKEN environment variable not set.")
         exit(1)
 
     # Suppress asyncio errors when the loop is closed.

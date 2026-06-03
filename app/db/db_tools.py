@@ -146,7 +146,16 @@ def get_db_credentials():
 # BEGIN LEGACY: The is_migration parameter supports v2→v3 data migration.
 # See docs/LEGACY_V2_MIGRATION.md for context and removal guide.
 def export_database(output_file: str, is_migration: bool = False):
-    """Exports the database to a SQL file."""
+    """Export the database to a SQL file.
+
+    Args:
+        output_file: Path for the output ``.sql`` file.
+        is_migration: If ``True``, exports data-only with INSERT statements
+            (LEGACY: v2→v3 data migration path).
+
+    Supports both Docker container and local PostgreSQL environments,
+    automatically detecting which path to use.
+    """
     creds = get_db_credentials()
     output_path = Path(output_file.strip("\"'")).resolve()
 
@@ -306,7 +315,14 @@ class BackupService:
 
 
 def import_database(input_file: str):
-    """Imports a SQL file into the database."""
+    """Import a SQL file into the database.
+
+    Args:
+        input_file: Path to the ``.sql`` file to import.
+
+    Supports both Docker container and local PostgreSQL environments,
+    automatically detecting which path to use.
+    """
     creds = get_db_credentials()
     input_path = Path(input_file.strip("\"'")).resolve()
 

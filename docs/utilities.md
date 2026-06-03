@@ -20,16 +20,31 @@ async def read_item(item_id: int):
 
 ### Dependencies (`app.api.dependencies`)
 
-#### `verify_api_key`
+#### `get_current_api_user`
 
-Verifies the `Authorization` header against the `API_RELOAD_KEY`.
+Unified API authentication dependency. Validates Internal API keys,
+Database API keys, and Discord OAuth tokens. Returns a dict with
+`identity` and `scopes`.
 
 ```python
-from app.api.dependencies import verify_api_key
+from app.api.dependencies import get_current_api_user
 from fastapi import Depends
 
-@app.post("/reload", dependencies=[Depends(verify_api_key)])
-async def reload_config():
+@app.get("/protected", dependencies=[Depends(get_current_api_user)])
+async def protected_route():
+    ...
+```
+
+#### `api_scope_required`
+
+Dependency generator to secure an endpoint to a specific scope.
+
+```python
+from app.api.dependencies import api_scope_required
+from fastapi import Depends
+
+@app.get("/honeypot/data", dependencies=[Depends(api_scope_required("honeypot"))])
+async def honeypot_data():
     ...
 ```
 

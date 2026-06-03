@@ -12,30 +12,32 @@ The `example` extension serves as a template and reference implementation for bu
 
 ### Bot Features (Cogs)
 - **Commands**:
-  - `/add_todo`: A slash command to add an item to the database.
-  - `/list_todo`: A slash command to retrieve items from the database.
-  - `!ping`: A traditional prefix command.
-  - `Context Menu Commands`: Includes interactive UI components.
+  - `!helloworld`: A simple prefix command that replies with "Hello, world!".
+  - `!headsortails`: A prefix command for a coin flip game.
+  - `!roll`: A dice-rolling prefix command in NdN format.
+  - `Context Menu Commands`: Includes interactive UI components (user and message commands).
 - **Listeners**:
-  - `on_message`: Demonstrates how to safely listen to chat events.
+  - `on_message_delete`: Logs deleted messages to the channel.
+  - `on_message_edit`: Logs message edits showing before/after content.
 - **Tasks**:
-  - `example_loop`: An asynchronous background loop that runs periodically to perform maintenance or checks.
+  - `bg_counter_task`: An asynchronous background loop (using `tasks.loop`) that runs periodically to demonstrate background task execution.
 
 > **Note**: Cogs utilizing persistent views or modals cannot be hot-reloaded and require a full bot restart.
 
 ### API Routes (Sprockets)
-- `GET /example/todos`: Retrieves a list of TodoItems.
-- `POST /example/todos`: Creates a new TodoItem.
+- `GET /example/todos/`: Retrieves a list of TodoItems.
+- `POST /example/todos/`: Creates a new TodoItem.
 - `PUT /example/todos/{id}`: Updates an existing TodoItem.
 - `DELETE /example/todos/{id}`: Deletes a TodoItem.
 
 ### UI Elements (Widgets)
-- `public_example_card`: A simple informational widget visible to public visitors.
-- `public_example_todo_list`: A live rendering of TodoItems fetched from the active database session.
+- `welcome_widget`: A simple informational widget visible to visitors.
+- `another_widget`: An additional example widget.
+- `todo_widget`: A live rendering of TodoItems fetched from the active database session.
 - `admin_example_controls_widget`: A widget strictly prefixed with `admin_` to guarantee it only appears in the System Admin dashboard, featuring actionable forms hitting backend endpoints.
 
 ## Setup Instructions
 This extension is enabled by default for demonstration purposes. To create a new extension, simply copy this folder structure, rename the components, and build out your logic!
 
 ### Environment Variables
-- `EXAMPLE_WEBHOOK_URL`: (Optional) The URL of a Discord webhook to send a message to for testing purposes.
+- `POWERCORD_EXAMPLE_WEBHOOK_URL`: (Optional) The URL of a Discord webhook to send a message to for testing purposes.

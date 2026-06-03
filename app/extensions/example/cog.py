@@ -321,7 +321,7 @@ class ChannelOrMemberConverter(commands.Converter):
 ### === BOT STARTUP OVERRIDE CLASSES === ###
 # Some bot features (custom contexts, persistent modals/views)
 # require overriding base Bot classes before the bot is started.
-# See bottom of cogs/powerloader/cog_gobbler.py for more details.
+# See app/bot/powerloader.py for more details on cog management.
 ## == NOTICE == ##
 # Using these features means the cog must be included when the bot
 # initially starts, and cannot be hot loaded after the bot has started!

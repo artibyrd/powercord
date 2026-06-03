@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # Dynamically import all installed extension blueprints so Alembic's
 # autogenerate can detect their SQLModel tables.  Only extensions that
 # are currently installed under app/extensions/ will be picked up.
-# We also automatically mount any extension's isolated alembic/versions
-# folder to facilitate localized decoupled schema migrations.
+# We also automatically register any extension's isolated alembic/versions
+# folder into version_locations so Alembic discovers their migration scripts.
 import os
 
 from app.common.alchemy import get_database_url

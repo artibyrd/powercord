@@ -1,9 +1,16 @@
 """Extension lifecycle hook registry for Powercord.
 
 Provides a lightweight mechanism for extensions to register callbacks
-for lifecycle events.  Currently supported events:
+for lifecycle events.  The only event with special built-in handling in
+this module is:
 
 - ``delete_guild_data`` — purges all extension-specific data for a guild.
+  Core ``GuildExtensionSettings`` and ``WidgetSettings`` rows are always
+  cleaned up automatically, in addition to any custom callback.
+
+The following event names are conventional and fired by
+``app.common.extension_manager``, but have no special handling here:
+
 - ``on_install``        — called after an extension is installed.
 - ``on_uninstall``      — called before an extension is removed.
 
@@ -17,7 +24,8 @@ Usage (in an extension's ``__init__.py``)::
     register_hook("my_extension", "delete_guild_data", _delete_my_data)
 
 The UI and bot layers call ``run_hook`` to execute registered callbacks,
-and ``supports_delete_data`` to decide whether to show the button/command.
+and ``supports_delete_data`` / ``get_deletable_extensions`` to query
+which extensions support the ``delete_guild_data`` event.
 """
 
 from __future__ import annotations

@@ -8,6 +8,11 @@ from app.common.gsm_loader import check_gce_metadata
 
 
 def log_to_file():
+    """Return True if file logging should be enabled.
+
+    Checks the ``LOG_TO_FILE`` GCE metadata key.  Defaults to ``True``
+    in local / non-GCE environments where the metadata is unavailable.
+    """
     log_to_file = check_gce_metadata(metadata_key="LOG_TO_FILE")
     if not log_to_file:
         # Avoid using logging here to prevent premature initialization of basicConfig
