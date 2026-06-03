@@ -147,25 +147,45 @@ class Bot(commands.Bot):
             logging.info("Starting Bot Internal API...")
             self.bot_api_task = self.loop.create_task(start_bot_api(self))
 
-        await self.rollout_application_commands()  # Force sync on startup
+        if not getattr(self, "_commands_synced", False):
+            await self.rollout_application_commands()
+            self._commands_synced = True
+        else:
+            logging.info("Skipping command sync on reconnect (already synced).")
 
         self.cog_logger()
 
+    async def on_guild_join(self, guild):
+        """Sync application commands when the bot joins a new guild."""
+        logging.info(f"Joined new guild: {guild.name} (id:{guild.id})")
+        try:
+            await self.sync_application_commands(guild_id=guild.id)
+            logging.info(f"Application commands synced for new guild: {guild.name}")
+        except Exception as e:
+            logging.error(f"Failed to sync commands for new guild {guild.name}: {e}")
 
-def _parse_guild_ids() -> list[int]:
-    """Parse POWERCORD_DEFAULT_GUILD_IDS from env (comma-separated integers).
+    async def on_guild_remove(self, guild):
+        """Log when the bot is removed from a guild."""
+        logging.info(
+            f"Removed from guild: {guild.name} (id:{guild.id}). "
+            "Discord will automatically clean up registered commands."
+        )
 
-    Returns an empty list when unset, which tells nextcord to register
-    commands globally instead of per-guild.
+
+def _parse_strict_guild_ids() -> list[int]:
+    """Parse POWERCORD_STRICT_GUILD_IDS from env (comma-separated integers).
+
+    When set, commands are restricted to ONLY these guilds.
+    Returns an empty list when unset, which registers commands globally.
     """
-    raw = os.environ.get("POWERCORD_DEFAULT_GUILD_IDS", "")
+    raw = os.environ.get("POWERCORD_STRICT_GUILD_IDS", "")
     if not raw.strip():
         return []
     try:
         return [int(gid.strip()) for gid in raw.split(",") if gid.strip()]
     except ValueError:
         logging.warning(
-            "POWERCORD_DEFAULT_GUILD_IDS contains non-integer values; "
+            "POWERCORD_STRICT_GUILD_IDS contains non-integer values; "
             "falling back to global command registration."
         )
         return []
@@ -173,9 +193,9 @@ def _parse_guild_ids() -> list[int]:
 
 gadget_inspector = GadgetInspector()
 
-_guild_ids = _parse_guild_ids()
-if _guild_ids:
-    logging.info(f"Registering commands to guilds: {_guild_ids}")
+_strict_guild_ids = _parse_strict_guild_ids()
+if _strict_guild_ids:
+    logging.info(f"Strict guild restriction active — commands limited to: {_strict_guild_ids}")
 else:
     logging.info("No guild IDs configured; commands will register globally.")
 
@@ -184,7 +204,7 @@ bot = Bot(
     intents=intents,
     description="Powercord Powerbot",
     gadget_inspector=gadget_inspector,
-    default_guild_ids=_guild_ids or None,
+    default_guild_ids=_strict_guild_ids or None,
 )
 
 # Load the powerloader cog first, as it's a core part of the bot

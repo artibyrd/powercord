@@ -50,11 +50,6 @@ class AppPowerLoader(commands.Cog):
             "views": self.bot.cog_report.get("cog_persistent_views", {}),
         }
 
-    def _get_guild_ids(self, bot: commands.Bot):
-        guild_ids = []
-        for guildname in bot.guilds:
-            guild_ids.append(guildname.id)
-        return guild_ids
 
     def _hotload_caution(self, cogname):
         for preload_dict in self.preload_required_map.values():
@@ -64,8 +59,6 @@ class AppPowerLoader(commands.Cog):
 
     async def _cog_rollout(self):
         await self.bot.rollout_application_commands()
-        for guild in self.bot.guilds:
-            await guild.rollout_application_commands()
 
     async def _extension_handler(self, cogname: str, load=True, unload=False):
         if self._hotload_caution(cogname):

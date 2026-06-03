@@ -294,9 +294,14 @@ async def reload_config(payload: dict):
         raise HTTPException(status_code=400, detail="guild_id required")
 
     logging.info(f"Received config reload request for guild {guild_id}")
-    # Here you would trigger any specific reload logic for the bot
-    # For now, we just log it as the bot might re-read DB on next event
-    return {"status": "success", "message": f"Config reload triggered for guild {guild_id}"}
+    try:
+        await bot_instance.rollout_application_commands()
+        logging.info(f"Application commands re-synced for config reload (guild {guild_id}).")
+    except Exception as e:
+        logging.error(f"Failed to re-sync commands during config reload: {e}")
+        raise HTTPException(status_code=500, detail=f"Command sync failed: {e}") from None
+
+    return {"status": "success", "message": f"Config reloaded and commands synced for guild {guild_id}"}
 
 
 @api_router.post("/examples/counters")
