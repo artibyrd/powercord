@@ -33,6 +33,15 @@ just db-import <filename.sql>          # Import database from SQL
 just db-export <file> --migration      # INSERT-only dump (for pre-initialized targets)
 ```
 
+> [!NOTE]
+> **Host Requirements**: If you are running `just dev` (Local Development), these commands require the PostgreSQL command-line tools (`pg_dump` and `psql`) to be installed and available in your system's `PATH`. If you are using `just run`, these tools are automatically executed inside the Docker container and do not need to be installed on your host machine.
+> - **Windows**: Download the [PostgreSQL Windows Installer](https://www.postgresql.org/download/windows/), install the "Command Line Tools", and add `C:\Program Files\PostgreSQL\<version>\bin` to your system Environment Variables `PATH`.
+> - **macOS**: `brew install postgresql`
+> - **Linux (Ubuntu/Debian)**: `sudo apt install postgresql-client`
+
+> [!TIP]
+> **Migrating between environments**: The `just dev` (Local) and `just run` (Containerized) environments use two completely different Postgres databases. If you wish to migrate your local data into the Docker container, run `just db-export my-local-db.sql` while the local environment is active, then terminate it. Start the containerized app with `just run`, let the blank database initialize, and run `just db-import my-local-db.sql` in a new terminal window to migrate your data!
+
 ### 4. Run Tests
 Execute the test suite (runs against the isolated `powercord_test` database).
 ```bash

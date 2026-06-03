@@ -13,6 +13,7 @@ We utilize Google Container-Optimized OS (COS) to directly run the Powercord Doc
 *   A Google Cloud Platform account with an active billing account.
 *   The [Google Cloud SDK (`gcloud`)](https://cloud.google.com/sdk/docs/install) installed and authenticated on your local machine.
 *   [Terraform](https://developer.hashicorp.com/terraform/downloads) (> 1.7) installed locally.
+*   Enable the **Compute Engine API** and **Cloud Build API** in your GCP project.
 
 Authenticate the gcloud CLI and set your project:
 
@@ -63,6 +64,18 @@ just tf-apply
 ```
 
 _(Note: You will be prompted to confirm the execution before resources are provisioned)._
+
+---
+
+## Cloudflare and SSL Integration
+
+To front your Powercord deployment with Cloudflare and properly utilize SSL (preventing `522 Connection Timed Out` errors):
+
+1. **Cloudflare "Full" Mode**:
+   By default, Powercord auto-generates a self-signed SSL certificate at startup to serve HTTPS traffic over port 443. This requires zero configuration and perfectly satisfies Cloudflare's standard **"Full"** SSL/TLS encryption mode setting.
+
+2. **Cloudflare "Full (strict)" Mode**:
+   If your deployment demands strict origin CA validation, you must configure `POWERCORD_SSL_CERT` and `POWERCORD_SSL_KEY` variables inside your Google Secret Manager environment secrets. Provide them your valid multi-line Cloudflare Origin CA certificate and private key. The deployment will use these instead of the self-signed fallback.
 
 ---
 

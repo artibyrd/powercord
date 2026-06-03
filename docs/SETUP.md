@@ -167,6 +167,17 @@ Spins up the full stack in Docker containers.
 > ```
 > Use `just db-export` / `just db-import` locally to migrate data between environments. Note that if migrating data into an already-initialized Docker database, you should use `just db-export <file> --migration` to generate an INSERT-only data dump.
 
+### Behavioral Differences
+
+#### System Restarts
+The system restart buttons in the Admin Dashboard rely on an external process manager to restart services gracefully. When running `just dev` without containerization, terminating a component will stop it but **not** automatically restart it. To fully test restart functionality, use `just run`.
+
+#### Database Port Mapping
+The Docker database is exposed to the host machine on port `5433` so that local CLI commands (like `just db-upgrade`) function seamlessly using the `.env` file, while internal Dockerized applications securely resolve to the native `5432` port via an environment override.
+
+#### Shared Sessions
+Because both `just dev` and `just run` use the same local `.env` file (which contains your `SESSION_KEY`), your browser session cookies remain valid across both environments. If you log in during `just dev` and then switch to `just run`, the UI will still recognize your session — but since the Docker database is empty, your admin permissions will be revoked and you'll be redirected to your profile until you add yourself as an admin to the container's database.
+
 ---
 
 ## 8. Legacy Migrations (Optional)

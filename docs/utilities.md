@@ -105,3 +105,15 @@ form = Form(
 
 card = Card(title="Login", content=form)
 ```
+
+## Utilities Extension — Permission Auditor
+
+The **Utilities Extension** includes a **Discord Permission Auditor** feature that fetches and visualizes role and channel permissions for your server.
+
+### Requirements
+- The bot requires `Manage Roles` and `Manage Channels` permissions (or `Administrator`) to strictly read all permission overwrites.
+- The bot's role must be **higher** in the hierarchy than the roles it is auditing to view/manage them correctly in some cases.
+
+### Usage
+- Run the `$audit` or `/audit` command in your Discord server to fetch and store the latest permission data.
+- View the "Permission Auditor" widget in the Dashboard to visualize role and channel permissions, including category inheritance.
