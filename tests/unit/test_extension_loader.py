@@ -328,4 +328,3 @@ class TestCollectPublicPaths:
                 inspector.extensions_dir = Path(tmpdir)
                 result = inspector.collect_public_paths()
                 assert result == []
-

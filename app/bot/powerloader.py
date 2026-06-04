@@ -50,7 +50,6 @@ class AppPowerLoader(commands.Cog):
             "views": self.bot.cog_report.get("cog_persistent_views", {}),
         }
 
-
     def _hotload_caution(self, cogname):
         for preload_dict in self.preload_required_map.values():
             if cogname in preload_dict:

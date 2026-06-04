@@ -98,7 +98,7 @@ The `powercord/devkit.just` module centralizes reusable `just` recipes that exte
 ### What It Provides
 | Recipe | Purpose |
 | --- | --- |
-| `_ensure-db` | Starts a local PostgreSQL 15 Docker container on port 5433 if one isn't already running. Uses PowerShell `Get-NetTCPConnection` for port detection. |
+| `_ensure-db` | Starts a local PostgreSQL 15 Docker container on port 5433 if one isn't already running. Uses `ss` for port detection and `pg_isready` for readiness polling. |
 | `_teardown-dev-db` | Stops and removes the `powercord-pg-dev` container. |
 
 ### How Extensions Resolve It
@@ -108,14 +108,14 @@ Extensions include a self-resolving `_ensure-db` recipe that discovers and deleg
 ```just
 [private]
 _ensure-db:
-    #!powershell
-    $pcPath = if ($env:POWERCORD_PATH) { $env:POWERCORD_PATH } else { "../../powercord" }
-    $devkit = Join-Path $pcPath "devkit.just"
-    if (Test-Path $devkit) {
-        just --justfile $devkit _ensure-db
-    } else {
-        Write-Host "[devkit] powercord/devkit.just not found - skipping DB provisioning" -ForegroundColor Yellow
-    }
+    #!/usr/bin/env bash
+    pc_path="${POWERCORD_PATH:-../../powercord}"
+    devkit="$pc_path/devkit.just"
+    if [ -f "$devkit" ]; then
+      just --justfile "$devkit" _ensure-db
+    else
+      echo "[devkit] powercord/devkit.just not found - skipping DB provisioning"
+    fi
 ```
 
 **Resolution order:**
@@ -132,8 +132,15 @@ _ensure-db:
 | Inside a downstream project (e.g., `bards-guild-midi-project-3`) | ✅ Project-level Justfile has its own `_ensure-db` via `import 'powercord/devkit.just'` |
 | CI pipelines / no powercord checkout | ⚠️ Warning printed — CI manages its own DB services |
 
+## Agent-Specific Notes
+
+- **`install` is a prerequisite:** The `qa`, `dev`, `dev-debug`, `bot`, `api`, and `ui` recipes automatically run `poetry install` first. No manual setup step is needed.
+- **`[confirm]` prompts:** The `tf-apply` and `tf-destroy` recipes use interactive confirmation prompts that will fail in non-interactive agent shells. Use `just --yes tf-apply` to bypass.
+- **GCP project:** Deploy recipes (`tf-*`, `gcp-build`) require `POWERCORD_GCP_PROJECT` to be set (loaded from `.env` via `dotenv-load`). They will error clearly if it is missing.
+
 ## Common Failure Patterns to Avoid
 - **Environment Shadowing / Contamination:** Generating `.env` files or stray compilation artifacts directly inside the `powercord` source directory. These must solely exist inside a fresh project directory.
 - **Dependency Desync:** Using manual pip installations which override production lockfiles. Always use `just ext-install` to guarantee stable local editable references for testbed evaluation.
 - **Discord Client Caching (Phantom Bugs):** If slash commands are not appearing in the Discord server after a restart or deployment, **investigate client caching problems BEFORE writing diagnostic tests or debugging code**. Discord clients heavily cache slash commands. Always advise the user to force-refresh their Discord client (e.g., `Ctrl+R`) or check on another device before assuming the bot's command registration failed.
 - **Missing `devkit.just` Warnings:** If an extension's `just test` prints a yellow `[devkit]` warning, set `POWERCORD_PATH` or ensure the standard sibling layout. Without DB provisioning, tests will fail with database connection errors.
+

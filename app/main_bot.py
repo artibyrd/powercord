@@ -185,8 +185,7 @@ def _parse_strict_guild_ids() -> list[int]:
         return [int(gid.strip()) for gid in raw.split(",") if gid.strip()]
     except ValueError:
         logging.warning(
-            "POWERCORD_STRICT_GUILD_IDS contains non-integer values; "
-            "falling back to global command registration."
+            "POWERCORD_STRICT_GUILD_IDS contains non-integer values; falling back to global command registration."
         )
         return []
 

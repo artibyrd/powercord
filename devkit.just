@@ -16,7 +16,13 @@ _ensure-db:
         -v powercord_pg_dev_data:/var/lib/postgresql/data \
         postgres:15 >/dev/null
       echo "Waiting for database to be ready..."
-      sleep 5
+      for i in $(seq 1 30); do
+        if docker exec powercord-pg-dev pg_isready -q 2>/dev/null; then
+          echo "Database ready."
+          break
+        fi
+        sleep 1
+      done
     fi
 
 # Stops the standalone local dev database container if it's running

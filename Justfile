@@ -18,7 +18,7 @@ export PYTHONIOENCODING := "utf8"
 #                                 CONSTANTS                                    #
 # ---------------------------------------------------------------------------- #
 
-gcp_project := `gcloud config get-value project`
+gcp_project := env("POWERCORD_GCP_PROJECT", "")
 gcp_bucket := gcp_project + "-tf-state"
 gcp_default_image := "us-central1-docker.pkg.dev/" + gcp_project + "/powercord/powercord-app:latest"
 
@@ -74,32 +74,32 @@ alias kill := kill-dev
 # Run the Powercord Discord bot
 [group: "dev"]
 [arg("debug", long, value="true")]
-bot debug="false":
+bot debug="false": install
     @just _kill_port 8001
     {{ if debug == "true" { "DEBUG=1 " } else { "" } }}poetry run python app/main_bot.py
 
 # Run the FastAPI server
 [group: "dev"]
 [arg("debug", long, value="true")]
-api debug="false":
+api debug="false": install
     @just _kill_port 8000
     poetry run uvicorn app.main_api:app --log-level {{ if debug == "true" { "debug" } else { "info" } }}
 
 # Run the FastHTML frontend
 [group: "dev"]
 [arg("debug", long, value="true")]
-ui debug="false":
+ui debug="false": install
     @just _kill_port 5001
     {{ if debug == "true" { "DEBUG=1 " } else { "" } }}poetry run python app/main_ui.py
 
 # Run Powercord stack locally.
 [group: "dev"]
-dev: db-upgrade
+dev: install db-upgrade
     @just _dev_parallel
 
 # Run Powercord stack locally in debug mode.
 [group: "dev"]
-dev-debug: db-upgrade
+dev-debug: install db-upgrade
     @just _dev_debug_parallel
 
 [private]
@@ -152,7 +152,7 @@ rebuild-target:
 # Quality Assurance. Usage: just qa [--fix]
 [group: "qa"]
 [arg("fix", long, value="true")]
-qa fix="false": (lint fix) (format fix) check test
+qa fix="false": install (lint fix) (format fix) check test
 
 # Linting. Usage: just lint [--fix] (auto-fix issues)
 [group: "qa"]
@@ -315,7 +315,7 @@ ext-list:
 
 # Run terraform init locally
 [group: "deploy"]
-tf-init:
+tf-init: _require-gcp
     just _run-with-status _tf-init
 
 [private]
@@ -325,7 +325,7 @@ _tf-init:
 # Run terraform plan locally
 [group: "deploy"]
 [arg("docker_image", long)]
-tf-plan docker_image=gcp_default_image:
+tf-plan docker_image=gcp_default_image: _require-gcp
     just _run-with-status _tf-plan {{docker_image}}
 
 [private]
@@ -336,19 +336,19 @@ _tf-plan docker_image:
 [group: "deploy"]
 [confirm("Are you sure you want to manually apply Terraform changes locally?")]
 [arg("docker_image", long)]
-tf-apply docker_image=gcp_default_image:
+tf-apply docker_image=gcp_default_image: _require-gcp
     cd terraform && terraform apply -var=project_id={{gcp_project}} -var=docker_image={{docker_image}}
 
 # Destroy infrastructure
 [group: "deploy"]
 [confirm("Are you absolutely sure you want to DESTROY all Terraform infrastructure? This process cannot be reversed!")]
 [arg("docker_image", long)]
-tf-destroy docker_image=gcp_default_image:
+tf-destroy docker_image=gcp_default_image: _require-gcp
     cd terraform && terraform destroy -var=project_id={{gcp_project}} -var=docker_image={{docker_image}}
 
 # Build the Powercord Docker image and trigger the CI deployment pipeline
 [group: "deploy"]
-gcp-build:
+gcp-build: _require-gcp
     gcloud builds submit --config cloudbuild.yaml .
     @echo "Resetting the VM instance to pull the new image..."
     gcloud compute instances reset powercord-instance --zone us-central1-a
@@ -363,6 +363,15 @@ gcp-build:
 [private]
 _dev_message debug='false':
     @echo "Powercord is {{ if debug == "true" { "running in DEBUG mode" } else { "starting" } }}! Please wait ~1 minute for all services to start.  Use Ctrl+C to exit."
+
+# Guard: abort with a clear error if GCP project is not configured
+[private]
+_require-gcp:
+    #!/usr/bin/env bash
+    if [ -z "$POWERCORD_GCP_PROJECT" ]; then
+      echo "Error: POWERCORD_GCP_PROJECT is not set. Set it in .env or export it." >&2
+      exit 1
+    fi
 
 # Status reporter for nested jobs.
 [private]
