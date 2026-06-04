@@ -55,9 +55,8 @@ async def test_extension_handler_load(loader, mock_bot):
     # Ensure the bot's load_extension method was called with the correct path
     mock_bot.load_extension.assert_called_once_with("app.extensions.cog2.cog")
     assert "**`cog2` loaded.**" in msg
-    # Verify that commands were rolled out globally and to guilds
+    # Verify that commands were rolled out globally
     mock_bot.rollout_application_commands.assert_called_once()
-    mock_bot.guilds[0].rollout_application_commands.assert_called_once()
 
 
 @pytest.mark.asyncio

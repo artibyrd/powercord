@@ -45,7 +45,8 @@ install:
 [group: "dev"]
 dev-clean:
     @echo "Cleaning up..."
-    find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache \) -exec rm -rf {} +
+    find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -exec rm -rf {} +
+    rm -f .coverage
     [ -d .venv ] && rm -rf .venv || true
     @echo "Cleanup complete!"
 
