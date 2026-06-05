@@ -60,6 +60,7 @@ def test_login_with_creds(mock_creds):
     """Verifies standard login widget renders login URL properly."""
     mock_creds.return_value = ("client_id", "secret", "token")
     req = MagicMock()
+    req.headers = {"host": "localhost"}
     req.url.replace.return_value = "http://localhost/auth/discord/callback"
     with patch.dict(os.environ, {}, clear=True):
         res = login(req, {})
@@ -131,10 +132,10 @@ async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_
             "POWERCORD_DISCORD_CLIENT_ID": "1",
             "POWERCORD_DISCORD_CLIENT_SECRET": "2",
             "POWERCORD_DISCORD_TOKEN": "3",
-            "POWERCORD_BASE_URL": "http://localhost",
         },
     ):
         req = MagicMock()
+        req.headers = {"host": "localhost"}
         sess = {}
         with patch("app.ui.auth.add_toast"):
             with patch("app.ui.helpers.is_dashboard_admin", return_value=True):
@@ -143,6 +144,7 @@ async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_
 
                 # Should redirect appropriately setting auth context along the way
                 assert res.status_code == 303
+                assert res.headers["location"] == "/profile"
                 assert sess["auth"]["id"] == "123"
 
 
@@ -231,9 +233,12 @@ def test_dev_login_in_debug_mode():
     from app.ui.auth import dev_login
 
     sess = {}
-    with patch.dict(os.environ, {"POWERCORD_DEBUG": "1", "POWERCORD_BASE_URL": "http://localhost:5001"}):
-        res = dev_login(sess)
+    req = MagicMock()
+    req.url.hostname = "localhost"
+    with patch.dict(os.environ, {"POWERCORD_DEBUG": "1"}):
+        res = dev_login(req, sess)
         assert res.status_code == 303
+        assert res.headers["location"] == "/profile"
         assert sess["auth"]["username"] == "DevAdmin"
         assert sess["auth"]["is_dashboard_admin"] is True
 
@@ -243,11 +248,104 @@ def test_dev_login_blocked_in_production():
     from app.ui.auth import dev_login
 
     sess = {}
-    with patch.dict(os.environ, {"POWERCORD_BASE_URL": "https://production.example.com"}, clear=False):
-        # Ensure DEBUG is not set
-        env = os.environ.copy()
-        env.pop("POWERCORD_DEBUG", None)
-        with patch.dict(os.environ, env, clear=True):
-            res = dev_login(sess)
-            assert res.status_code == 303
-            assert "auth" not in sess
+    req = MagicMock()
+    req.url.hostname = "production.example.com"
+    # Ensure DEBUG is not set
+    env = os.environ.copy()
+    env.pop("POWERCORD_DEBUG", None)
+    with patch.dict(os.environ, env, clear=True):
+        res = dev_login(req, sess)
+        assert res.status_code == 303
+        assert "auth" not in sess
+
+
+# ── get_redirect_uri tests ──────────────────────────────────────────
+
+
+def test_get_redirect_uri_whitelisted_hosts():
+    from app.ui.auth import get_redirect_uri
+
+    # Test cases: (host, expected_redirect_uri, optional_headers, optional_scheme)
+    cases = [
+        # localhost
+        ("localhost", "http://localhost/auth/discord/callback", None, "http"),
+        ("localhost:5001", "http://localhost:5001/auth/discord/callback", None, "http"),
+        ("sub.localhost:3000", "http://sub.localhost:3000/auth/discord/callback", None, "http"),
+
+        # 127.0.0.1
+        ("127.0.0.1", "http://127.0.0.1/auth/discord/callback", None, "http"),
+        ("127.0.0.1:8000", "http://127.0.0.1:8000/auth/discord/callback", None, "http"),
+
+        # midi.gallery
+        ("midi.gallery", "http://midi.gallery/auth/discord/callback", None, "http"),
+        ("sub.midi.gallery", "http://sub.midi.gallery/auth/discord/callback", None, "http"),
+        ("foo.bar.midi.gallery:443", "http://foo.bar.midi.gallery:443/auth/discord/callback", None, "http"),
+
+        # powercord.rocks
+        ("powercord.rocks", "http://powercord.rocks/auth/discord/callback", None, "http"),
+        ("dev.powercord.rocks:8080", "http://dev.powercord.rocks:8080/auth/discord/callback", None, "http"),
+
+        # HTTPS via x-forwarded-proto
+        ("powercord.rocks", "https://powercord.rocks/auth/discord/callback", {"x-forwarded-proto": "https"}, "http"),
+        ("midi.gallery", "https://midi.gallery/auth/discord/callback", {"x-forwarded-proto": "https"}, "http"),
+
+        # host header
+        ("powercord.rocks", "http://powercord.rocks/auth/discord/callback", {"host": "powercord.rocks"}, "http"),
+        # x-forwarded-host header
+        ("midi.gallery", "http://midi.gallery/auth/discord/callback", {"x-forwarded-host": "midi.gallery"}, "http"),
+    ]
+
+    for host, expected, headers_dict, url_scheme in cases:
+        req = MagicMock()
+
+        # Setup headers
+        if headers_dict:
+            req.headers = {"host": host, **headers_dict}
+        else:
+            req.headers = {"host": host}
+
+        # Setup URL
+        req.url = MagicMock()
+        req.url.scheme = url_scheme
+        # Netloc/hostname mock returns
+        if ":" in host:
+            req.url.netloc = host
+            req.url.hostname = host.split(":")[0]
+        else:
+            req.url.netloc = host
+            req.url.hostname = host
+
+        with patch.dict(os.environ, {"POWERCORD_ALLOWED_DOMAINS": "midi.gallery,powercord.rocks,localhost,127.0.0.1"}, clear=True):
+            res = get_redirect_uri(req)
+            assert res == expected, f"Expected {expected} for host={host}, headers={headers_dict}, got {res}"
+
+
+def test_get_redirect_uri_untrusted_host():
+    from app.ui.auth import get_redirect_uri
+    from starlette.exceptions import HTTPException
+
+    req = MagicMock()
+    req.headers = {"host": "attacker.com"}
+    req.url = MagicMock()
+    req.url.netloc = "attacker.com"
+    req.url.hostname = "attacker.com"
+
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(HTTPException) as exc_info:
+            get_redirect_uri(req)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "Untrusted Host"
+
+
+def test_get_redirect_uri_raw_mock_robustness():
+    from app.ui.auth import get_redirect_uri
+    from starlette.exceptions import HTTPException
+
+    req = MagicMock()
+    # A completely raw MagicMock will have all attributes return other MagicMocks.
+    # It should raise HTTPException since it is not in the whitelist.
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(HTTPException) as exc_info:
+            get_redirect_uri(req)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "Untrusted Host"

@@ -180,9 +180,33 @@ Because both `just dev` and `just run` use the same local `.env` file (which con
 
 ---
 
-## 8. Legacy Migrations (Optional)
+## 8. Multi-Domain Support & Domain Whitelisting
 
-### 8.1. Import Legacy MIDI Data
+Powercord supports multi-domain routing natively for deployments serving multiple domains (e.g., `midi.gallery` and `powercord.rocks`). 
+
+### How it Works
+- When a user initiates a Discord login, Powercord dynamically constructs the OAuth redirect URI using the protocol (`http`/`https`) and host headers from the incoming request.
+- This dynamic behavior preserves the domain in the user's browser address bar, rather than force-redirecting all traffic to a single primary domain.
+
+### Host Whitelisting
+To prevent redirect-hijack attacks, only requests with hosts matching the whitelisted domains are allowed to dynamically generate redirect URIs. 
+
+Configure the whitelisted domains using the `POWERCORD_ALLOWED_DOMAINS` environment variable as a comma-separated list of domains:
+```env
+POWERCORD_ALLOWED_DOMAINS="midi.gallery,powercord.rocks,localhost,127.0.0.1"
+```
+If not specified, the whitelist defaults to `localhost` and `127.0.0.1`.
+
+If an incoming request host (or its parent domain) does not match the whitelist, Powercord will reject the request and raise a `400 Bad Request` ("Untrusted Host") error.
+
+Ensure that any domain you host Powercord on is registered in the Discord Developer Portal as a valid redirect URI (e.g., `https://yourdomain.com/auth/discord/callback`).
+
+
+---
+
+## 9. Legacy Migrations (Optional)
+
+### 9.1. Import Legacy MIDI Data
 
 If you have a legacy MIDI database SQL dump:
 
@@ -193,7 +217,7 @@ just midi-migrate <path_to_dump.sql>
 This recipe is provided by the `midi_library` extension's own justfile
 and is automatically available after installation.
 
-### 8.2. Migrating Legacy API Keys (V2 to V3)
+### 9.2. Migrating Legacy API Keys (V2 to V3)
 
 If you have an existing application using the older V2 of Powercord (e.g., `bards-guild-midi-project-2`), its legacy API keys are not automatically supported in the new V3 database. You will need to explicitly register the existing key string so that existing integrations won't break.
 
@@ -208,7 +232,7 @@ This bypasses the internal secure generation and uses your specified key, ensuri
 
 ---
 
-## 9. Run QA
+## 10. Run QA
 
 ```bash
 just qa        # lint + format check + type check + tests

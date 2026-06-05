@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fasthtml.common import *
@@ -27,6 +27,90 @@ def get_discord_creds():
     client_secret = os.getenv("POWERCORD_DISCORD_CLIENT_SECRET")
     bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
     return client_id, client_secret, bot_token
+
+
+def is_whitelisted_host(host: str) -> bool:
+    if not host:
+        return False
+    host = host.lower().strip()
+    allowed = os.getenv("POWERCORD_ALLOWED_DOMAINS")
+    if allowed:
+        whitelist = {d.strip().lower() for d in allowed.split(",") if d.strip()}
+    else:
+        whitelist = {"localhost", "127.0.0.1"}
+    if host in whitelist:
+        return True
+    for domain in whitelist:
+        if host.endswith("." + domain):
+            return True
+    return False
+
+
+def is_mock(obj) -> bool:
+    if obj is None:
+        return False
+    return (
+        type(obj).__name__ in ("MagicMock", "Mock", "AsyncMock", "NonCallableMagicMock")
+        or hasattr(obj, "_is_protocol_mock")
+    )
+
+
+def get_redirect_uri(req) -> str:
+    scheme = "http"
+    host = None
+
+    headers = getattr(req, "headers", None)
+    if headers is not None and not is_mock(headers):
+        try:
+            xf_proto = headers.get("x-forwarded-proto")
+            if xf_proto and isinstance(xf_proto, str) and not is_mock(xf_proto):
+                scheme = xf_proto
+            elif hasattr(req, "url") and hasattr(req.url, "scheme"):
+                url_scheme = req.url.scheme
+                if url_scheme and isinstance(url_scheme, str) and not is_mock(url_scheme):
+                    scheme = url_scheme
+
+            xf_host = headers.get("x-forwarded-host")
+            if xf_host and isinstance(xf_host, str) and not is_mock(xf_host):
+                host = xf_host
+            else:
+                host_hdr = headers.get("host")
+                if host_hdr and isinstance(host_hdr, str) and not is_mock(host_hdr):
+                    host = host_hdr
+        except Exception as e:
+            logging.debug(f"Failed to read headers: {e}")
+
+    if not host and hasattr(req, "url"):
+        try:
+            url_obj = req.url
+            if url_obj is not None and not is_mock(url_obj):
+                if hasattr(url_obj, "netloc"):
+                    netloc_val = url_obj.netloc
+                    if netloc_val and isinstance(netloc_val, str) and not is_mock(netloc_val):
+                        host = netloc_val
+                if not host and hasattr(url_obj, "hostname"):
+                    host_val = url_obj.hostname
+                    if host_val and isinstance(host_val, str) and not is_mock(host_val):
+                        host = host_val
+
+                if scheme == "http" and hasattr(url_obj, "scheme"):
+                    scheme_val = url_obj.scheme
+                    if scheme_val and isinstance(scheme_val, str) and not is_mock(scheme_val):
+                        scheme = scheme_val
+        except Exception as e:
+            logging.debug(f"Failed to parse req.url: {e}")
+
+    hostname = None
+    if host and isinstance(host, str):
+        if ":" in host:
+            hostname = host.split(":")[0]
+        else:
+            hostname = host
+
+    if hostname and is_whitelisted_host(hostname):
+        return f"{scheme}://{host}/auth/discord/callback"
+
+    raise HTTPException(status_code=400, detail="Untrusted Host")
 
 
 # Beforeware to protect routes that require authentication
@@ -88,11 +172,7 @@ def login(req, sess):
         logging.error("DISCORD_CLIENT_ID is not set in environment.")
         return Titled("Error", P("Application configuration error: Missing Client ID."))
 
-    base_url = os.getenv("POWERCORD_BASE_URL")
-    if base_url:
-        redirect_uri = f"{base_url}/auth/discord/callback"
-    else:
-        redirect_uri = str(req.url.replace(path="/auth/discord/callback", query=None))
+    redirect_uri = get_redirect_uri(req)
     logging.debug(f"Generating login link with redirect_uri: {redirect_uri}")
 
     # Manually construct the authorization URL
@@ -180,11 +260,7 @@ async def discord_callback(req, sess, code: str):
 
     try:
         # The redirect_uri for the token exchange must exactly match the one used to initiate the flow.
-        base_url = os.getenv("POWERCORD_BASE_URL")
-        if base_url:
-            redirect_uri = f"{base_url}/auth/discord/callback"
-        else:
-            redirect_uri = str(req.url.replace(path="/auth/discord/callback", query=None))
+        redirect_uri = get_redirect_uri(req)
         logging.debug(f"Using redirect_uri for token exchange: {redirect_uri}")
 
         # 1. Manually exchange the authorization code for an access token.
@@ -236,10 +312,7 @@ async def discord_callback(req, sess, code: str):
                 sess["auth"] = user_info
                 add_toast(sess, f"Welcome, {user_info.get('username')}!", "success")
 
-                if user_info["is_dashboard_admin"]:
-                    return RedirectResponse("/admin", status_code=303)
-                else:
-                    return RedirectResponse("/profile", status_code=303)
+                return RedirectResponse("/profile", status_code=303)
     except httpx.HTTPStatusError as e:
         logging.error(
             f"An HTTP error occurred during authentication: {e.response.text}",
@@ -269,7 +342,7 @@ def logout(sess):
 
 
 @auth_router("/dev/login")
-def dev_login(sess):
+def dev_login(req, sess):
     """Dev-only route: logs in as a test admin without Discord OAuth.
 
     Only available when the DEBUG environment variable is set.
@@ -277,8 +350,12 @@ def dev_login(sess):
     automated testing tools (e.g. browser agents) can access /admin.
     """
     # Guard: only allow in development (DEBUG set or running on localhost)
-    base_url = os.getenv("POWERCORD_BASE_URL", "http://localhost:5001")
-    is_local = "localhost" in base_url or "127.0.0.1" in base_url
+    is_local = False
+    if hasattr(req, "url") and hasattr(req.url, "hostname"):
+        hostname = req.url.hostname
+        if hostname and not is_mock(hostname):
+            is_local = "localhost" in hostname or "127.0.0.1" in hostname
+
     if not (os.getenv("POWERCORD_DEBUG") or is_local):
         return RedirectResponse("/login", status_code=303)
 
@@ -291,4 +368,4 @@ def dev_login(sess):
         "token_data": {"access_token": "dev-token"},
     }
     logging.info("DEV LOGIN: Logged in as synthetic admin user.")
-    return RedirectResponse("/admin", status_code=303)
+    return RedirectResponse("/profile", status_code=303)

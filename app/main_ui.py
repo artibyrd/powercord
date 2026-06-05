@@ -384,19 +384,29 @@ async def profile_page(sess):
             if guild["icon"]
             else "https://cdn.discordapp.com/embed/avatars/0.png"
         )
-        card_content = Card(
-            Header(H3(guild["name"])),
-            Img(src=icon_url, width=64, height=64, style="border-radius: 50%;"),
-        )
-        return A(
-            card_content,
-            href=f"/dashboard/{guild['id']}",
-            style="text-decoration: none; color: inherit;",
+        return Div(
+            Div(
+                Div(
+                    Img(src=icon_url, width=48, height=48, cls="rounded-full flex-shrink-0"),
+                    Div(
+                        H3(guild["name"], cls="font-bold text-lg line-clamp-2"),
+                    ),
+                    cls="flex items-center gap-3 flex-grow min-w-0",
+                ),
+                A("Configure", href=f"/dashboard/{guild['id']}", cls="btn btn-outline btn-primary btn-sm flex-shrink-0"),
+                cls="flex items-center justify-between gap-4 p-4",
+            ),
+            cls="card bg-base-300 shadow-sm border border-base-content/20 rounded-xl",
         )
 
     server_list = Div(
         H2("Your Servers", cls="text-2xl font-bold mb-4"),
-        Grid(*[guild_card(g) for g in admin_guilds.values()]) if admin_guilds else P("No shared admin servers found."),
+        Div(
+            *[guild_card(g) for g in admin_guilds.values()],
+            cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+        )
+        if admin_guilds
+        else P("No shared admin servers found."),
         cls="mb-8",
     )
 
