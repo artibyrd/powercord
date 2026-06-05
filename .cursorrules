@@ -1,0 +1,60 @@
+# Powercord Ecosystem Custom Agent Guardrails
+
+These rules define strict guidelines for AI agents working on the Powercord project (Core backend, companion client, and extensions) under CachyOS or other Linux environments.
+
+---
+
+## 1. Agent Behavior & Communication
+* **No Assumptions / Clarify First**: Do not make assumptions regarding project structure, script placement, environment settings, or execution workflows. Always ask the user for clarification before proceeding with files creation or logic alterations.
+* **No Apologies / Guardrail Refinement**: Do not write conversational apologies when a mistake or incorrect assumption occurs. Instead, state the correction factures, identify the root cause, and immediately propose/write new or refined guardrail rules to prevent repeat failures.
+* **File Location Verification**: Before creating any new configuration files, script assets, or automation runners, present a list of target directory options to the user and obtain explicit selection before writing the files to disk.
+* **Critical Design Evaluation**: Provide a hard-nosed evaluation of user design decisions and suggestions. If a user proposal is flawed, non-standard, or introduces architectural risks, propose why it is bad or suboptimal *before* wasting effort solutioning it.
+* **Grounded in Best Practices**: Always suggest solutions grounded in established industry best practices (e.g., standard OS layouts, native tool capabilities, official configuration paths) rather than custom or convoluted workarounds.
+
+---
+
+## 2. Git & Workspace Normalization Guardrails & Workflows
+* **Using the User Justfile**: To inspect or normalize the workspace, always run the global user-level just commands:
+  * Check branch and functional modifications (ignoring CRLF line-ending differences) across all sub-repos:
+    ```bash
+    just -g status
+    ```
+  * Perform safe line-ending normalization for clean sub-repos:
+    ```bash
+    just -g normalize-all
+    ```
+* **No Unstaged Hard Resets**: Never execute `git reset --hard` to resolve carriage return (CRLF) noise when the workspace contains uncommitted changes.
+* **Line Ending Config**: Ensure `core.autocrlf` is set to `input` and `core.filemode` is set to `true` locally in every repository to maintain LF line endings and preserve executable permissions.
+
+---
+
+## 3. Upstream Contamination Prevention
+* **Client Dependencies**: Do not install extension-specific Python dependencies (e.g., `py7zr`, `rarfile`) directly into the base repository of `powercord-client`.
+* **Testing & Downstream Workflows**: All testing of client + extension integrations must be performed using isolated downstream environments or worktrees (similar to the server-side test isolation config), keeping upstream branches clean.
+
+---
+
+## 4. Environment & Shell Compatibility
+* **Bash Shell Enforcement**: All command execution scripts and Just recipes must run in a Bash/POSIX-compliant shell. Do not write Fish-specific syntax in Justfiles or automation scripts.
+* **Cross-Platform Justfiles**: Ensure any modified Just recipes do not contain Windows-specific commands (such as `cmd.exe` or PowerShell syntax).
+
+---
+
+## 5. Extension Architecture Guardrails
+* **Split-Stack Separation**: Keep FastHTML routes (`routes.py` / `widget.py`) and FastAPI endpoints (`sprocket.py`) separated.
+  * FastHTML routes return HTML fragments to be swapped in-place by HTMX.
+  * FastAPI sprockets return JSON payloads for companion client consumption.
+* **Decoupled Database Schemas**: Extensions must manage their own tables via independent, isolated Alembic version histories inside the extension directory.
+* **Lifecycle Hooks & Data Purging**: 
+  * Extensions containing guild-scoped data must register a `delete_guild_data` hook in their `__init__.py`.
+  * Global catalogs (e.g., `midi_library`) must be explicitly excluded from guild-level data deletion to preserve catalog integrity.
+
+---
+
+## 6. Project-Specific Agent Skills & Workflows
+* **Skill Reference**: When performing development, deployment, or testing tasks, refer to the custom skills and workflows located inside the project:
+  * Ecosystem Architecture & Testing: Read `.agent/skills/powercord-ecosystem/SKILL.md`
+  * GCP Production VM Operations: Read `.agent/skills/powercord-gcp-operations/SKILL.md`
+  * Downstream Server Deployment Workflow: Read `.agent/workflows/fresh-install-downstream-server.md`
+  * Downstream Client Deployment Workflow: Read `.agent/workflows/fresh-install-downstream-client.md`
+* **Check for Unlinked Workflows/Skills**: Actively check for any new workflows or skills defined within subdirectories (such as `powercord/.agents/workflows/` or `powercord/.agents/skills/`) that have not been symlinked to the project root (`.agent/workflows/` or `.agent/skills/`). If any are found, suggest to the user that they be symlinked to ensure IDE auto-discovery and proper slash command integration.

@@ -12,7 +12,7 @@ Powercord consists of a centralized server framework, a Flet-based UI client, an
 - **Modifying Core Logic:** When altering the core `powercord` server or `powercord-client` source repositories.
 - **Building Extensions:** When developing new integrations via `powercord-extensions` or `powercord-client-extensions`.
 - **System Testing:** When you need to test changes across multiple repositories simultaneously to ensure integration fidelity.
-- **Stand-up testing:** When bootstrapping a new project (e.g., `bards-guild-midi-project`).
+- **Stand-up testing:** When bootstrapping a new project (e.g., `my-downstream-project`).
 
 ## Ecosystem Structure
 The ecosystem is split across several source repositories with a standardized hierarchy. These are the absolute sources of truth for codebase configuration:
@@ -57,7 +57,7 @@ Instead, execute the following explicit workflow to test changes using a specifi
 Author and commit your code changes inside the independent source repositories (e.g., `Google/powercord`, `Google/powercord-extensions/midi_library`). The code here MUST remain generic and framework-oriented. Do not put implementation-specific or secrets data here.
 
 ### 2. Stand Up a "Fresh Install" Project Directory
-Create or use a distinct implementation repository (such as `bards-guild-midi-project-3`) to act as the staging testbed. This operational directory acts as a dedicated instance of your framework for validation purposes.
+Create or use a distinct implementation repository (such as `my-downstream-project`) to act as the staging testbed. This operational directory acts as a dedicated instance of your framework for validation purposes.
 
 ### 3. Initialize the Project Environment
 Powercord utilizes `poetry` tightly integrated with `just` for testbed lifecycle execution. Within your test project directory, execute:
@@ -129,7 +129,7 @@ _ensure-db:
 | --- | --- |
 | Extension repo cloned next to `powercord/` | ✅ Devkit found via relative path — Docker DB auto-provisioned |
 | Extension repo in non-standard location | ✅ Set `POWERCORD_PATH` to resolve |
-| Inside a downstream project (e.g., `bards-guild-midi-project-3`) | ✅ Project-level Justfile has its own `_ensure-db` via `import 'powercord/devkit.just'` |
+| Inside a downstream project (e.g., `my-downstream-project`) | ✅ Project-level Justfile has its own `_ensure-db` via `import 'powercord/devkit.just'` |
 | CI pipelines / no powercord checkout | ⚠️ Warning printed — CI manages its own DB services |
 
 ## Agent-Specific Notes
