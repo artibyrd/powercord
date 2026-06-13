@@ -2,6 +2,7 @@
 import importlib
 import logging
 import os
+from typing import Optional
 
 try:
     # When running as a script (e.g. python app/main_bot.py)
@@ -80,14 +81,90 @@ class Bot(commands.Bot):
 
         await super().close()
 
-    async def rollout_application_commands(self):
-        """Syncs application commands to all guilds."""
-        logging.info("Rolling out application commands...")
-        # Force sync of application commands
-        try:
-            await self.sync_all_application_commands()
+    def _update_command_routing(self):
+        """Dynamically update command routing based on which cogs are enabled in which guilds."""
+        # 1. Back up all loaded commands the first time
+        if not hasattr(self, "_all_loaded_commands") or not self._all_loaded_commands:
+            self._all_loaded_commands = self._connection._application_commands.copy()
 
-            logging.info("Application commands synced successfully.")
+        # 2. Reset the bot's application commands state
+        self._connection._application_commands.clear()
+        self._connection._application_command_ids.clear()
+        self._connection._application_command_signatures.clear()
+
+        # Determine strict guilds restriction
+        strict_guilds = set(_strict_guild_ids) if _strict_guild_ids else None
+
+        for command in self._all_loaded_commands:
+            # Find the extension name if this command is defined in a cog
+            cog = getattr(command, "cog", None)
+            extension_name = None
+            if cog is not None:
+                module_name = cog.__module__
+                if module_name.startswith("app.extensions."):
+                    # e.g., app.extensions.utilities.cog -> utilities
+                    parts = module_name.split(".")
+                    if len(parts) >= 3:
+                        extension_name = parts[2]
+
+            if extension_name:
+                # Query enabled guilds for this extension
+                enabled_guilds = get_enabled_guild_ids(self, extension_name)
+                if strict_guilds:
+                    enabled_guilds = enabled_guilds.intersection(strict_guilds)
+
+                if enabled_guilds:
+                    # Update command to register only to these guilds
+                    command.force_global = False
+                    command.use_default_guild_ids = False
+                    command.guild_ids_to_rollout = enabled_guilds
+                    # Remove the global ID (None) if it was in command_ids
+                    command.command_ids.pop(None, None)
+                    # Add back to bot
+                    self.add_application_command(command, use_rollout=True, pre_remove=False)
+                else:
+                    # If not enabled in any guild, we do not add it back.
+                    # Ensure None is popped from command_ids as well
+                    command.command_ids.pop(None, None)
+            else:
+                # Core/global commands (not part of an extension)
+                if strict_guilds:
+                    command.force_global = False
+                    command.use_default_guild_ids = False
+                    command.guild_ids_to_rollout = strict_guilds
+                    command.command_ids.pop(None, None)
+                else:
+                    command.force_global = True
+                    command.use_default_guild_ids = False
+                    command.guild_ids_to_rollout = set()
+                self.add_application_command(command, use_rollout=True, pre_remove=False)
+
+    async def rollout_application_commands(self, guild_id: Optional[int] = None):
+        """Syncs application commands to all guilds (or a specific guild)."""
+        logging.info(f"Rolling out application commands (guild_id={guild_id})...")
+        try:
+            self._update_command_routing()
+
+            if guild_id is not None:
+                await self.sync_application_commands(guild_id=guild_id)
+                logging.info(f"Application commands synced successfully for guild {guild_id}.")
+            else:
+                # Fetch global commands
+                data = {}
+                try:
+                    data[None] = await self.http.get_global_commands(self.application_id)
+                except Exception as e:
+                    logging.error(f"Failed to fetch global commands: {e}")
+
+                # Fetch commands for all guilds the bot is currently in
+                for guild in self.guilds:
+                    try:
+                        data[guild.id] = await self.http.get_guild_commands(self.application_id, guild.id)
+                    except Exception as e:
+                        logging.error(f"Failed to fetch commands for guild {guild.id}: {e}")
+
+                await self.sync_all_application_commands(data=data)
+                logging.info("Application commands synced successfully for all guilds.")
         except Exception as e:
             logging.error(f"Failed to sync application commands: {e}")
 
@@ -159,6 +236,7 @@ class Bot(commands.Bot):
         """Sync application commands when the bot joins a new guild."""
         logging.info(f"Joined new guild: {guild.name} (id:{guild.id})")
         try:
+            self._update_command_routing()
             await self.sync_application_commands(guild_id=guild.id)
             logging.info(f"Application commands synced for new guild: {guild.name}")
         except Exception as e:
@@ -170,6 +248,48 @@ class Bot(commands.Bot):
             f"Removed from guild: {guild.name} (id:{guild.id}). "
             "Discord will automatically clean up registered commands."
         )
+
+
+def get_enabled_guild_ids(bot, extension_name: str) -> set[int]:
+    """Helper to get all guild IDs where a specific extension is enabled."""
+    from sqlmodel import Session, select
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import GuildExtensionSettings
+
+    engine = init_connection_engine()
+    try:
+        with Session(engine) as session:
+            # 1. Check Global Setting
+            global_stmt = select(GuildExtensionSettings).where(
+                GuildExtensionSettings.guild_id == 0,
+                GuildExtensionSettings.extension_name == extension_name,
+                GuildExtensionSettings.gadget_type == "cog",
+            )
+            global_setting = session.exec(global_stmt).first()
+
+            # If global setting is explicitly disabled or missing, return empty set
+            if not global_setting or not global_setting.is_enabled:
+                return set()
+
+            # 2. Get all local settings for this extension
+            local_stmt = select(GuildExtensionSettings).where(
+                GuildExtensionSettings.guild_id != 0,
+                GuildExtensionSettings.extension_name == extension_name,
+                GuildExtensionSettings.gadget_type == "cog",
+            )
+            local_settings = session.exec(local_stmt).all()
+            local_map = {row.guild_id: row.is_enabled for row in local_settings}
+    except Exception as e:
+        logging.error(f"Error checking enabled guild IDs for {extension_name}: {e}")
+        return set()
+
+    enabled_guilds = set()
+    for guild in bot.guilds:
+        # Respect local override if present; default to True (inherit Global) if not present
+        if local_map.get(guild.id, True):
+            enabled_guilds.add(guild.id)
+
+    return enabled_guilds
 
 
 def _parse_strict_guild_ids() -> list[int]:

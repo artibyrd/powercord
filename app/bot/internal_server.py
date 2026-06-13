@@ -293,9 +293,14 @@ async def reload_config(payload: dict):
     if guild_id is None:
         raise HTTPException(status_code=400, detail="guild_id required")
 
+    try:
+        guild_id = int(guild_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="guild_id must be an integer")
+
     logging.info(f"Received config reload request for guild {guild_id}")
     try:
-        await bot_instance.rollout_application_commands()
+        await bot_instance.rollout_application_commands(guild_id=guild_id)
         logging.info(f"Application commands re-synced for config reload (guild {guild_id}).")
     except Exception as e:
         logging.error(f"Failed to re-sync commands during config reload: {e}")

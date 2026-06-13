@@ -22,6 +22,15 @@ If the cog has registered preload requirements (persistent views/modals/contexts
 
 The manual **Reload** button (🔄) on each extension card remains available for forcing a reload at any time.
 
+## Per-Server Command Routing (Guild Gating)
+
+When an extension is toggled on or off via an individual **Server (Guild) Dashboard** on the web UI, its corresponding slash commands are dynamically registered or unregistered on that specific Discord server:
+
+- **Toggled ON** → The extension's commands are registered as guild-specific commands for that server.
+- **Toggled OFF** → The extension's commands are unregistered and deleted from that server.
+
+To achieve this, the bot dynamically updates the command routing at runtime by rewriting command target `guild_ids_to_rollout` and syncing them specifically to the target guild. Core loader commands (like `/load`, `/unload`, `/reload`, and `/powercord`) always remain global and accessible across all guilds (or restricted to `POWERCORD_STRICT_GUILD_IDS` if configured).
+
 ## Restart Bot
 
 A **Restart Bot** button is available on the Admin Dashboard under the **Bot Management** section. This gracefully shuts down the bot process. In production environments (Docker, systemd), the process manager will automatically restart it. During local development with `just dev`, the bot process will stop and must be manually restarted.
