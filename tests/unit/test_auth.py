@@ -271,24 +271,19 @@ def test_get_redirect_uri_whitelisted_hosts():
         ("localhost", "http://localhost/auth/discord/callback", None, "http"),
         ("localhost:5001", "http://localhost:5001/auth/discord/callback", None, "http"),
         ("sub.localhost:3000", "http://sub.localhost:3000/auth/discord/callback", None, "http"),
-
         # 127.0.0.1
         ("127.0.0.1", "http://127.0.0.1/auth/discord/callback", None, "http"),
         ("127.0.0.1:8000", "http://127.0.0.1:8000/auth/discord/callback", None, "http"),
-
         # midi.gallery
         ("midi.gallery", "http://midi.gallery/auth/discord/callback", None, "http"),
         ("sub.midi.gallery", "http://sub.midi.gallery/auth/discord/callback", None, "http"),
         ("foo.bar.midi.gallery:443", "http://foo.bar.midi.gallery:443/auth/discord/callback", None, "http"),
-
         # powercord.rocks
         ("powercord.rocks", "http://powercord.rocks/auth/discord/callback", None, "http"),
         ("dev.powercord.rocks:8080", "http://dev.powercord.rocks:8080/auth/discord/callback", None, "http"),
-
         # HTTPS via x-forwarded-proto
         ("powercord.rocks", "https://powercord.rocks/auth/discord/callback", {"x-forwarded-proto": "https"}, "http"),
         ("midi.gallery", "https://midi.gallery/auth/discord/callback", {"x-forwarded-proto": "https"}, "http"),
-
         # host header
         ("powercord.rocks", "http://powercord.rocks/auth/discord/callback", {"host": "powercord.rocks"}, "http"),
         # x-forwarded-host header
@@ -315,14 +310,17 @@ def test_get_redirect_uri_whitelisted_hosts():
             req.url.netloc = host
             req.url.hostname = host
 
-        with patch.dict(os.environ, {"POWERCORD_ALLOWED_DOMAINS": "midi.gallery,powercord.rocks,localhost,127.0.0.1"}, clear=True):
+        with patch.dict(
+            os.environ, {"POWERCORD_ALLOWED_DOMAINS": "midi.gallery,powercord.rocks,localhost,127.0.0.1"}, clear=True
+        ):
             res = get_redirect_uri(req)
             assert res == expected, f"Expected {expected} for host={host}, headers={headers_dict}, got {res}"
 
 
 def test_get_redirect_uri_untrusted_host():
-    from app.ui.auth import get_redirect_uri
     from starlette.exceptions import HTTPException
+
+    from app.ui.auth import get_redirect_uri
 
     req = MagicMock()
     req.headers = {"host": "attacker.com"}
@@ -338,8 +336,9 @@ def test_get_redirect_uri_untrusted_host():
 
 
 def test_get_redirect_uri_raw_mock_robustness():
-    from app.ui.auth import get_redirect_uri
     from starlette.exceptions import HTTPException
+
+    from app.ui.auth import get_redirect_uri
 
     req = MagicMock()
     # A completely raw MagicMock will have all attributes return other MagicMocks.

@@ -32,9 +32,10 @@ def test_guild_admin_audit_channels_widget_empty(mock_session, mock_engine):
     result = guild_admin_audit_channels_widget(MOCK_GUILD_ID)
 
     assert isinstance(result, FT)
-    assert result.tag == "div"
-    assert "Start Audit to view Channels" in str(result)
-    assert "No channels found for this server." in str(result)
+    assert result.tag == "details"
+    html_output = to_xml(result)
+    assert "Guild Channels" in html_output
+    assert "No channels found for this server." in html_output
 
 
 def test_guild_admin_audit_channels_widget_with_channels(mock_session, mock_engine):

@@ -36,8 +36,8 @@ def test_get_prefix_with_guild():
 @patch("app.common.alchemy.init_connection_engine")
 @patch("sqlmodel.Session")
 def test_get_enabled_guild_ids_globally_disabled(mock_session_cls, mock_init_engine):
-    from app.main_bot import get_enabled_guild_ids
     from app.db.models import GuildExtensionSettings
+    from app.main_bot import get_enabled_guild_ids
 
     mock_session = MagicMock()
     mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -56,8 +56,8 @@ def test_get_enabled_guild_ids_globally_disabled(mock_session_cls, mock_init_eng
 @patch("app.common.alchemy.init_connection_engine")
 @patch("sqlmodel.Session")
 def test_get_enabled_guild_ids_globally_enabled_no_local_overrides(mock_session_cls, mock_init_engine):
-    from app.main_bot import get_enabled_guild_ids
     from app.db.models import GuildExtensionSettings
+    from app.main_bot import get_enabled_guild_ids
 
     mock_session = MagicMock()
     mock_session_cls.return_value.__enter__.return_value = mock_session
@@ -82,8 +82,8 @@ def test_get_enabled_guild_ids_globally_enabled_no_local_overrides(mock_session_
 @patch("app.common.alchemy.init_connection_engine")
 @patch("sqlmodel.Session")
 def test_get_enabled_guild_ids_with_local_override(mock_session_cls, mock_init_engine):
-    from app.main_bot import get_enabled_guild_ids
     from app.db.models import GuildExtensionSettings
+    from app.main_bot import get_enabled_guild_ids
 
     mock_session = MagicMock()
     mock_session_cls.return_value.__enter__.return_value = mock_session

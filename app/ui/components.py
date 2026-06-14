@@ -1,10 +1,15 @@
 from fasthtml.common import (
     H3,
+    A,
     Button,
+    Details,
     Div,
     Input,
     Label,
+    Summary,
 )
+from fasthtml.svg import Circle, Svg
+from fasthtml.svg import Text as SvgText
 
 
 def PrimaryButton(text: str, **kwargs):
@@ -78,4 +83,86 @@ def Card(title, content, **kwargs):
         Div(header, content, cls="card-body"),
         cls=f"card bg-base-100 shadow-xl {cls}",
         **kwargs,
+    )
+
+
+def HealthScoreArc(score: int, alert_count: int = 0):
+    """
+    Standardized SVG circular progress indicator displaying score and alert counts.
+    """
+    if score >= 80:
+        color_class = "text-success"
+        stroke_class = "stroke-success"
+    elif score >= 50:
+        color_class = "text-warning"
+        stroke_class = "stroke-warning"
+    else:
+        color_class = "text-error"
+        stroke_class = "stroke-error"
+
+    r = 36
+    c = 226.19  # Approx 2 * pi * 36
+    offset = c - (score / 100.0) * c
+
+    return Div(
+        Svg(
+            Circle(cx="50", cy="50", r=str(r), stroke_width="8", cls="stroke-base-300 fill-transparent"),
+            Circle(
+                cx="50",
+                cy="50",
+                r=str(r),
+                stroke_width="8",
+                cls=f"{stroke_class} fill-transparent transition-all duration-500 ease-in-out",
+                stroke_dasharray=str(c),
+                stroke_dashoffset=f"{offset:.2f}",
+                transform="rotate(-90 50 50)",
+                stroke_linecap="round",
+            ),
+            SvgText(
+                f"{score}%",
+                x="50",
+                y="46",
+                text_anchor="middle",
+                dominant_baseline="middle",
+                cls=f"text-xl font-bold fill-current {color_class}",
+            ),
+            SvgText(
+                f"{alert_count} alert{'s' if alert_count != 1 else ''}",
+                x="50",
+                y="64",
+                text_anchor="middle",
+                dominant_baseline="middle",
+                cls="text-[9px] font-semibold fill-base-content/70",
+            ),
+            viewBox="0 0 100 100",
+            cls="w-32 h-32",
+        ),
+        cls="flex flex-col items-center justify-center",
+    )
+
+
+def TabGroup(tabs: list[tuple[str, str, bool]], target_id: str):
+    """
+    Tabbed filter component for page filtering.
+    """
+    target = target_id if target_id.startswith("#") else f"#{target_id}"
+    tab_elements = []
+    for label, url, is_active in tabs:
+        cls = "tab"
+        if is_active:
+            cls += " tab-active"
+        tab_elements.append(A(label, cls=cls, hx_get=url, hx_target=target, hx_swap="innerHTML"))
+    return Div(*tab_elements, cls="tabs tabs-boxed")
+
+
+def Accordion(title: str, *children, open: bool = False, **kwargs):
+    """
+    Reusable DaisyUI details/summary collapsible wrapper.
+    """
+    open_kwargs = {"open": "open"} if open else {}
+    return Details(
+        Summary(title, cls="collapse-title text-lg font-medium"),
+        Div(*children, cls="collapse-content"),
+        cls="collapse collapse-arrow bg-base-200",
+        **{**open_kwargs, **kwargs},
     )

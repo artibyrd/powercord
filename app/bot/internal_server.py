@@ -296,7 +296,7 @@ async def reload_config(payload: dict):
     try:
         guild_id = int(guild_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="guild_id must be an integer")
+        raise HTTPException(status_code=400, detail="guild_id must be an integer") from None
 
     logging.info(f"Received config reload request for guild {guild_id}")
     try:

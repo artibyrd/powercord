@@ -8,5 +8,37 @@
         "manage_channels"
     ],
     "has_migrations": true,
-    "internal": true
+    "internal": true,
+    "default_widgets": [
+        {
+            "widget_name": "guild_admin_security_overview",
+            "display_order": 1,
+            "column_span": 4
+        },
+        {
+            "widget_name": "guild_admin_alerts",
+            "display_order": 2,
+            "column_span": 8
+        },
+        {
+            "widget_name": "guild_admin_auditor_settings",
+            "display_order": 3,
+            "column_span": 12
+        },
+        {
+            "widget_name": "guild_admin_audit_roles",
+            "display_order": 4,
+            "column_span": 12
+        },
+        {
+            "widget_name": "guild_admin_audit_channels",
+            "display_order": 5,
+            "column_span": 12
+        },
+        {
+            "widget_name": "guild_admin_audit_permissions",
+            "display_order": 6,
+            "column_span": 12
+        }
+    ]
 }

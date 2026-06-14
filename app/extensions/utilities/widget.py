@@ -7,8 +7,8 @@ from sqlmodel import Session, select
 
 from app.common.alchemy import init_connection_engine
 from app.common.discord_constants import ALL_PERMISSIONS, OTHER_PERMISSIONS, SENSITIVE_PERMISSIONS
-from app.db.models import DiscordChannel, DiscordRole
-from app.ui.components import Card
+from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole, GuildExtensionSettings
+from app.ui.components import Accordion, Card, HealthScoreArc, TabGroup
 
 engine = init_connection_engine()
 
@@ -66,7 +66,7 @@ def _get_role_badges(permissions: int) -> list[FT]:
     # Administrator
     if permissions & (1 << 3):
         badges.append(
-            Span("Admin", cls="badge badge-error badge-sm px-2 rounded-md mr-1 mb-1 font-bold", title="Administrator")
+            Span("Admin", cls="badge badge-neutral badge-sm px-2 rounded-md mr-1 mb-1 font-bold", title="Administrator")
         )
 
     # Manager (Manage Server, Manage Roles, Manage Channels)
@@ -74,14 +74,14 @@ def _get_role_badges(permissions: int) -> list[FT]:
         badges.append(
             Span(
                 "Manager",
-                cls="badge badge-warning badge-sm px-2 rounded-md mr-1 mb-1",
+                cls="badge badge-ghost badge-sm px-2 rounded-md mr-1 mb-1",
                 title="Manage Server/Roles/Channels",
             )
         )
 
     # Moderator (Kick, Ban)
     if permissions & (1 << 1) or permissions & (1 << 2):
-        badges.append(Span("Mod", cls="badge badge-info badge-sm px-2 rounded-md mr-1 mb-1", title="Kick/Ban Members"))
+        badges.append(Span("Mod", cls="badge badge-ghost badge-sm px-2 rounded-md mr-1 mb-1", title="Kick/Ban Members"))
 
     return badges
 
@@ -96,7 +96,12 @@ def guild_admin_audit_roles_widget(guild_id: int):
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
 
     if not roles:
-        return Card("Start Audit to view Roles", Div("No roles found for this server.", cls="opacity-70 text-sm mt-2"))
+        return Accordion(
+            "Guild Roles",
+            Div("No roles found for this server.", cls="opacity-70 text-sm mt-2"),
+            open=False,
+            id=f"guild-admin-audit-roles-{guild_id}",
+        )
 
     roles = sorted(roles, key=lambda x: x.position, reverse=True)
 
@@ -104,22 +109,14 @@ def guild_admin_audit_roles_widget(guild_id: int):
     for role in roles:
         badges = _get_role_badges(role.permissions)
 
-        # Build detailed permissions badges
+        # Build detailed permissions badges with neutral styling
         detailed_perms = []
         for perm_name, perm_value in ALL_PERMISSIONS.items():
             if bool(role.permissions & perm_value) or bool(role.permissions & (1 << 3)):
-                color_css = ""
-                if role.color:
-                    hex_str = f"{role.color:06x}"
-                    r, g, b = int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16)
-                    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-                    text_color = "#000000" if luminance > 0.5 else "#ffffff"
-                    color_css = f"background-color: #{hex_str}; color: {text_color}; border-color: #{hex_str};"
                 detailed_perms.append(
                     Span(
                         perm_name,
-                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-base-content/10 w-full",
-                        style=color_css,
+                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-base-content/10 bg-base-200 text-base-content/70 w-full",
                     )
                 )
 
@@ -163,8 +160,11 @@ def guild_admin_audit_roles_widget(guild_id: int):
         cls="w-full flex flex-col border border-white/10 rounded-lg overflow-hidden",
     )
 
-    return Card(
-        "Guild Roles", Div(_get_common_legend(for_roles=True), guild_section), id=f"guild-admin-audit-roles-{guild_id}"
+    return Accordion(
+        "Guild Roles",
+        Div(_get_common_legend(for_roles=True), guild_section),
+        open=False,
+        id=f"guild-admin-audit-roles-{guild_id}",
     )
 
 
@@ -178,8 +178,11 @@ def guild_admin_audit_channels_widget(guild_id: int):
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
 
     if not channels:
-        return Card(
-            "Start Audit to view Channels", Div("No channels found for this server.", cls="opacity-70 text-sm mt-2")
+        return Accordion(
+            "Guild Channels",
+            Div("No channels found for this server.", cls="opacity-70 text-sm mt-2"),
+            open=False,
+            id=f"guild-admin-audit-channels-{guild_id}",
         )
 
     channels = sorted(channels, key=lambda x: x.position)
@@ -232,11 +235,11 @@ def guild_admin_audit_channels_widget(guild_id: int):
 
                         color_cls = "badge-ghost"
                         if allow_count > 0 and deny_count == 0:
-                            color_cls = "badge-success text-success-content border-success"
+                            color_cls = "badge-ghost bg-base-200 border-base-300 text-base-content"
                         elif deny_count > 0:
-                            color_cls = "badge-error text-error-content border-error"
+                            color_cls = "badge-neutral"
                         elif allow_count > 0:
-                            color_cls = "badge-warning border-warning"  # Mixed
+                            color_cls = "badge-ghost"  # Mixed
 
                         # Build specific permissions UI for this target
                         target_detailed_perms = []
@@ -245,14 +248,14 @@ def guild_admin_audit_channels_widget(guild_id: int):
                                 target_detailed_perms.append(
                                     Span(
                                         perm_name,
-                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-success/20 text-success border border-success/30 w-full hover:bg-success/30 transition-colors",
+                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-base-200 text-base-content/80 border border-base-content/10 w-full",
                                     )
                                 )
                             elif deny_val & perm_value:
                                 target_detailed_perms.append(
                                     Span(
                                         perm_name,
-                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-error/20 text-error border border-error/30 w-full hover:bg-error/30 transition-colors",
+                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-neutral/20 text-neutral-content/80 border border-neutral/30 w-full",
                                     )
                                 )
 
@@ -402,9 +405,10 @@ def guild_admin_audit_channels_widget(guild_id: int):
         cls="w-full flex flex-col border border-white/10 rounded-lg overflow-hidden",
     )
 
-    return Card(
+    return Accordion(
         "Guild Channels",
         Div(_get_common_legend(for_roles=False), guild_section),
+        open=False,
         id=f"guild-admin-audit-channels-{guild_id}",
     )
 
@@ -415,33 +419,18 @@ def guild_admin_security_overview_widget(guild_id: int):
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
 
-    if not roles and not channels:
-        return Card(
-            "Start Audit to view Security Overview",
-            Div("No data found for this server.", cls="opacity-70 text-sm mt-2"),
-        )
+        if not roles and not channels:
+            return Card(
+                "Start Audit to view Security Overview",
+                Div("No data found for this server.", cls="opacity-70 text-sm mt-2"),
+            )
+
+        evaluation = SecurityRuleEngine.evaluate(guild_id, session)
+        score = evaluation["score"]
+        alerts = evaluation["alerts"]
 
     # Calculate stats
-    admin_roles_count = 0
-    warnings = []
-
-    for r in roles:
-        if r.permissions & (1 << 3) and not r.is_managed:
-            admin_roles_count += 1
-
-        # Check @everyone role (ID usually matches guild_id, but the position is always 0)
-        if r.position == 0:
-            if r.permissions & (1 << 3):
-                warnings.append("⚠️ @everyone has Administrator")
-            if r.permissions & (1 << 5):
-                warnings.append("⚠️ @everyone can Manage Guild")
-            if r.permissions & (1 << 4):
-                warnings.append("⚠️ @everyone can Manage Channels")
-            if r.permissions & (1 << 28):
-                warnings.append("⚠️ @everyone can Manage Roles")
-            if r.permissions & (1 << 17):
-                warnings.append("⚠️ @everyone can Mention Everyone")
-
+    admin_roles_count = sum(1 for r in roles if (r.permissions & (1 << 3)) and not r.is_managed)
     private_channels_count = 0
     for c in channels:
         if c.overwrites:
@@ -477,19 +466,16 @@ def guild_admin_security_overview_widget(guild_id: int):
         cls="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4",
     )
 
-    warnings_ui = ""
-    if warnings:
-        warnings_ui = Div(
-            H4("Security Warnings", cls="font-bold text-error mb-2 text-sm"),
-            Ul(*[Li(w) for w in warnings], cls="list-none text-xs text-error/90 space-y-1"),
-            cls="p-3 bg-error/10 border left-border-error border-error/30 rounded-md mt-4",
-        )
-    else:
-        warnings_ui = Div(
-            "✅ No immediate security warnings detected for @everyone.", cls="text-success text-xs mt-4 opacity-80"
-        )
+    arc_ui = Div(HealthScoreArc(score, len(alerts)), cls="flex justify-center items-center mb-6")
 
-    return Card("Security Overview", Div(stats_grid, warnings_ui), id=f"guild-admin-security-overview-{guild_id}")
+    return Card(
+        "Security Overview",
+        Div(
+            arc_ui,
+            stats_grid,
+        ),
+        id=f"guild-admin-security-overview-{guild_id}",
+    )
 
 
 def guild_admin_audit_permissions_widget(guild_id: int):
@@ -498,9 +484,11 @@ def guild_admin_audit_permissions_widget(guild_id: int):
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
 
     if not roles:
-        return Card(
-            "Start Audit to view Permissions Matrix",
+        return Accordion(
+            "Permissions Matrix",
             Div("No roles found for this server.", cls="opacity-70 text-sm mt-2"),
+            open=False,
+            id=f"guild-admin-audit-permissions-{guild_id}",
         )
 
     # Standardize sort: highly privileged / high position roles first
@@ -514,20 +502,9 @@ def guild_admin_audit_permissions_widget(guild_id: int):
                 has_perm = bool(role.permissions & perm_value) or bool(role.permissions & (1 << 3))
 
                 if has_perm:
-                    color_css = ""
-                    if role.color:
-                        # Calculate perceived lightness to determine text color
-                        hex_str = f"{role.color:06x}"
-                        r, g, b = int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16)
-                        # Standard relative luminance calculation (simplified)
-                        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-                        text_color = "#000000" if luminance > 0.5 else "#ffffff"
-                        color_css = f"background-color: #{hex_str}; color: {text_color}; border-color: #{hex_str};"
-
                     badge = Span(
                         role.name,
-                        cls="inline-flex items-center px-2 py-0.5 rounded-md mr-1 mb-1 text-xs font-medium border border-base-content/10",
-                        style=color_css,
+                        cls="inline-flex items-center px-2 py-0.5 rounded-md mr-1 mb-1 text-xs font-medium border border-base-content/10 bg-base-200 text-base-content/80",
                     )
                     roles_with_perm.append(badge)
 
@@ -536,7 +513,9 @@ def guild_admin_audit_permissions_widget(guild_id: int):
             else:
                 roles_ui = Div(*roles_with_perm, cls="flex flex-wrap")
 
-            highlight_class = "text-error font-bold" if perm_name == "Administrator" else "font-medium"
+            highlight_class = (
+                "font-semibold text-base-content" if perm_name == "Administrator" else "opacity-80 font-medium"
+            )
 
             matrix_rows.append(
                 Tr(
@@ -570,7 +549,7 @@ def guild_admin_audit_permissions_widget(guild_id: int):
         ),
     )
 
-    return Card(
+    return Accordion(
         "Permissions Matrix",
         Div(
             P(
@@ -580,5 +559,654 @@ def guild_admin_audit_permissions_widget(guild_id: int):
             primary_table,
             secondary_table,
         ),
+        open=False,
         id=f"guild-admin-audit-permissions-{guild_id}",
     )
+
+
+class SecurityRule:
+    name: str = ""
+    category: str = ""
+    severity: str = ""
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        raise NotImplementedError
+
+
+class CategoryPermissionBaseline(SecurityRule):
+    name = "Category Permission Baseline"
+    category = "exposure"
+    severity = "medium"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        categories = {c.id: c for c in channels if c.type == "category"}
+        alerts = []
+
+        for child in channels:
+            if child.type == "category" or not child.parent_id:
+                continue
+            parent = categories.get(child.parent_id)
+            if not parent:
+                continue
+
+            try:
+                child_ov = json.loads(child.overwrites or "{}")
+                parent_ov = json.loads(parent.overwrites or "{}")
+            except Exception:  # noqa: S112
+                continue
+
+            # Only iterate child keys; targets absent from child inherit parent's baseline (no leak)
+            for target_id in child_ov.keys():
+                c_target = child_ov.get(target_id, {})
+                p_target = parent_ov.get(target_id, {})
+
+                c_allow = c_target.get("allow", 0)
+                c_deny = c_target.get("deny", 0)
+                p_allow = p_target.get("allow", 0)
+                p_deny = p_target.get("deny", 0)
+
+                leaked_allows = c_allow & ~p_allow
+                leaked_denies = p_deny & ~c_deny
+
+                if leaked_allows or leaked_denies:
+                    is_view_leak = bool((leaked_allows & (1 << 10)) or (leaked_denies & (1 << 10)))
+                    alert_severity = "high" if is_view_leak else self.severity
+                    alerts.append(
+                        {
+                            "rule": self.name,
+                            "category": self.category,
+                            "severity": alert_severity,
+                            "message": f"Channel #{child.name} has permission exposure leak compared to parent category {parent.name}.",
+                            "details": f"Target ID {target_id} has less restricted overwrites. Leaked allows: {leaked_allows:#x}, leaked denies: {leaked_denies:#x}.",
+                            "action_buttons": [],
+                        }
+                    )
+        return alerts
+
+
+def get_effective_channel_permissions(
+    role: DiscordRole, channel: DiscordChannel, everyone_role: Optional[DiscordRole], overwrites: dict
+) -> int:
+    base_everyone = everyone_role.permissions if everyone_role else 0
+    if role.position == 0 or (everyone_role and role.id == everyone_role.id):
+        ev_ov = overwrites.get(str(role.id), {})
+        allow_ev = ev_ov.get("allow", 0)
+        deny_ev = ev_ov.get("deny", 0)
+        p = (base_everyone & ~deny_ev) | allow_ev
+        if p & (1 << 3):  # Administrator
+            return 0xFFFFFFFFFFFFFFFF
+        return p
+
+    base_role = role.permissions | base_everyone
+    ev_id = str(everyone_role.id) if everyone_role else str(role.guild_id)
+    ev_ov = overwrites.get(ev_id, {})
+    allow_ev = ev_ov.get("allow", 0)
+    deny_ev = ev_ov.get("deny", 0)
+
+    p = (base_role & ~deny_ev) | allow_ev
+
+    role_ov = overwrites.get(str(role.id), {})
+    allow_r = role_ov.get("allow", 0)
+    deny_r = role_ov.get("deny", 0)
+
+    p = (p & ~deny_r) | allow_r
+
+    if (role.permissions & (1 << 3)) or (base_everyone & (1 << 3)) or (p & (1 << 3)):
+        return 0xFFFFFFFFFFFFFFFF
+    return p
+
+
+class PublicAnnouncementProtection(SecurityRule):
+    name = "Public Announcement Protection"
+    category = "pings"
+    severity = "high"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        ann_channel_ids = []
+        sep_role_id = None
+        if config:
+            try:
+                ann_channel_ids = json.loads(config.announcement_channel_ids or "[]")
+            except Exception:  # noqa: S110
+                pass
+            sep_role_id = config.staff_separator_role_id
+
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        everyone_role = next((r for r in roles if r.position == 0 or r.id == guild_id), None)
+
+        sep_pos = None
+        if sep_role_id:
+            sep_role = next((r for r in roles if r.id == sep_role_id), None)
+            if sep_role:
+                sep_pos = sep_role.position
+
+        channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        alerts = []
+
+        for c in channels:
+            if c.type == "category":
+                continue
+            is_ann = (c.id in ann_channel_ids) or ("announcement" in c.name.lower()) or ("rules" in c.name.lower())
+            if not is_ann:
+                continue
+
+            try:
+                overwrites = json.loads(c.overwrites or "{}")
+            except Exception:  # noqa: S112
+                continue
+
+            for r in roles:
+                is_everyone = r.position == 0 or r.id == guild_id
+                is_below_sep = sep_pos is not None and r.position < sep_pos
+                if is_everyone or is_below_sep:
+                    p = get_effective_channel_permissions(r, c, everyone_role, overwrites)
+                    # Check for send messages (1<<11), mention everyone (1<<17), or global Administrator (1<<3)
+                    if (p & (1 << 11)) or (p & (1 << 17)) or (r.permissions & (1 << 3)):
+                        alerts.append(
+                            {
+                                "rule": self.name,
+                                "category": self.category,
+                                "severity": self.severity,
+                                "message": f"Announcement channel #{c.name} allows role '{r.name}' to send messages or mention everyone.",
+                                "details": f"Role '{r.name}' (position {r.position}) has effective permissions {p:#x} in announcement channel.",
+                                "action_buttons": [],
+                            }
+                        )
+        return alerts
+
+
+class ExposedStaffChannels(SecurityRule):
+    name = "Exposed Staff Channels"
+    category = "exposure"
+    severity = "high"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        staff_channel_ids = []
+        sep_role_id = None
+        if config:
+            try:
+                staff_channel_ids = json.loads(config.staff_channel_ids or "[]")
+            except Exception:  # noqa: S110
+                pass
+            sep_role_id = config.staff_separator_role_id
+
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        everyone_role = next((r for r in roles if r.position == 0 or r.id == guild_id), None)
+        if not everyone_role:
+            everyone_role = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
+            roles = [everyone_role] + list(roles)
+
+        sep_pos = None
+        if sep_role_id:
+            sep_role = next((r for r in roles if r.id == sep_role_id), None)
+            if sep_role:
+                sep_pos = sep_role.position
+
+        # Determine non-staff roles
+        non_staff_roles = []
+        for r in roles:
+            is_everyone = r.position == 0 or r.id == guild_id
+            is_below_sep = sep_pos is not None and r.position < sep_pos
+            if is_everyone or is_below_sep:
+                non_staff_roles.append(r)
+
+        channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        categories = {c.id: c for c in channels if c.type == "category"}
+        alerts = []
+
+        for c in channels:
+            if c.type == "category":
+                continue
+            is_staff = (c.id in staff_channel_ids) or any(k in c.name.lower() for k in ["staff", "admin", "moderator"])
+            if not is_staff:
+                continue
+
+            try:
+                overwrites = json.loads(c.overwrites or "{}")
+            except Exception:
+                overwrites = {}
+
+            # Inherit parent overwrites
+            parent = categories.get(c.parent_id) if c.parent_id else None
+            if parent:
+                try:
+                    parent_ov = json.loads(parent.overwrites or "{}")
+                except Exception:
+                    parent_ov = {}
+                effective_overwrites = dict(parent_ov)
+                effective_overwrites.update(overwrites)
+            else:
+                effective_overwrites = overwrites
+
+            for r in non_staff_roles:
+                # Compute View Channel permission access
+                if r.position == 0 or r.id == guild_id:
+                    everyone_ov = effective_overwrites.get(str(r.id), {})
+                    has_view = (everyone_ov.get("deny", 0) & (1 << 10)) == 0
+                else:
+                    r_ov = effective_overwrites.get(str(r.id), {})
+                    everyone_ov = effective_overwrites.get(str(guild_id), {})
+                    everyone_denied = (everyone_ov.get("deny", 0) & (1 << 10)) != 0
+
+                    has_view = (
+                        bool(r.permissions & (1 << 3))
+                        or bool(r_ov.get("allow", 0) & (1 << 10))
+                        or (not everyone_denied and (r_ov.get("deny", 0) & (1 << 10)) == 0)
+                    )
+
+                if has_view:
+                    alerts.append(
+                        {
+                            "rule": self.name,
+                            "category": self.category,
+                            "severity": self.severity,
+                            "message": f"Staff channel #{c.name} is visible to {r.name}.",
+                            "details": f"Role '{r.name}' (position {r.position}) has View Channel (1 << 10) permission in staff channel.",
+                            "action_buttons": [],
+                        }
+                    )
+        return alerts
+
+
+class UnauthorizedChatPings(SecurityRule):
+    name = "Unauthorized Chat Pings in Non-Text Locations"
+    category = "pings"
+    severity = "medium"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        sep_role_id = config.staff_separator_role_id if config else None
+
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        everyone_role = next((r for r in roles if r.position == 0 or r.id == guild_id), None)
+
+        sep_pos = None
+        if sep_role_id:
+            sep_role = next((r for r in roles if r.id == sep_role_id), None)
+            if sep_role:
+                sep_pos = sep_role.position
+
+        channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        alerts = []
+
+        for c in channels:
+            if not any(k in c.type.lower() for k in ["voice", "thread", "forum"]):
+                continue
+
+            try:
+                overwrites = json.loads(c.overwrites or "{}")
+            except Exception:  # noqa: S112
+                continue
+
+            for r in roles:
+                is_everyone = r.position == 0 or r.id == guild_id
+                is_below_sep = sep_pos is not None and r.position < sep_pos
+                if is_everyone or is_below_sep:
+                    p = get_effective_channel_permissions(r, c, everyone_role, overwrites)
+                    if (p & (1 << 11)) or (p & (1 << 17)) or (r.permissions & (1 << 3)):
+                        alerts.append(
+                            {
+                                "rule": self.name,
+                                "category": self.category,
+                                "severity": self.severity,
+                                "message": f"Non-text location #{c.name} allows role '{r.name}' to send messages or mention everyone.",
+                                "details": f"Channel of type '{c.type}' allows role '{r.name}' below staff separator to Send Messages or Mention Everyone.",
+                                "action_buttons": [],
+                            }
+                        )
+        return alerts
+
+
+class LowTierRolePrivileges(SecurityRule):
+    name = "Low-Tier Role Privileges"
+    category = "roles"
+    severity = "high"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        sep_role_id = config.staff_separator_role_id if config else None
+        if not sep_role_id:
+            return []
+
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        sep_role = next((r for r in roles if r.id == sep_role_id), None)
+        if not sep_role:
+            return []
+
+        sep_pos = sep_role.position
+        alerts = []
+        mask = (1 << 3) | (1 << 5) | (1 << 28) | (1 << 4) | (1 << 1) | (1 << 2) | (1 << 17)
+
+        for r in roles:
+            if r.position < sep_pos and (r.permissions & mask) != 0:
+                alerts.append(
+                    {
+                        "rule": self.name,
+                        "category": self.category,
+                        "severity": self.severity,
+                        "message": f"Low-tier role '{r.name}' has sensitive permissions.",
+                        "details": f"Role '{r.name}' (position {r.position}) has sensitive permissions: {r.permissions & mask:#x}.",
+                        "action_buttons": [],
+                    }
+                )
+        return alerts
+
+
+class GeneralRoleMentionability(SecurityRule):
+    name = "General Role Mentionability"
+    category = "pings"
+    severity = "low"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        sep_role_id = config.staff_separator_role_id if config else None
+        if not sep_role_id:
+            return []
+
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        sep_role = next((r for r in roles if r.id == sep_role_id), None)
+        if not sep_role:
+            return []
+
+        sep_pos = sep_role.position
+        alerts = []
+
+        for r in roles:
+            if r.position < sep_pos and not r.is_managed and r.is_mentionable:
+                alerts.append(
+                    {
+                        "rule": self.name,
+                        "category": self.category,
+                        "severity": self.severity,
+                        "message": f"Low-tier role '{r.name}' is mentionable.",
+                        "details": f"Role '{r.name}' below staff separator is set to mentionable, posing a mass ping raid vulnerability.",
+                        "action_buttons": [],
+                    }
+                )
+        return alerts
+
+
+class SuggestiveHoneypotIntegration(SecurityRule):
+    name = "Suggestive Honeypot Integration"
+    category = "integrations"
+    severity = "medium"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        ext_setting = session.exec(
+            select(GuildExtensionSettings).where(
+                GuildExtensionSettings.guild_id == guild_id,
+                GuildExtensionSettings.extension_name == "honeypot",
+                GuildExtensionSettings.is_enabled,
+            )
+        ).first()
+
+        if not ext_setting:
+            return [
+                {
+                    "rule": self.name,
+                    "category": self.category,
+                    "severity": "low",
+                    "message": "Install the honeypot extension to protect public discovery channels.",
+                    "details": "The honeypot extension is not currently enabled for this guild. Enabling it adds defensive decoy channels.",
+                    "action_buttons": [],
+                }
+            ]
+
+        try:
+            from app.extensions.honeypot.blueprint import HoneypotChannel
+        except ImportError:
+            HoneypotChannel = None
+
+        protected_ids = set()
+        if HoneypotChannel is not None:
+            try:
+                protected_ids = set(
+                    session.exec(select(HoneypotChannel.channel_id).where(HoneypotChannel.guild_id == guild_id)).all()
+                )
+            except Exception:  # noqa: S110
+                pass
+
+        channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        alerts = []
+
+        for c in channels:
+            if "discovery" not in c.name.lower() or c.type == "category":
+                continue
+
+            try:
+                overwrites = json.loads(c.overwrites or "{}")
+            except Exception:
+                overwrites = {}
+
+            everyone_ov = overwrites.get(str(guild_id), {})
+            deny_val = everyone_ov.get("deny", 0)
+            is_public = (deny_val & (1 << 10)) == 0
+
+            if is_public and c.id not in protected_ids:
+                alerts.append(
+                    {
+                        "rule": self.name,
+                        "category": self.category,
+                        "severity": self.severity,
+                        "message": f"Public discovery channel #{c.name} is unprotected.",
+                        "details": f"Channel '{c.name}' is visible to the public but has no honeypot protection configured.",
+                        "action_buttons": [
+                            {
+                                "text": "Protect",
+                                "hx_post": f"/api/guild/{guild_id}/audit/honeypot/protect?channel_id={c.id}",
+                            },
+                            {
+                                "text": "Remind Later",
+                                "hx_post": f"/api/guild/{guild_id}/audit/honeypot/remind?channel_id={c.id}",
+                            },
+                            {
+                                "text": "No Thanks",
+                                "hx_post": f"/api/guild/{guild_id}/audit/honeypot/dismiss?channel_id={c.id}",
+                            },
+                        ],
+                    }
+                )
+        return alerts
+
+
+class OverPrivilegedBotIntegrations(SecurityRule):
+    name = "Over-privileged Bot Integrations"
+    category = "integrations"
+    severity = "medium"
+
+    def evaluate(self, guild_id: int, session: Session) -> list[dict]:
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        alerts = []
+        mask = (1 << 3) | (1 << 5) | (1 << 28) | (1 << 4)
+
+        for r in roles:
+            if r.is_managed and (r.permissions & mask) != 0:
+                alerts.append(
+                    {
+                        "rule": self.name,
+                        "category": self.category,
+                        "severity": self.severity,
+                        "message": f"Bot role '{r.name}' has excessive privileges.",
+                        "details": f"Managed integration role '{r.name}' has sensitive permissions: {r.permissions & mask:#x}.",
+                        "action_buttons": [],
+                    }
+                )
+        return alerts
+
+
+SECURITY_RULES = [
+    CategoryPermissionBaseline,
+    PublicAnnouncementProtection,
+    ExposedStaffChannels,
+    UnauthorizedChatPings,
+    LowTierRolePrivileges,
+    GeneralRoleMentionability,
+    SuggestiveHoneypotIntegration,
+    OverPrivilegedBotIntegrations,
+]
+
+
+class SecurityRuleEngine:
+    def __init__(self):
+        self.rules = [rule_cls() for rule_cls in SECURITY_RULES]
+
+    @staticmethod
+    def evaluate(guild_id: int, session: Session) -> dict:
+        return SecurityRuleEngine().run_all(guild_id, session)
+
+    def run_all(self, guild_id: int, session: Session) -> dict:
+        alerts = []
+        for rule in self.rules:
+            try:
+                rule_alerts = rule.evaluate(guild_id, session)
+                alerts.extend(rule_alerts)
+            except Exception as e:
+                logging.exception(f"Error evaluating rule {rule.name}: {e}")
+
+        score = 100
+        for alert in alerts:
+            sev = alert.get("severity", "").lower()
+            if sev == "high":
+                score -= 15
+            elif sev == "medium":
+                score -= 10
+            elif sev == "low":
+                score -= 5
+
+        score = max(0, score)
+        return {"score": score, "alerts": alerts}
+
+
+def _render_alerts_list(alerts: list[dict]) -> FT:
+    if not alerts:
+        return Div("No security alerts found.", cls="text-sm opacity-70 p-4 text-center")
+
+    alert_elements = []
+    for alert in alerts:
+        sev = alert.get("severity", "").lower()
+        if sev == "high":
+            badge_cls = "badge-error"
+            border_cls = "border-error/30 bg-error/10 text-error-content"
+        elif sev == "medium":
+            badge_cls = "badge-warning"
+            border_cls = "border-warning/30 bg-warning/10 text-warning-content"
+        else:
+            badge_cls = "badge-info"
+            border_cls = "border-info/30 bg-info/10 text-info-content"
+
+        # Action buttons
+        buttons = []
+        for btn in alert.get("action_buttons", []):
+            buttons.append(Button(btn["text"], hx_post=btn["hx_post"], cls="btn btn-xs btn-outline btn-primary mr-2"))
+
+        alert_elements.append(
+            Div(
+                Div(
+                    Span(alert.get("rule", "Security Alert"), cls=f"badge {badge_cls} badge-sm mr-2 font-bold"),
+                    Span(alert.get("category", "").upper(), cls="text-[10px] opacity-50 uppercase font-semibold"),
+                    cls="flex items-center mb-1",
+                ),
+                P(alert.get("message", ""), cls="text-sm font-medium mb-1"),
+                P(alert.get("details", ""), cls="text-xs opacity-70 mb-2"),
+                Div(*buttons, cls="flex") if buttons else "",
+                cls=f"p-3 rounded-md border {border_cls} mb-3 last:mb-0",
+            )
+        )
+    return Div(*alert_elements)
+
+
+def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
+    """Renders the list of security alerts filterable by a TabGroup tab bar."""
+    tabs = [
+        ("All", f"/dashboard/{guild_id}/alerts-list?category=all", category == "all"),
+        ("Exposure", f"/dashboard/{guild_id}/alerts-list?category=exposure", category == "exposure"),
+        ("Pings", f"/dashboard/{guild_id}/alerts-list?category=pings", category == "pings"),
+        ("Roles", f"/dashboard/{guild_id}/alerts-list?category=roles", category == "roles"),
+    ]
+
+    with Session(engine) as session:
+        evaluation = SecurityRuleEngine.evaluate(guild_id, session)
+        alerts = evaluation["alerts"]
+
+    if category != "all":
+        alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
+
+    tabs_ui = TabGroup(tabs, f"alerts-list-content-{guild_id}")
+    content_id = f"alerts-list-content-{guild_id}"
+    alerts_list_ui = Div(_render_alerts_list(alerts), id=content_id, cls="mt-4")
+
+    return Card(
+        "Security Alerts",
+        Div(
+            tabs_ui,
+            alerts_list_ui,
+        ),
+        id=f"guild-admin-alerts-{guild_id}",
+    )
+
+
+def guild_admin_auditor_settings_widget(guild_id: int):
+    """Renders the settings card for managing auditor configurations."""
+    with Session(engine) as session:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        roles = sorted(roles, key=lambda x: x.position, reverse=True)
+
+    selected_role_id = config.staff_separator_role_id if config else None
+
+    staff_ids_list = []
+    ann_ids_list = []
+    if config:
+        try:
+            staff_ids_list = json.loads(config.staff_channel_ids or "[]")
+        except Exception:  # noqa: S110
+            pass
+        try:
+            ann_ids_list = json.loads(config.announcement_channel_ids or "[]")
+        except Exception:  # noqa: S110
+            pass
+
+    staff_ids_str = ", ".join(str(x) for x in staff_ids_list)
+    ann_ids_str = ", ".join(str(x) for x in ann_ids_list)
+
+    role_options = [Option("None / Select a role...", value="", selected=(selected_role_id is None))]
+    for role in roles:
+        role_options.append(Option(role.name, value=str(role.id), selected=(role.id == selected_role_id)))
+
+    form_content = Form(
+        Div(
+            Label("Staff Separator Role", cls="label text-sm font-semibold"),
+            Select(*role_options, name="staff_separator_role_id", cls="select select-bordered w-full"),
+            cls="form-control mb-4",
+        ),
+        Div(
+            Label("Staff Channel IDs (comma-separated)", cls="label text-sm font-semibold"),
+            Input(
+                type="text",
+                name="staff_channel_ids",
+                value=staff_ids_str,
+                placeholder="e.g. 1234567890, 0987654321",
+                cls="input input-bordered w-full",
+            ),
+            cls="form-control mb-4",
+        ),
+        Div(
+            Label("Announcement Channel IDs (comma-separated)", cls="label text-sm font-semibold"),
+            Input(
+                type="text",
+                name="announcement_channel_ids",
+                value=ann_ids_str,
+                placeholder="e.g. 1234567890, 0987654321",
+                cls="input input-bordered w-full",
+            ),
+            cls="form-control mb-4",
+        ),
+        Button("Save Settings", type="submit", cls="btn btn-primary w-full"),
+        hx_post=f"/dashboard/{guild_id}/auditor-settings",
+        hx_target=f"#guild-admin-auditor-settings-{guild_id}",
+    )
+
+    return Card("Auditor Settings", form_content, id=f"guild-admin-auditor-settings-{guild_id}")

@@ -161,3 +161,27 @@ class CustomContentItem(SQLModel, table=True):
     def set_content(self, raw_content: str) -> None:
         """Sanitize and store content. All write paths should use this method."""
         self.content = _sanitize_content(raw_content)
+
+
+class DiscordAuditorConfig(SQLModel, table=True):
+    __tablename__ = "discord_auditor_configs"
+
+    guild_id: int = Field(sa_column=Column(BigInteger, primary_key=True, autoincrement=False))
+    staff_separator_role_id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    staff_channel_ids: str = Field(default="[]")
+    announcement_channel_ids: str = Field(default="[]")
+
+
+class SiteSetting(SQLModel, table=True):
+    __tablename__ = "site_settings"
+
+    key: str = Field(primary_key=True)
+    value: str
+
+
+class UserSetting(SQLModel, table=True):
+    __tablename__ = "user_settings"
+
+    user_id: int = Field(sa_column=Column(BigInteger, primary_key=True, autoincrement=False))
+    show_sidebar: bool = Field(default=True)
+    show_topbar: bool = Field(default=True)

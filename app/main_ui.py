@@ -393,7 +393,11 @@ async def profile_page(sess):
                     ),
                     cls="flex items-center gap-3 flex-grow min-w-0",
                 ),
-                A("Configure", href=f"/dashboard/{guild['id']}", cls="btn btn-outline btn-primary btn-sm flex-shrink-0"),
+                A(
+                    "Configure",
+                    href=f"/dashboard/{guild['id']}",
+                    cls="btn btn-outline btn-primary btn-sm flex-shrink-0",
+                ),
                 cls="flex items-center justify-between gap-4 p-4",
             ),
             cls="card bg-base-300 shadow-sm border border-base-content/20 rounded-xl",

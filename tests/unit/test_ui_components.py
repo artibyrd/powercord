@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import sys
 from pathlib import Path
 
@@ -11,7 +12,17 @@ if str(project_root) not in sys.path:
 import pytest  # noqa: E402
 
 from app.main_ui import extension_card  # noqa: E402
-from app.ui.components import Card, DangerButton, FormInput, FormLabel, PrimaryButton, SecondaryButton  # noqa: E402
+from app.ui.components import (
+    Accordion,
+    Card,
+    DangerButton,
+    FormInput,
+    FormLabel,
+    HealthScoreArc,
+    PrimaryButton,
+    SecondaryButton,
+    TabGroup,
+)  # noqa: E402
 
 # All tests in this module are unit tests.
 pytestmark = pytest.mark.unit
@@ -108,3 +119,42 @@ def test_extension_card():
     assert toggle_checkbox.attrs["name"] == "enabled"
     assert toggle_checkbox.attrs["id"] == "all-test_ext-global"
     assert "toggle-primary" in toggle_checkbox.attrs["class"]
+
+
+def test_health_score_arc():
+    arc = HealthScoreArc(score=85, alert_count=5)
+    assert arc.tag == "div"
+    assert "flex" in arc.attrs["class"]
+    svg_el = arc.children[0]
+    assert svg_el.tag == "svg"
+    assert any("text-success" in getattr(c, "attrs", {}).get("class", "") for c in svg_el.children)
+    assert any("85%" in c.children for c in svg_el.children if getattr(c, "tag", None) == "text")
+    assert any("5 alerts" in c.children for c in svg_el.children if getattr(c, "tag", None) == "text")
+
+
+def test_tab_group():
+    tabs = [("Active", "/url1", True), ("Inactive", "/url2", False)]
+    tg = TabGroup(tabs, "target_div")
+    assert tg.tag == "div"
+    assert "tabs" in tg.attrs["class"]
+    assert len(tg.children) == 2
+    assert tg.children[0].tag == "a"
+    assert "tab-active" in tg.children[0].attrs["class"]
+    assert tg.children[0].attrs["hx-target"] == "#target_div"
+    assert tg.children[0].attrs["hx-get"] == "/url1"
+    assert "tab-active" not in tg.children[1].attrs["class"]
+    assert tg.children[1].attrs["hx-target"] == "#target_div"
+    assert tg.children[1].attrs["hx-get"] == "/url2"
+
+
+def test_accordion():
+    acc = Accordion("My Title", Div("Content"), open=True)
+    assert acc.tag == "details"
+    assert "collapse" in acc.attrs["class"]
+    assert acc.attrs["open"] == "open"
+    summary = acc.children[0]
+    assert summary.tag == "summary"
+    assert "My Title" in summary.children
+    content_div = acc.children[1]
+    assert content_div.tag == "div"
+    assert "collapse-content" in content_div.attrs["class"]

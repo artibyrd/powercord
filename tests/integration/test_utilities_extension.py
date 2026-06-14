@@ -292,7 +292,7 @@ async def test_slash_audit_success():
 
     with patch.object(cog, "verify_bot_permissions", return_value=[]):
         with patch.object(cog, "audit_guild", new_callable=AsyncMock) as mock_audit:
-            await cog.slash_audit(interaction)
+            await cog.slash_audit_run(interaction)
 
             interaction.response.defer.assert_called_once()
             mock_audit.assert_called_once_with(interaction.guild)
@@ -308,7 +308,7 @@ async def test_slash_audit_not_in_guild():
     interaction.guild = None
     interaction.response.send_message = AsyncMock()
 
-    await cog.slash_audit(interaction)
+    await cog.slash_audit_run(interaction)
     interaction.response.send_message.assert_called_once_with(
         "❌ This command must be used in a server.", ephemeral=True
     )
@@ -324,10 +324,13 @@ async def test_slash_audit_no_admin():
     interaction.user = MagicMock(spec=nextcord.Member)
     interaction.user.guild_permissions.administrator = False
     interaction.response.defer = AsyncMock()
+    interaction.response.send_message = AsyncMock()
     interaction.followup.send = AsyncMock()
 
-    await cog.slash_audit(interaction)
-    interaction.followup.send.assert_called_once_with("❌ You need Administrator permissions to use this command.")
+    await cog.slash_audit_run(interaction)
+    interaction.response.send_message.assert_called_once_with(
+        "❌ You need Administrator permissions to use this command.", ephemeral=True
+    )
 
 
 @pytest.mark.asyncio
@@ -342,7 +345,7 @@ async def test_slash_audit_bot_missing_perms():
     interaction.followup.send = AsyncMock()
 
     with patch.object(cog, "verify_bot_permissions", return_value=["Manage Roles"]):
-        await cog.slash_audit(interaction)
+        await cog.slash_audit_run(interaction)
         interaction.followup.send.assert_called_once_with("❌ Bot is missing permissions: Manage Roles")
 
 
@@ -359,5 +362,5 @@ async def test_slash_audit_failure():
 
     with patch.object(cog, "verify_bot_permissions", return_value=[]):
         with patch.object(cog, "audit_guild", new_callable=AsyncMock, side_effect=Exception("TestError")):
-            await cog.slash_audit(interaction)
+            await cog.slash_audit_run(interaction)
             interaction.followup.send.assert_called_with("❌ Audit failed: TestError")

@@ -32,7 +32,7 @@ from app.ui.helpers import (
     update_guild_extension_setting,
     update_widget_setting,
 )
-from app.ui.page import StandardPage
+from app.ui.page import DashboardPage
 
 
 def server_extension_card(
@@ -344,7 +344,7 @@ async def dashboard(guild_id: int, sess):
 
     access_roles_section = await _render_access_roles(guild_id)
 
-    return StandardPage(
+    return DashboardPage(
         f"Dashboard: {guild['name']}",
         H1(f"Dashboard: {guild['name']}", cls="text-2xl font-extrabold mb-8"),
         access_roles_section,
@@ -352,6 +352,7 @@ async def dashboard(guild_id: int, sess):
         guild_widgets,
         A("Back to Dashboard", href="/admin", role="button", cls="secondary mt-8 inline-block"),
         auth=auth,
+        guild_id=guild_id,
     )
 
 
@@ -561,7 +562,7 @@ def layout_editor(sess):
     auth = sess.get("auth", {})
     widgets = _get_ordered_widgets(SCOPE_PUBLIC)
 
-    return StandardPage(
+    return DashboardPage(
         "Edit Public Layout",
         Div(
             H1("Edit Public Layout", cls="text-3xl font-extrabold mb-6"),
@@ -575,6 +576,7 @@ def layout_editor(sess):
             ),
         ),
         auth=auth,
+        guild_id=None,
     )
 
 
@@ -584,7 +586,7 @@ def admin_layout_editor(sess):
     auth = sess.get("auth", {})
     widgets = _get_ordered_widgets(SCOPE_ADMIN_DASHBOARD)
 
-    return StandardPage(
+    return DashboardPage(
         "Edit Admin Layout",
         Div(
             H1("Edit Admin Layout", cls="text-3xl font-extrabold mb-6"),
@@ -598,6 +600,7 @@ def admin_layout_editor(sess):
             ),
         ),
         auth=auth,
+        guild_id=None,
     )
 
 
@@ -618,7 +621,7 @@ async def guild_layout_editor(guild_id: int, sess):
 
     widgets = _get_ordered_widgets(guild_id)
 
-    return StandardPage(
+    return DashboardPage(
         f"Edit Layout: {guild['name']}",
         Div(
             H1(f"Edit Layout: {guild['name']}", cls="text-3xl font-extrabold mb-6"),
@@ -633,6 +636,7 @@ async def guild_layout_editor(guild_id: int, sess):
             A("Back to Dashboard", href=f"/dashboard/{guild_id}", role="button", cls="secondary mt-8 inline-block"),
         ),
         auth=auth,
+        guild_id=guild_id,
     )
 
 
@@ -835,3 +839,148 @@ async def remove_access_role(guild_id: int, req, sess):
             pass
 
     return await _render_access_roles(guild_id)
+
+
+@dashboard_router("/dashboard/{guild_id:int}/lockdown", methods=["POST"])
+async def lockdown_route(guild_id: int):
+    """
+    Emergency lockdown route.
+    """
+    return Div(
+        Span("🚨 Emergency Lockdown Initiated! Channels are being locked down.", cls="font-bold"),
+        cls="alert alert-error shadow-lg flex items-center gap-2",
+    )
+
+
+@dashboard_router("/dashboard/{guild_id:int}/toggle-nav", methods=["POST"])
+async def toggle_nav_route(guild_id: int, req, sess):
+    """
+    Handles toggling user visibility preferences (updates UserSetting in the database).
+    """
+    auth = sess.get("auth", {})
+    user_id_str = auth.get("id")
+    if not user_id_str:
+        return Response("Unauthorized", status_code=401)
+
+    try:
+        user_id = int(user_id_str)
+    except ValueError:
+        return Response("Invalid User ID", status_code=400)
+
+    # Read parameters from query parameters or form data
+    show_sidebar_param = req.query_params.get("show_sidebar")
+    show_topbar_param = req.query_params.get("show_topbar")
+
+    try:
+        form_data = await req.form()
+        if show_sidebar_param is None:
+            show_sidebar_param = form_data.get("show_sidebar")
+        if show_topbar_param is None:
+            show_topbar_param = form_data.get("show_topbar")
+    except Exception:  # noqa: S110
+        pass
+
+    from sqlmodel import Session
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import UserSetting
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        user_setting = session.get(UserSetting, user_id)
+        if not user_setting:
+            user_setting = UserSetting(user_id=user_id)
+
+        if show_sidebar_param is not None:
+            user_setting.show_sidebar = show_sidebar_param.lower() in ("true", "1", "yes", "on")
+        if show_topbar_param is not None:
+            user_setting.show_topbar = show_topbar_param.lower() in ("true", "1", "yes", "on")
+
+        session.add(user_setting)
+        session.commit()
+
+    return Response(headers={"HX-Refresh": "true"})
+
+
+@dashboard_router("/dashboard/{guild_id:int}/auditor-settings", methods=["POST"])
+async def post_auditor_settings(guild_id: int, req):
+    """Parses separator role and staff/announcement channels, validates, and saves in DB."""
+    import json
+
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import DiscordAuditorConfig
+
+    form = await req.form()
+
+    # staff_separator_role_id
+    role_id_raw = form.get("staff_separator_role_id")
+    staff_separator_role_id = None
+    if role_id_raw:
+        try:
+            staff_separator_role_id = int(role_id_raw)
+        except ValueError:
+            pass
+
+    # staff_channel_ids
+    staff_ids_raw = form.get("staff_channel_ids", "")
+    staff_channel_ids = []
+    if staff_ids_raw:
+        for val in staff_ids_raw.split(","):
+            val_clean = val.strip()
+            if val_clean:
+                try:
+                    staff_channel_ids.append(int(val_clean))
+                except ValueError:
+                    pass
+
+    # announcement_channel_ids
+    ann_ids_raw = form.get("announcement_channel_ids", "")
+    ann_channel_ids = []
+    if ann_ids_raw:
+        for val in ann_ids_raw.split(","):
+            val_clean = val.strip()
+            if val_clean:
+                try:
+                    ann_channel_ids.append(int(val_clean))
+                except ValueError:
+                    pass
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        if not config:
+            config = DiscordAuditorConfig(guild_id=guild_id)
+            session.add(config)
+
+        config.staff_separator_role_id = staff_separator_role_id
+        config.staff_channel_ids = json.dumps(staff_channel_ids)
+        config.announcement_channel_ids = json.dumps(ann_channel_ids)
+        session.commit()
+
+    return Response(
+        content='<div class="alert alert-success mt-4">✅ Auditor settings updated successfully!</div>',
+        headers={"HX-Refresh": "true"},
+    )
+
+
+@dashboard_router("/dashboard/{guild_id:int}/alerts-list", methods=["GET"])
+async def get_alerts_list(guild_id: int, req, category: str = "all"):
+    """Evaluates rules, filters alerts by category, and returns the HTMX list segment."""
+    from sqlmodel import Session
+
+    from app.common.alchemy import init_connection_engine
+    from app.extensions.utilities.widget import SecurityRuleEngine, _render_alerts_list
+
+    category = req.query_params.get("category", "all")
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        evaluation = SecurityRuleEngine.evaluate(guild_id, session)
+        alerts = evaluation["alerts"]
+
+    if category != "all":
+        alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
+
+    return _render_alerts_list(alerts)

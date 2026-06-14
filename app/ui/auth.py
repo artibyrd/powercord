@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 import httpx
 from fasthtml.common import *
@@ -49,9 +49,8 @@ def is_whitelisted_host(host: str) -> bool:
 def is_mock(obj) -> bool:
     if obj is None:
         return False
-    return (
-        type(obj).__name__ in ("MagicMock", "Mock", "AsyncMock", "NonCallableMagicMock")
-        or hasattr(obj, "_is_protocol_mock")
+    return type(obj).__name__ in ("MagicMock", "Mock", "AsyncMock", "NonCallableMagicMock") or hasattr(
+        obj, "_is_protocol_mock"
     )
 
 

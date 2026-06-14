@@ -125,6 +125,7 @@ def load_manifest(extension_path: Path) -> dict[str, Any]:
             "has_migrations": powercord_meta.get("has_migrations", False),
             "latest_migration_version": powercord_meta.get("latest_migration_version", None),
             "internal": powercord_meta.get("internal", False),
+            "default_widgets": powercord_meta.get("default_widgets", []),
         }
         return manifest
 
@@ -137,7 +138,10 @@ def load_manifest(extension_path: Path) -> dict[str, Any]:
         if missing:
             raise ValueError(f"extension.json missing required keys: {missing}")
 
-        return dict(manifest)
+        manifest_dict = dict(manifest)
+        if "default_widgets" not in manifest_dict:
+            manifest_dict["default_widgets"] = []
+        return manifest_dict
 
     raise FileNotFoundError(f"No pyproject.toml or extension.json found in {extension_path}")
 

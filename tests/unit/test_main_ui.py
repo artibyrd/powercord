@@ -12,15 +12,7 @@ pytestmark = pytest.mark.unit
 @pytest.mark.asyncio
 async def test_profile_page_rendering():
     # Emulates a session dictionary with a valid authenticated user.
-    sess = {
-        "auth": {
-            "id": "123456",
-            "username": "testuser",
-            "token_data": {
-                "access_token": "mock_access_token"
-            }
-        }
-    }
+    sess = {"auth": {"id": "123456", "username": "testuser", "token_data": {"access_token": "mock_access_token"}}}
 
     # Mock get_admin_guilds to return a list of guilds
     mock_guilds = {
@@ -35,11 +27,13 @@ async def test_profile_page_rendering():
             "name": "Test Guild 2",
             "icon": None,
             "permissions": "8",
-        }
+        },
     }
 
-    with patch("app.main_ui.get_admin_guilds", new_callable=AsyncMock) as mock_get_admin_guilds, \
-         patch("app.main_ui._render_client_keys", new_callable=AsyncMock) as mock_render_client_keys:
+    with (
+        patch("app.main_ui.get_admin_guilds", new_callable=AsyncMock) as mock_get_admin_guilds,
+        patch("app.main_ui._render_client_keys", new_callable=AsyncMock) as mock_render_client_keys,
+    ):
         mock_get_admin_guilds.return_value = mock_guilds
         mock_render_client_keys.return_value = Div(id="mocked-client-keys")
 
@@ -73,18 +67,12 @@ async def test_profile_page_rendering():
 
 @pytest.mark.asyncio
 async def test_profile_page_rendering_empty():
-    sess = {
-        "auth": {
-            "id": "123456",
-            "username": "testuser",
-            "token_data": {
-                "access_token": "mock_access_token"
-            }
-        }
-    }
+    sess = {"auth": {"id": "123456", "username": "testuser", "token_data": {"access_token": "mock_access_token"}}}
 
-    with patch("app.main_ui.get_admin_guilds", new_callable=AsyncMock) as mock_get_admin_guilds, \
-         patch("app.main_ui._render_client_keys", new_callable=AsyncMock) as mock_render_client_keys:
+    with (
+        patch("app.main_ui.get_admin_guilds", new_callable=AsyncMock) as mock_get_admin_guilds,
+        patch("app.main_ui._render_client_keys", new_callable=AsyncMock) as mock_render_client_keys,
+    ):
         mock_get_admin_guilds.return_value = {}
         mock_render_client_keys.return_value = Div(id="mocked-client-keys")
 

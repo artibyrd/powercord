@@ -1,0 +1,418 @@
+import json
+
+import pytest
+from sqlmodel import Session
+
+from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole, GuildExtensionSettings
+from app.extensions.utilities.widget import (
+    CategoryPermissionBaseline,
+    ExposedStaffChannels,
+    GeneralRoleMentionability,
+    LowTierRolePrivileges,
+    OverPrivilegedBotIntegrations,
+    PublicAnnouncementProtection,
+    SecurityRuleEngine,
+    SuggestiveHoneypotIntegration,
+    UnauthorizedChatPings,
+)
+
+try:
+    from app.extensions.honeypot.blueprint import HoneypotChannel
+except ImportError:
+    HoneypotChannel = None
+
+
+@pytest.fixture(autouse=True)
+def clean_db(session: Session):
+    from sqlalchemy import text
+
+    session.execute(text("DELETE FROM discord_channels;"))
+    session.execute(text("DELETE FROM discord_roles;"))
+    session.execute(text("DELETE FROM discord_auditor_configs;"))
+    session.execute(text("DELETE FROM guild_extension_settings;"))
+    session.execute(text("DELETE FROM site_settings;"))
+    session.execute(text("DELETE FROM user_settings;"))
+    if HoneypotChannel is not None:
+        try:
+            session.execute(text("DELETE FROM honeypot_channels;"))
+        except Exception:
+            pass
+    session.commit()
+
+
+def test_category_permission_baseline(session: Session):
+    guild_id = 12345
+
+    # Create parent category
+    parent = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Category",
+        type="category",
+        overwrites=json.dumps(
+            {
+                "999": {"allow": 0, "deny": 1 << 10}  # Deny view channel
+            }
+        ),
+    )
+    # Create child channel (exposed: allows view channel)
+    child_exposed = DiscordChannel(
+        id=101,
+        guild_id=guild_id,
+        parent_id=100,
+        name="exposed-channel",
+        type="text",
+        overwrites=json.dumps(
+            {
+                "999": {"allow": 1 << 10, "deny": 0}  # Allow view channel
+            }
+        ),
+    )
+    # Create child channel (secure: inherits or denies)
+    child_secure = DiscordChannel(
+        id=102,
+        guild_id=guild_id,
+        parent_id=100,
+        name="secure-channel",
+        type="text",
+        overwrites=json.dumps({"999": {"allow": 0, "deny": 1 << 10}}),
+    )
+
+    session.add_all([parent, child_exposed, child_secure])
+    session.commit()
+
+    rule = CategoryPermissionBaseline()
+    alerts = rule.evaluate(guild_id, session)
+
+    # Should flag child_exposed but not child_secure
+    assert len(alerts) == 1
+    assert alerts[0]["rule"] == "Category Permission Baseline"
+    assert alerts[0]["severity"] == "high"  # view_channel is leaked
+    assert "exposed-channel" in alerts[0]["message"]
+
+
+def test_category_permission_baseline_fully_synced(session: Session):
+    guild_id = 12345
+    parent = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Category",
+        type="category",
+        overwrites=json.dumps({"999": {"allow": 0, "deny": 1 << 10}}),
+    )
+    # Completely empty overwrites (synced, inherits deny)
+    child_synced = DiscordChannel(
+        id=101, guild_id=guild_id, parent_id=100, name="synced-channel", type="text", overwrites="{}"
+    )
+    session.add_all([parent, child_synced])
+    session.commit()
+    rule = CategoryPermissionBaseline()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 0
+
+
+def test_public_announcement_protection(session: Session):
+    guild_id = 12345
+
+    # Configure auditor
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
+
+    # Roles
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
+    low_role = DiscordRole(id=222, guild_id=guild_id, name="Members", permissions=0, position=1)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+
+    # Channels
+    ann_channel = DiscordChannel(
+        id=201,
+        guild_id=guild_id,
+        parent_id=None,
+        name="rules",
+        type="text",
+        overwrites=json.dumps(
+            {
+                "222": {"allow": 1 << 11, "deny": 0}  # Allow low_role to send messages
+            }
+        ),
+    )
+
+    session.add_all([config, everyone, low_role, sep_role, ann_channel])
+    session.commit()
+
+    rule = PublicAnnouncementProtection()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) > 0
+    assert any(a["rule"] == "Public Announcement Protection" for a in alerts)
+
+
+def test_announcement_admin_bypass(session: Session):
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
+    low_admin = DiscordRole(id=111, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=1)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    ann_channel = DiscordChannel(
+        id=201,
+        guild_id=guild_id,
+        parent_id=None,
+        name="announcements",
+        type="text",
+        overwrites=json.dumps({"111": {"allow": 0, "deny": 1 << 11}}),
+    )
+    session.add_all([config, everyone, low_admin, sep_role, ann_channel])
+    session.commit()
+    rule = PublicAnnouncementProtection()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) > 0
+
+
+def test_exposed_staff_channels(session: Session):
+    guild_id = 12345
+
+    # Config
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_channel_ids="[301]")
+
+    # Staff channel that doesn't explicitly deny view_channel
+    channel_exposed = DiscordChannel(
+        id=301, guild_id=guild_id, parent_id=None, name="admin-talk", type="text", overwrites="{}"
+    )
+    # Staff channel that denies view_channel to @everyone
+    channel_secure = DiscordChannel(
+        id=302,
+        guild_id=guild_id,
+        parent_id=None,
+        name="staff-only",
+        type="text",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),
+    )
+
+    session.add_all([config, channel_exposed, channel_secure])
+    session.commit()
+
+    rule = ExposedStaffChannels()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert alerts[0]["message"] == "Staff channel #admin-talk is visible to @everyone."
+
+
+def test_exposed_staff_channels_non_staff_role_and_sync(session: Session):
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_channel_ids="[301, 302, 303]", staff_separator_role_id=900)
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
+    non_staff = DiscordRole(id=111, guild_id=guild_id, name="Members", permissions=0, position=1)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    category = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Staff Category",
+        type="category",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),
+    )
+    chan_synced = DiscordChannel(
+        id=301, guild_id=guild_id, parent_id=100, name="staff-synced", type="text", overwrites="{}"
+    )
+    chan_exposed_role = DiscordChannel(
+        id=302,
+        guild_id=guild_id,
+        parent_id=100,
+        name="staff-exposed-role",
+        type="text",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}, "111": {"allow": 1 << 10, "deny": 0}}),
+    )
+    chan_secure = DiscordChannel(
+        id=303,
+        guild_id=guild_id,
+        parent_id=100,
+        name="staff-secure",
+        type="text",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}, "111": {"allow": 0, "deny": 1 << 10}}),
+    )
+    session.add_all([config, everyone, non_staff, sep_role, category, chan_synced, chan_exposed_role, chan_secure])
+    session.commit()
+    rule = ExposedStaffChannels()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 1
+    assert alerts[0]["message"] == "Staff channel #staff-exposed-role is visible to Members."
+
+
+def test_unauthorized_chat_pings(session: Session):
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+
+    # Voice channel allowing @everyone to Send Messages
+    voice_chan = DiscordChannel(
+        id=401,
+        guild_id=guild_id,
+        parent_id=None,
+        name="General Voice",
+        type="voice",
+        overwrites=json.dumps({str(guild_id): {"allow": 1 << 11, "deny": 0}}),
+    )
+
+    session.add_all([config, everyone, sep_role, voice_chan])
+    session.commit()
+
+    rule = UnauthorizedChatPings()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert alerts[0]["rule"] == "Unauthorized Chat Pings in Non-Text Locations"
+
+
+def test_unauthorized_chat_pings_admin_bypass(session: Session):
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
+    low_admin = DiscordRole(id=111, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=1)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    voice_chan = DiscordChannel(
+        id=401,
+        guild_id=guild_id,
+        parent_id=None,
+        name="General Voice",
+        type="voice",
+        overwrites=json.dumps({"111": {"allow": 0, "deny": 1 << 11}}),
+    )
+    session.add_all([config, everyone, low_admin, sep_role, voice_chan])
+    session.commit()
+    rule = UnauthorizedChatPings()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 1
+    assert "Low Admin" in alerts[0]["message"]
+
+
+def test_low_tier_role_privileges(session: Session):
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+
+    # Role below staff separator with Administrator
+    low_role_admin = DiscordRole(id=501, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
+    # Role above staff separator with Administrator
+    high_role_admin = DiscordRole(id=502, guild_id=guild_id, name="High Admin", permissions=1 << 3, position=7)
+
+    session.add_all([config, sep_role, low_role_admin, high_role_admin])
+    session.commit()
+
+    rule = LowTierRolePrivileges()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert "Low Admin" in alerts[0]["message"]
+
+
+def test_general_role_mentionability(session: Session):
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+
+    # Role below separator that is mentionable and not managed
+    low_mentionable = DiscordRole(
+        id=601,
+        guild_id=guild_id,
+        name="Pingable Role",
+        permissions=0,
+        position=2,
+        is_mentionable=True,
+        is_managed=False,
+    )
+    # Managed bot role that is mentionable
+    bot_mentionable = DiscordRole(
+        id=602, guild_id=guild_id, name="Bot Role", permissions=0, position=2, is_mentionable=True, is_managed=True
+    )
+
+    session.add_all([config, sep_role, low_mentionable, bot_mentionable])
+    session.commit()
+
+    rule = GeneralRoleMentionability()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert "Pingable Role" in alerts[0]["message"]
+
+
+def test_suggestive_honeypot_integration(session: Session):
+    guild_id = 12345
+
+    # 1. Honeypot disabled -> returns tip suggestion
+    rule = SuggestiveHoneypotIntegration()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 1
+    assert "Install the honeypot extension" in alerts[0]["message"]
+    assert alerts[0]["severity"] == "low"
+
+    # 2. Honeypot enabled -> checks public discovery channels
+    ext_setting = GuildExtensionSettings(
+        guild_id=guild_id, extension_name="honeypot", gadget_type="cog", is_enabled=True
+    )
+
+    disc_channel = DiscordChannel(
+        id=701, guild_id=guild_id, parent_id=None, name="public-discovery", type="text", overwrites="{}"
+    )
+
+    session.add(ext_setting)
+    session.add(disc_channel)
+    session.commit()
+
+    alerts2 = rule.evaluate(guild_id, session)
+    assert len(alerts2) == 1
+    assert "unprotected" in alerts2[0]["message"]
+    assert len(alerts2[0]["action_buttons"]) == 3
+
+    # 3. Add to HoneypotChannel -> should be protected
+    if HoneypotChannel is not None:
+        protected = HoneypotChannel(guild_id=guild_id, channel_id=701)
+        session.add(protected)
+        session.commit()
+
+        alerts3 = rule.evaluate(guild_id, session)
+        assert len(alerts3) == 0
+
+
+def test_over_privileged_bot_integrations(session: Session):
+    guild_id = 12345
+
+    # Managed bot role with Administrator
+    bot_role = DiscordRole(
+        id=801, guild_id=guild_id, name="Overprivileged Bot", permissions=1 << 3, position=4, is_managed=True
+    )
+    # Standard role with Administrator
+    user_role = DiscordRole(
+        id=802, guild_id=guild_id, name="Admin User", permissions=1 << 3, position=4, is_managed=False
+    )
+
+    session.add_all([bot_role, user_role])
+    session.commit()
+
+    rule = OverPrivilegedBotIntegrations()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert "Overprivileged Bot" in alerts[0]["message"]
+
+
+def test_security_rule_engine(session: Session):
+    guild_id = 12345
+
+    # Seed various issues
+    # Low-tier role privilege (high severity - 15 points)
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    low_role_admin = DiscordRole(id=901, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
+
+    session.add_all([config, sep_role, low_role_admin])
+    session.commit()
+
+    engine = SecurityRuleEngine()
+    result = engine.run_all(guild_id, session)
+
+    # Expected alerts: LowTierRolePrivileges (high), SuggestiveHoneypotIntegration (low)
+    # score = 100 - 15 (high) - 5 (low) = 80
+    assert result["score"] == 80

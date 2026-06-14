@@ -19,7 +19,13 @@ The `utilities` extension provides powerful administrative tools for server anal
   - None included.
 
 ### API Routes (Sprockets)
-- None included.
+The extension exposes the following Sprocket API routes for programmatic access to the Security Auditor:
+- `GET /api/guild/{guild_id}/audit/score`: Returns the overall security health score (starting from 100) and warning counts by severity.
+- `GET /api/guild/{guild_id}/audit/alerts`: Retrieves the list of active security alerts (filterable by category).
+- `GET /api/guild/{guild_id}/audit/config`: Returns the current Auditor configuration settings.
+- `POST /api/guild/{guild_id}/audit/config`: Updates the Auditor configuration. Omitted fields in the request body preserve their existing database values rather than resetting to `None`.
+
+For a comprehensive guide on the Security Auditor rules, scoring, and architecture, see [SECURITY_AUDITOR.md](../../../docs/SECURITY_AUDITOR.md).
 
 ### UI Elements (Widgets)
 - `guild_admin_audit_roles_widget`: A detailed table of server roles, generating visual badges for permissions and matching the exact color of the role in Discord.

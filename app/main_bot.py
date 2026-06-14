@@ -253,6 +253,7 @@ class Bot(commands.Bot):
 def get_enabled_guild_ids(bot, extension_name: str) -> set[int]:
     """Helper to get all guild IDs where a specific extension is enabled."""
     from sqlmodel import Session, select
+
     from app.common.alchemy import init_connection_engine
     from app.db.models import GuildExtensionSettings
 

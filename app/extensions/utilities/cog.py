@@ -3,10 +3,10 @@ import logging
 
 import nextcord
 from nextcord.ext import commands
-from sqlmodel import Session, col, delete
+from sqlmodel import Session, col, delete, select
 
 from app.common.alchemy import init_connection_engine
-from app.db.models import DiscordChannel, DiscordRole
+from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole
 
 engine = init_connection_engine()
 
@@ -140,22 +140,31 @@ class UtilitiesCog(commands.Cog):
 
     @nextcord.slash_command(
         name="audit",
-        description="Triggers the server permission auditor.",
+        description="Permission Auditor commands",
         default_member_permissions=nextcord.Permissions(administrator=True),
     )
     async def slash_audit(self, interaction: nextcord.Interaction):
+        pass
+
+    @slash_audit.subcommand(
+        name="run",
+        description="Triggers the server permission auditor.",
+    )
+    async def slash_audit_run(self, interaction: nextcord.Interaction):
         """Slash command to trigger the audit."""
         if not interaction.guild or not isinstance(interaction.user, nextcord.Member):
             await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
             return
 
-        # Defer response since audit might take a moment
-        await interaction.response.defer()
-
         # Check User Permissions
         if not interaction.user.guild_permissions.administrator:
-            await interaction.followup.send("❌ You need Administrator permissions to use this command.")
+            await interaction.response.send_message(
+                "❌ You need Administrator permissions to use this command.", ephemeral=True
+            )
             return
+
+        # Defer response since audit might take a moment
+        await interaction.response.defer()
 
         guild = interaction.guild
         # Check Bot Permissions
@@ -169,6 +178,158 @@ class UtilitiesCog(commands.Cog):
             await interaction.followup.send("✅ Audit complete! Dashboard updated.")
         except Exception as e:
             await interaction.followup.send(f"❌ Audit failed: {e}")
+
+    @slash_audit.subcommand(
+        name="config",
+        description="Auditor configuration commands",
+    )
+    async def slash_audit_config(self, interaction: nextcord.Interaction):
+        pass
+
+    @slash_audit_config.subcommand(
+        name="get",
+        description="Displays the current config parameters.",
+    )
+    async def slash_audit_config_get(self, interaction: nextcord.Interaction):
+        """Displays the current config parameters for the separator role and staff/announcement channels."""
+        if not interaction.guild or not isinstance(interaction.user, nextcord.Member):
+            await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
+            return
+
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "❌ You need Administrator permissions to use this command.", ephemeral=True
+            )
+            return
+
+        guild = interaction.guild
+        with Session(engine) as session:
+            config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild.id)).first()
+
+        if not config:
+            await interaction.response.send_message("ℹ️ No auditor configuration found for this server.", ephemeral=True)
+            return
+
+        # Resolve role mention
+        role_mention = "None"
+        if config.staff_separator_role_id:
+            role = guild.get_role(config.staff_separator_role_id)
+            if role:
+                role_mention = role.mention
+            else:
+                role_mention = f"ID: {config.staff_separator_role_id} (Role not found)"
+
+        # Parse channel IDs and mention them
+        def format_channels(json_str):
+            try:
+                ids = json.loads(json_str or "[]")
+            except Exception:
+                ids = []
+            if not ids:
+                return "None"
+            mentions = []
+            for cid in ids:
+                channel = guild.get_channel(int(cid))
+                if channel:
+                    mentions.append(channel.mention)
+                else:
+                    mentions.append(f"`{cid}`")
+            return ", ".join(mentions)
+
+        staff_channels_str = format_channels(config.staff_channel_ids)
+        announcement_channels_str = format_channels(config.announcement_channel_ids)
+
+        embed = nextcord.Embed(title="Auditor Configuration", color=nextcord.Color.blue())
+        embed.add_field(name="Staff Separator Role", value=role_mention, inline=False)
+        embed.add_field(name="Staff Channels", value=staff_channels_str, inline=False)
+        embed.add_field(name="Announcement Channels", value=announcement_channels_str, inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @slash_audit_config.subcommand(
+        name="set",
+        description="Allows setting/updating the separator role, staff channels, and announcement channels.",
+    )
+    async def slash_audit_config_set(
+        self,
+        interaction: nextcord.Interaction,
+        separator_role: nextcord.Role = nextcord.SlashOption(
+            name="separator_role",
+            description="The staff separator role",
+            required=False,
+            default=None,
+        ),
+        staff_channels: str = nextcord.SlashOption(
+            name="staff_channels",
+            description="Comma-separated staff channel IDs",
+            required=False,
+            default=None,
+        ),
+        announcement_channels: str = nextcord.SlashOption(
+            name="announcement_channels",
+            description="Comma-separated announcement channel IDs",
+            required=False,
+            default=None,
+        ),
+    ):
+        """Allows setting/updating the separator role, staff channels, and announcement channels."""
+        if not interaction.guild or not isinstance(interaction.user, nextcord.Member):
+            await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
+            return
+
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "❌ You need Administrator permissions to use this command.", ephemeral=True
+            )
+            return
+
+        guild = interaction.guild
+        has_updates = False
+
+        with Session(engine) as session:
+            config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild.id)).first()
+            if not config:
+                config = DiscordAuditorConfig(guild_id=guild.id)
+                session.add(config)
+
+            if separator_role is not None:
+                config.staff_separator_role_id = separator_role.id
+                has_updates = True
+
+            if staff_channels is not None:
+                staff_ids = []
+                for x in staff_channels.split(","):
+                    val = x.strip()
+                    if val:
+                        try:
+                            staff_ids.append(int(val))
+                        except ValueError:
+                            pass
+                config.staff_channel_ids = json.dumps(staff_ids)
+                has_updates = True
+
+            if announcement_channels is not None:
+                ann_ids = []
+                for x in announcement_channels.split(","):
+                    val = x.strip()
+                    if val:
+                        try:
+                            ann_ids.append(int(val))
+                        except ValueError:
+                            pass
+                config.announcement_channel_ids = json.dumps(ann_ids)
+                has_updates = True
+
+            if not has_updates:
+                await interaction.response.send_message(
+                    "❌ Please provide at least one configuration parameter to update (separator_role, staff_channels, or announcement_channels).",
+                    ephemeral=True,
+                )
+                return
+
+            session.commit()
+
+        await interaction.response.send_message("✅ Auditor configuration updated successfully!", ephemeral=True)
 
     # Optionally, we could add a listener to update on changes,
     # but the request said "this data changes fairly infrequently" and suggested a refresh mechanism.

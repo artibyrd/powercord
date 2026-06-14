@@ -299,6 +299,47 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
                 extension_setting.is_enabled = is_enabled
                 session.add(extension_setting)
 
+            if gadget_type == "widget":
+                if is_enabled:
+                    from app.common.extension_manager import EXTENSIONS_DIR, load_manifest
+
+                    ext_path = EXTENSIONS_DIR / extension_name
+                    if ext_path.exists():
+                        try:
+                            manifest = load_manifest(ext_path)
+                            default_widgets = manifest.get("default_widgets", [])
+                            for dw in default_widgets:
+                                widget_name = dw.get("widget_name")
+                                display_order = dw.get("display_order", 99)
+                                column_span = dw.get("column_span", 4)
+
+                                w_stmt = select(WidgetSettings).where(
+                                    WidgetSettings.guild_id == guild_id,
+                                    WidgetSettings.extension_name == extension_name,
+                                    WidgetSettings.widget_name == widget_name,
+                                )
+                                existing_widget = session.exec(w_stmt).first()
+                                if not existing_widget:
+                                    new_widget = WidgetSettings(
+                                        guild_id=guild_id,
+                                        extension_name=extension_name,
+                                        widget_name=widget_name,
+                                        is_enabled=True,
+                                        display_order=display_order,
+                                        column_span=column_span,
+                                    )
+                                    session.add(new_widget)
+                        except Exception as e:
+                            logging.error(f"Error loading manifest or provisioning default widgets: {e}")
+                else:
+                    from sqlmodel import delete
+
+                    delete_stmt = delete(WidgetSettings).where(
+                        WidgetSettings.guild_id == guild_id,
+                        WidgetSettings.extension_name == extension_name,
+                    )
+                    session.exec(delete_stmt)
+
             session.commit()
             session.refresh(extension_setting)
             logging.info(f"Successfully updated {gadget_type} '{extension_name}' enabled status to {is_enabled}")
