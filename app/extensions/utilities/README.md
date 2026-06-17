@@ -28,10 +28,57 @@ The extension exposes the following Sprocket API routes for programmatic access 
 For a comprehensive guide on the Security Auditor rules, scoring, and architecture, see [SECURITY_AUDITOR.md](../../../docs/SECURITY_AUDITOR.md).
 
 ### UI Elements (Widgets)
-- `guild_admin_audit_roles_widget`: A detailed table of server roles, generating visual badges for permissions and matching the exact color of the role in Discord.
-- `guild_admin_audit_channels_widget`: Displays the channel hierarchy, identifying private channels and explicitly showing how many roles/users are allowed or denied access in overwrites.
-- `guild_admin_security_overview_widget`: A dashboard card summarizing total counts and highlighting specific security warnings (e.g. `@everyone has Administrator`).
-- `guild_admin_audit_permissions_widget`: A matrix correlating specific permissions (like "Manage Server" or "Kick Members") directly to the roles that hold them.
+The extension registers 8 default widgets under the following configurations:
+
+1. `guild_admin_security_overview`:
+   - **Type**: Grid layout
+   - **Column Span**: 4
+   - **Display Order**: 1
+   - **Description**: A dashboard card summarizing total counts and highlighting specific security warnings (e.g., `@everyone has Administrator`).
+2. `guild_admin_alerts`:
+   - **Type**: Grid layout
+   - **Column Span**: 8
+   - **Display Order**: 2
+   - **Description**: An alert panel displaying active security alerts.
+3. `guild_admin_auditor_settings`:
+   - **Type**: Grid layout
+   - **Column Span**: 12
+   - **Display Order**: 3
+   - **Description**: Auditor settings configuration widget.
+4. `guild_admin_audit_roles`:
+   - **Type**: Grid layout
+   - **Column Span**: 12
+   - **Display Order**: 4
+   - **Description**: A detailed table of server roles, generating visual badges for permissions and matching the exact color of the role in Discord.
+5. `guild_admin_audit_channels`:
+   - **Type**: Grid layout
+   - **Column Span**: 12
+   - **Display Order**: 5
+   - **Description**: Displays the channel hierarchy, identifying private channels and explicitly showing how many roles/users are allowed or denied access in overwrites.
+6. `guild_admin_audit_permissions`:
+   - **Type**: Grid layout
+   - **Column Span**: 12
+   - **Display Order**: 6
+   - **Description**: A matrix correlating specific permissions (like "Manage Server" or "Kick Members") directly to the roles that hold them.
+7. `guild_admin_utilities_sidebar`:
+   - **Type**: Fixed layout
+   - **Position**: `"left"` (Left Sidebar)
+   - **Column Span**: 12
+   - **Display Order**: 7
+   - **Description**: A sidebar widget containing the security health score, quick statistics, quick navigation links, and a button to trigger a scan.
+8. `guild_admin_utilities_help_bubble`:
+   - **Type**: Floating layout
+   - **Position**: `"bottom-right"` (Bottom-Right Corner)
+   - **Column Span**: 12
+   - **Display Order**: 8
+   - **Description**: A bubble widget providing details on available slash commands and bot connection status.
+
+### UI Dashboard Endpoints
+- `POST /dashboard/{guild_id}/scan`: Triggers the bot permission scan and refreshes the dashboard page.
+- `GET /dashboard/{guild_id}/ping-bot`: Verifies bot connectivity and displays the current latency.
+
+### Bot Internal API Routes
+- `POST /guilds/{guild_id}/scan`: Bot-side internal API endpoint to trigger a server audit scan.
 
 ---
 

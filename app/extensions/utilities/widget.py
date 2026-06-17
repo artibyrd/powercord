@@ -1,6 +1,7 @@
 # mypy: ignore-errors
 import json
 import logging
+from typing import Optional
 
 from fasthtml.common import *
 from sqlmodel import Session, select
@@ -1210,3 +1211,120 @@ def guild_admin_auditor_settings_widget(guild_id: int):
     )
 
     return Card("Auditor Settings", form_content, id=f"guild-admin-auditor-settings-{guild_id}")
+
+
+def _render_utilities_sidebar(guild_id: int, session: Optional[Session] = None) -> FT:
+    if session is None:
+        with Session(engine) as session:
+            return _render_utilities_sidebar_inner(guild_id, session)
+    return _render_utilities_sidebar_inner(guild_id, session)
+
+
+def _render_utilities_sidebar_inner(guild_id: int, session: Session) -> FT:
+    evaluation = SecurityRuleEngine.evaluate(guild_id, session)
+    score = evaluation["score"]
+    if score >= 80:
+        score_color = "text-success"
+    elif score >= 50:
+        score_color = "text-warning"
+    else:
+        score_color = "text-error"
+
+    roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+    channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+
+    admin_roles = sum(1 for r in roles if (r.permissions & (1 << 3)) and not r.is_managed)
+    private_channels_count = 0
+    for c in channels:
+        if c.overwrites:
+            try:
+                ov = json.loads(c.overwrites)
+                everyone_ov = ov.get(str(guild_id))
+                if everyone_ov and (everyone_ov.get("deny", 0) & (1 << 10)):
+                    private_channels_count += 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return Card(
+        "Utilities Sidebar",
+        Div(
+            Div(
+                Span("Security Health Score: ", cls="font-semibold text-sm"),
+                Span(f"{score}/100", cls=f"font-bold text-lg {score_color}"),
+                cls="mb-3"
+            ),
+            Div(
+                Div(f"Roles: {len(roles)} ({admin_roles} Admin)", cls="text-xs opacity-80"),
+                Div(f"Channels: {len(channels)} ({private_channels_count} Private)", cls="text-xs opacity-80"),
+                cls="mb-4 bg-base-200/50 p-2 rounded-md"
+            ),
+            Div(
+                H4("Quick Navigation", cls="font-semibold text-sm mb-2"),
+                Ul(
+                    Li(A("Security Overview", href=f"#guild-admin-security-overview-{guild_id}", cls="link link-hover text-xs")),
+                    Li(A("Security Alerts", href=f"#guild-admin-alerts-{guild_id}", cls="link link-hover text-xs")),
+                    Li(A("Auditor Settings", href=f"#guild-admin-auditor-settings-{guild_id}", cls="link link-hover text-xs")),
+                    Li(A("Guild Roles", href=f"#guild-admin-audit-roles-{guild_id}", cls="link link-hover text-xs")),
+                    Li(A("Guild Channels", href=f"#guild-admin-audit-channels-{guild_id}", cls="link link-hover text-xs")),
+                    Li(A("Permissions Matrix", href=f"#guild-admin-audit-permissions-{guild_id}", cls="link link-hover text-xs")),
+                    cls="space-y-1 list-none p-0"
+                ),
+                cls="mb-4"
+            ),
+            Button(
+                "Run Security Scan",
+                hx_post=f"/dashboard/{guild_id}/scan",
+                hx_target=f"#guild-admin-utilities-sidebar-{guild_id}",
+                hx_swap="outerHTML",
+                cls="btn btn-primary btn-sm w-full"
+            ),
+        ),
+        id=f"guild-admin-utilities-sidebar-{guild_id}"
+    )
+
+
+def guild_admin_utilities_sidebar(guild_id: int, session: Optional[Session] = None) -> FT:
+    return _render_utilities_sidebar(guild_id, session)
+
+guild_admin_utilities_sidebar.position_config = "left"
+
+
+def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = None) -> FT:
+    return Card(
+        "Utilities Help & Slash Commands",
+        Div(
+            Div(
+                H4("Slash Commands", cls="font-semibold text-sm mb-1"),
+                Ul(
+                    Li(Code("/audit run"), " - Triggers the server permission auditor.", cls="text-xs mb-1"),
+                    Li(Code("/audit config get"), " - Displays current config parameters.", cls="text-xs mb-1"),
+                    Li(Code("/audit config set"), " - Update auditor parameters.", cls="text-xs mb-1"),
+                    cls="list-disc list-inside p-0 pl-1"
+                ),
+                cls="mb-4"
+            ),
+            Div(
+                H4("Bot Connection Status", cls="font-semibold text-sm mb-2"),
+                Div(
+                    Span("Status: ", cls="text-xs font-semibold mr-1"),
+                    Span("🔴 Disconnected", id=f"bot-latency-display-{guild_id}", cls="badge badge-error badge-sm"),
+                    cls="mb-3 flex items-center"
+                ),
+                Button(
+                    "Test Connection",
+                    hx_get=f"/dashboard/{guild_id}/ping-bot",
+                    hx_target=f"#bot-latency-display-{guild_id}",
+                    hx_swap="outerHTML",
+                    cls="btn btn-outline btn-xs btn-primary w-full"
+                )
+            )
+        ),
+        id=f"guild-admin-utilities-help-bubble-{guild_id}"
+    )
+
+
+def guild_admin_utilities_help_bubble(guild_id: int, session: Optional[Session] = None) -> FT:
+    return _render_utilities_help_bubble(guild_id, session)
+
+guild_admin_utilities_help_bubble.position_config = "bottom-right"
+

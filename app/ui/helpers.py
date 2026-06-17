@@ -229,6 +229,7 @@ def get_widget_settings(guild_id: int) -> dict[str, dict]:
                     "grid_x": row.grid_x,
                     "grid_y": row.grid_y,
                     "extension_name": row.extension_name,
+                    "position_config": row.position_config,
                 }
     except Exception as e:
         logging.error(f"Error fetching widget settings: {e}")
@@ -320,6 +321,7 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
                                 )
                                 existing_widget = session.exec(w_stmt).first()
                                 if not existing_widget:
+                                    position_config = dw.get("position_config", None)
                                     new_widget = WidgetSettings(
                                         guild_id=guild_id,
                                         extension_name=extension_name,
@@ -327,6 +329,7 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
                                         is_enabled=True,
                                         display_order=display_order,
                                         column_span=column_span,
+                                        position_config=position_config, # Save position layout
                                     )
                                     session.add(new_widget)
                         except Exception as e:

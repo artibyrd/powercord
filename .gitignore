@@ -51,3 +51,4 @@ terraform.rc
 # Agent Rules & Workflows
 .cursorrules
 .agent
+.agents/

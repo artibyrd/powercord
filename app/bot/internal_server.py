@@ -309,6 +309,24 @@ async def reload_config(payload: dict):
     return {"status": "success", "message": f"Config reloaded and commands synced for guild {guild_id}"}
 
 
+@api_router.post("/guilds/{guild_id}/scan")
+async def scan_guild(guild_id: int):
+    """Triggers a guild scan."""
+    if not bot_instance:
+        raise HTTPException(status_code=503, detail="Bot not initialized")
+
+    guild = bot_instance.get_guild(guild_id)
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+
+    cog = bot_instance.get_cog("UtilitiesCog")
+    if not cog:
+        raise HTTPException(status_code=404, detail="UtilitiesCog not found")
+
+    await cog.audit_guild(guild)
+    return {"status": "success", "message": f"Audit complete for guild {guild_id}"}
+
+
 @api_router.post("/examples/counters")
 async def toggle_example_counters(payload: dict):
     """Toggles the example counters in the ExamplesCog."""

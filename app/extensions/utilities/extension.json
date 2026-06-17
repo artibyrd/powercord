@@ -39,6 +39,18 @@
             "widget_name": "guild_admin_audit_permissions",
             "display_order": 6,
             "column_span": 12
+        },
+        {
+            "widget_name": "guild_admin_utilities_sidebar",
+            "display_order": 7,
+            "column_span": 12,
+            "position_config": "left"
+        },
+        {
+            "widget_name": "guild_admin_utilities_help_bubble",
+            "display_order": 8,
+            "column_span": 12,
+            "position_config": "bottom-right"
         }
     ]
 }

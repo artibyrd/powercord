@@ -80,7 +80,7 @@ def StandardPage(title: str, *children, auth: dict | None = None):
     )
 
 
-def TopAppBar(auth: dict | None = None, guild_id: int | None = None):
+def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name: str | None = None):
     """Navbar for the dashboard view."""
     # Branding
     branding = A(
@@ -92,22 +92,12 @@ def TopAppBar(auth: dict | None = None, guild_id: int | None = None):
 
     # Active Guild Info
     guild_info = None
-    lockdown_btn = None
-    if guild_id is not None:
-        guild_name = f"Server: {guild_id}"
+    if guild_id is not None or guild_name is not None:
+        display_name = guild_name if guild_name is not None else f"Server: {guild_id}"
         guild_info = Div(
             I(cls="fa-solid fa-server text-info mr-2"),
-            Span(guild_name, cls="font-semibold text-sm"),
+            Span(display_name, cls="font-semibold text-sm"),
             cls="flex items-center mx-4 bg-base-200 px-3 py-1.5 rounded-lg border border-base-content/10",
-        )
-
-        lockdown_btn = Button(
-            I(cls="fa-solid fa-triangle-exclamation mr-1.5"),
-            "Lockdown",
-            cls="btn btn-warning btn-sm font-bold shadow-sm",
-            hx_post=f"/dashboard/{guild_id}/lockdown",
-            hx_target="#lockdown-target",
-            hx_swap="innerHTML",
         )
 
     # Profile dropdown
@@ -147,27 +137,20 @@ def TopAppBar(auth: dict | None = None, guild_id: int | None = None):
         )
 
     left_side = Div(branding, guild_info if guild_info else "", cls="flex-1 flex items-center")
-    right_side = Div(lockdown_btn if lockdown_btn else "", login_section, cls="flex-none flex items-center gap-2")
+    right_side = Div(login_section, cls="flex-none flex items-center gap-2")
 
     return Div(left_side, right_side, cls="navbar bg-base-100 shadow-md border-b border-base-content/10 px-4 py-2")
 
 
-def SideNavBar(guild_id: int | None = None):
-    """Sidebar menu navigation for the dashboard."""
-    g_id = guild_id if guild_id is not None else 0
-    return Div(
-        Ul(
-            Li(A(I(cls="fa-solid fa-house mr-2"), "Dashboard Home", href=f"/dashboard/{g_id}")),
-            Li(A(I(cls="fa-solid fa-bell mr-2"), "Audit Alerts", href=f"/dashboard/{g_id}/alerts")),
-            Li(A(I(cls="fa-solid fa-magnifying-glass mr-2"), "Inspect Details", href=f"/dashboard/{g_id}/inspect")),
-            Li(A(I(cls="fa-solid fa-gears mr-2"), "System Settings", href=f"/dashboard/{g_id}/settings")),
-            cls="menu p-4 w-60 h-full bg-base-200 text-base-content border-r border-base-content/10 gap-2",
-        ),
-        cls="flex-none",
-    )
-
-
-def DashboardPage(title: str, *children, auth: dict | None = None, guild_id: int | None = None):
+def DashboardPage(
+    title: str,
+    *children,
+    auth: dict | None = None,
+    guild_id: int | None = None,
+    guild_name: str | None = None,
+    fixed_widgets: list | None = None,
+    floating_widgets: list | None = None,
+):
     """
     A premium FastHTML dashboard layout featuring visibility settings and structured sidebar/navbar components.
     """
@@ -179,7 +162,6 @@ def DashboardPage(title: str, *children, auth: dict | None = None, guild_id: int
     engine = init_connection_engine()
     allow_sidebar = True
     allow_topbar = True
-    user_show_sidebar = True
     user_show_topbar = True
 
     try:
@@ -199,7 +181,6 @@ def DashboardPage(title: str, *children, auth: dict | None = None, guild_id: int
                     user_id = int(auth["id"])
                     user_settings_rec = session.get(UserSetting, user_id)
                     if user_settings_rec is not None:
-                        user_show_sidebar = user_settings_rec.show_sidebar
                         user_show_topbar = user_settings_rec.show_topbar
                 except Exception:  # noqa: S110
                     pass
@@ -213,20 +194,80 @@ def DashboardPage(title: str, *children, auth: dict | None = None, guild_id: int
     except Exception:  # noqa: S110
         pass
 
-    show_sidebar = allow_sidebar and user_show_sidebar
+    show_sidebar = allow_sidebar  # noqa: F841
     show_topbar = allow_topbar and user_show_topbar
+
+    # Separate and group fixed & floating widgets safely
+    left_fixed = []
+    right_fixed = []
+    for w in (fixed_widgets or []):
+        if w is None:
+            continue
+        if isinstance(w, dict):
+            comp = w.get("component")
+            pos = w.get("position_config")
+        else:
+            comp = w
+            pos = getattr(w, "position_config", None)
+        if not comp:
+            continue
+        if pos == "right":
+            right_fixed.append(comp)
+        else:
+            left_fixed.append(comp)
+
+    floating_containers = []
+    for w in (floating_widgets or []):
+        if w is None:
+            continue
+        if isinstance(w, dict):
+            comp = w.get("component")
+            pos = w.get("position_config")
+        else:
+            comp = w
+            pos = getattr(w, "position_config", None)
+        if not comp:
+            continue
+
+        style = ""
+        if pos == "bottom-right":
+            style = "position: fixed; z-index: 50; bottom: 20px; right: 20px;"
+        elif pos == "bottom-left":
+            style = "position: fixed; z-index: 50; bottom: 20px; left: 20px;"
+        elif pos == "top-right":
+            style = "position: fixed; z-index: 50; top: 100px; right: 20px;"
+        elif pos == "top-left":
+            style = "position: fixed; z-index: 50; top: 100px; left: 20px;"
+        else:
+            style = "position: fixed; z-index: 50; bottom: 20px; right: 20px;"
+
+        floating_containers.append(Div(comp, style=style))
+
+    content_style = ""
+    if left_fixed:
+        content_style += "margin-left: 280px; "
+    if right_fixed:
+        content_style += "margin-right: 280px; "
+
+    left_sidebar = Div(*left_fixed, style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;") if left_fixed else None
+    right_sidebar = Div(*right_fixed, style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;") if right_fixed else None
 
     # Render layout
     content_area = Div(
-        Div(id="lockdown-target", cls="w-full mb-4"), *children, cls="flex-1 p-6 min-h-[calc(100vh-200px)]"
+        Div(id="lockdown-target", cls="w-full mb-4"), *children, cls="flex-1 p-6 min-h-[calc(100vh-200px)]", style=content_style.strip() or None
     )
 
-    if show_sidebar:
-        main_layout = Div(SideNavBar(guild_id), content_area, cls="flex flex-row min-h-screen bg-base-100")
-    else:
-        main_layout = Div(content_area, cls="flex flex-row min-h-screen bg-base-100")
+    layout_children = []
+    if left_sidebar:
+        layout_children.append(left_sidebar)
+    layout_children.append(content_area)
+    if right_sidebar:
+        layout_children.append(right_sidebar)
+    layout_children.extend(floating_containers)
 
-    topbar_el = TopAppBar(auth=auth, guild_id=guild_id) if show_topbar else None
+    main_layout = Div(*layout_children, cls="flex flex-row min-h-screen bg-base-100")
+
+    topbar_el = TopAppBar(auth=auth, guild_id=guild_id, guild_name=guild_name) if show_topbar else None
 
     # Construct complete layout elements
     layout_elements = []

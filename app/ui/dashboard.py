@@ -286,8 +286,14 @@ async def dashboard(guild_id: int, sess):
     # Fetch widgets for this guild
     all_widgets = inspector.inspect_widgets()
     settings = get_widget_settings(guild_id)
+    if not settings:
+        for ext_name in enabled_widgets:
+            update_guild_extension_setting(guild_id, ext_name, "widget", True)
+        settings = get_widget_settings(guild_id)
 
-    guild_widget_configs = []
+    fixed_widgets = []
+    floating_widgets = []
+    grid_widgets = []
 
     for ext_name, widget_funcs in all_widgets.items():
         if not is_gadget_enabled(guild_id, ext_name, "widget"):
@@ -310,19 +316,29 @@ async def dashboard(guild_id: int, sess):
                     if "access_token" in sig.parameters:
                         kwargs["access_token"] = user_access_token
 
-                    guild_widget_configs.append(
-                        {
-                            "component": func(**kwargs),
-                            "order": widget_setting.get("display_order", 99),
-                            "span": widget_setting.get("column_span", 4),
-                        }
-                    )
+                    pos_cfg = widget_setting.get("position_config") or getattr(func, "position_config", None)
+                    widget_data = {
+                        "component": func(**kwargs),
+                        "order": widget_setting.get("display_order", 99),
+                        "span": widget_setting.get("column_span", 4),
+                        "position_config": pos_cfg,
+                    }
+
+                    if pos_cfg in ("left", "right"):
+                        fixed_widgets.append(widget_data)
+                    elif pos_cfg in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                        floating_widgets.append(widget_data)
+                    else:
+                        grid_widgets.append(widget_data)
                 except Exception as e:
                     logging.error(f"Failed to render guild widget {w_name}: {e}")
 
-    guild_widget_configs.sort(key=lambda x: x["order"])
+    fixed_widgets.sort(key=lambda x: x["order"])
+    floating_widgets.sort(key=lambda x: x["order"])
+    grid_widgets.sort(key=lambda x: x["order"])
+
     rendered_guild_widgets = [
-        Div(c["component"], style=f"grid-column: span {c['span']};") for c in guild_widget_configs
+        Div(c["component"], style=f"grid-column: span {c['span']};") for c in grid_widgets
     ]
 
     guild_widgets = Div(
@@ -353,6 +369,9 @@ async def dashboard(guild_id: int, sess):
         A("Back to Dashboard", href="/admin", role="button", cls="secondary mt-8 inline-block"),
         auth=auth,
         guild_id=guild_id,
+        guild_name=guild["name"],
+        fixed_widgets=fixed_widgets,
+        floating_widgets=floating_widgets,
     )
 
 
@@ -386,6 +405,7 @@ def _get_ordered_widgets(scope_id: int) -> list[dict]:
                 continue  # Guild dashboard only shows guild admin widgets
 
             ws = settings.get(wname, {})
+            pos_cfg = ws.get("position_config") or getattr(func, "position_config", None)
             widgets.append(
                 {
                     "ext": ext_name,
@@ -393,6 +413,7 @@ def _get_ordered_widgets(scope_id: int) -> list[dict]:
                     "enabled": ws.get("is_enabled", False),
                     "span": ws.get("column_span", 4),
                     "order": ws.get("display_order", 99),
+                    "position_config": pos_cfg,
                 }
             )
     # Enabled widgets first (sorted by order), then disabled (sorted by order)
@@ -433,6 +454,53 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
     rows = []
     for idx, w in enumerate(widgets):
         label = f"{w['ext'].replace('_', ' ').title()}: {_humanize_widget_name(w['ext'], w['widget'])}"
+        pos_cfg = w.get("position_config")
+        is_fixed_or_floating = pos_cfg in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left")
+
+        # Position Config Column
+        if pos_cfg in ("left", "right"):
+            pos_td = Td(
+                Form(
+                    Select(
+                        Option("Left Sidebar", value="left", selected=(pos_cfg == "left")),
+                        Option("Right Sidebar", value="right", selected=(pos_cfg == "right")),
+                        name="value",
+                        cls="select select-sm select-bordered",
+                    ),
+                    Hidden(name="ext", value=w["ext"]),
+                    Hidden(name="widget", value=w["widget"]),
+                    Hidden(name="field", value="position_config"),
+                    Hidden(name="scope_id", value=str(scope_id)),
+                    hx_post="/admin/layout/update",
+                    hx_trigger="change",
+                    hx_target="#layout-editor",
+                    hx_swap="innerHTML",
+                )
+            )
+        elif pos_cfg in ("bottom-right", "bottom-left", "top-right", "top-left"):
+            pos_td = Td(
+                Form(
+                    Select(
+                        Option("Bottom Right", value="bottom-right", selected=(pos_cfg == "bottom-right")),
+                        Option("Bottom Left", value="bottom-left", selected=(pos_cfg == "bottom-left")),
+                        Option("Top Right", value="top-right", selected=(pos_cfg == "top-right")),
+                        Option("Top Left", value="top-left", selected=(pos_cfg == "top-left")),
+                        name="value",
+                        cls="select select-sm select-bordered",
+                    ),
+                    Hidden(name="ext", value=w["ext"]),
+                    Hidden(name="widget", value=w["widget"]),
+                    Hidden(name="field", value="position_config"),
+                    Hidden(name="scope_id", value=str(scope_id)),
+                    hx_post="/admin/layout/update",
+                    hx_trigger="change",
+                    hx_target="#layout-editor",
+                    hx_swap="innerHTML",
+                )
+            )
+        else:
+            pos_td = Td("Grid Layout", cls="opacity-50 text-sm")
+
         rows.append(
             Tr(
                 # Widget name
@@ -475,9 +543,11 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                         hx_swap="innerHTML",
                     )
                 ),
+                # Position Config Column
+                pos_td,
                 # Reorder buttons
                 Td(
-                    Div(
+                    "" if is_fixed_or_floating else Div(
                         Form(
                             Hidden(name="ext", value=w["ext"]),
                             Hidden(name="widget", value=w["widget"]),
@@ -503,7 +573,7 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                             hx_swap="innerHTML",
                         ),
                         cls="flex gap-1",
-                    ),
+                    )
                 ),
             )
         )
@@ -517,6 +587,7 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                         Th("Widget"),
                         Th("Enabled"),
                         Th("Columns (1-12)"),
+                        Th("Position Config"),
                         Th("Order"),
                     )
                 ),
@@ -577,6 +648,9 @@ def layout_editor(sess):
         ),
         auth=auth,
         guild_id=None,
+        guild_name=None,
+        fixed_widgets=None,
+        floating_widgets=None,
     )
 
 
@@ -601,6 +675,9 @@ def admin_layout_editor(sess):
         ),
         auth=auth,
         guild_id=None,
+        guild_name=None,
+        fixed_widgets=None,
+        floating_widgets=None,
     )
 
 
@@ -637,6 +714,9 @@ async def guild_layout_editor(guild_id: int, sess):
         ),
         auth=auth,
         guild_id=guild_id,
+        guild_name=guild["name"],
+        fixed_widgets=None,
+        floating_widgets=None,
     )
 
 
@@ -655,6 +735,8 @@ async def layout_update(req):
         value = form.get("enabled") == "on"
     elif field == "column_span":
         value = int(form.get("value", 4))
+    elif field == "position_config":
+        value = form.get("value")
     else:
         return P("Unknown field", cls="text-error")
 
@@ -868,13 +950,10 @@ async def toggle_nav_route(guild_id: int, req, sess):
         return Response("Invalid User ID", status_code=400)
 
     # Read parameters from query parameters or form data
-    show_sidebar_param = req.query_params.get("show_sidebar")
     show_topbar_param = req.query_params.get("show_topbar")
 
     try:
         form_data = await req.form()
-        if show_sidebar_param is None:
-            show_sidebar_param = form_data.get("show_sidebar")
         if show_topbar_param is None:
             show_topbar_param = form_data.get("show_topbar")
     except Exception:  # noqa: S110
@@ -891,8 +970,6 @@ async def toggle_nav_route(guild_id: int, req, sess):
         if not user_setting:
             user_setting = UserSetting(user_id=user_id)
 
-        if show_sidebar_param is not None:
-            user_setting.show_sidebar = show_sidebar_param.lower() in ("true", "1", "yes", "on")
         if show_topbar_param is not None:
             user_setting.show_topbar = show_topbar_param.lower() in ("true", "1", "yes", "on")
 
@@ -984,3 +1061,43 @@ async def get_alerts_list(guild_id: int, req, category: str = "all"):
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
 
     return _render_alerts_list(alerts)
+
+
+@dashboard_router("/dashboard/{guild_id:int}/scan", methods=["POST"])
+async def dashboard_scan_guild(guild_id: int):
+    import os
+    bot_port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
+    try:
+        async with get_internal_api_client() as client:
+            resp = await client.post(f"http://127.0.0.1:{bot_port}/guilds/{guild_id}/scan")
+            if resp.status_code != 200:
+                logging.error(f"Failed to scan guild {guild_id}: Bot returned status {resp.status_code}")
+    except Exception as e:
+        logging.error(f"Failed to scan guild {guild_id}: {e}")
+
+    return Response(headers={"HX-Refresh": "true"})
+
+
+@dashboard_router("/dashboard/{guild_id:int}/ping-bot", methods=["GET"])
+async def dashboard_ping_bot(guild_id: int):
+    import os
+    bot_port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
+    latency = None
+    try:
+        async with get_internal_api_client() as client:
+            resp = await client.get(f"http://127.0.0.1:{bot_port}/stats", timeout=1.5)
+            if resp.status_code == 200:
+                stats = resp.json()
+                latency = stats.get("bot", {}).get("latency")
+    except Exception as e:
+        logging.error(f"Failed to ping bot stats: {e}")
+
+    if latency is not None:
+        text = f"🟢 Connected ({latency}ms)"
+        cls_color = "badge-success text-success-content"
+    else:
+        text = "🔴 Disconnected"
+        cls_color = "badge-error text-error-content"
+
+    return Span(text, id=f"bot-latency-display-{guild_id}", cls=f"badge {cls_color} badge-sm")
+

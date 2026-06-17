@@ -1,5 +1,6 @@
 import json
 from unittest.mock import patch
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -46,7 +47,7 @@ def test_sprocket_verification_workflow(client, session):
     full_payload = {
         "staff_separator_role_id": 1234567890,
         "staff_channel_ids": [111, 222],
-        "announcement_channel_ids": [333, 444]
+        "announcement_channel_ids": [333, 444],
     }
     response = client.post(f"/api/guild/{guild_id}/audit/config", json=full_payload)
     assert response.status_code == 200
@@ -64,10 +65,7 @@ def test_sprocket_verification_workflow(client, session):
     assert json.loads(db_config.announcement_channel_ids) == [333, 444]
 
     # 3. Verify POST config with a PARTIAL payload (omitting staff_separator_role_id)
-    partial_payload = {
-        "staff_channel_ids": [555, 666],
-        "announcement_channel_ids": [777, 888]
-    }
+    partial_payload = {"staff_channel_ids": [555, 666], "announcement_channel_ids": [777, 888]}
     response = client.post(f"/api/guild/{guild_id}/audit/config", json=partial_payload)
     assert response.status_code == 200
     data = response.json()
@@ -98,7 +96,7 @@ def test_sprocket_verification_workflow(client, session):
             {"rule": "Rule 1", "category": "exposure", "severity": "high"},
             {"rule": "Rule 2", "category": "roles", "severity": "medium"},
             {"rule": "Rule 3", "category": "exposure", "severity": "low"},
-        ]
+        ],
     }
     with patch("app.extensions.utilities.sprocket.SecurityRuleEngine.evaluate", return_value=mock_evaluate_val):
         # GET Score

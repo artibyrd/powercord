@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.db.models import DiscordAuditorConfig
-from app.ui.dashboard import get_alerts_list, post_auditor_settings
+from app.ui.dashboard import (
+    dashboard_ping_bot,
+    dashboard_scan_guild,
+    get_alerts_list,
+    post_auditor_settings,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -73,3 +78,62 @@ async def test_get_alerts_list(mock_evaluate, mock_session_cls, mock_init_engine
     rendered_str = str(res)
     assert "Rule A" in rendered_str
     assert "Rule B" not in rendered_str
+
+
+
+@patch("app.ui.dashboard.get_internal_api_client")
+@pytest.mark.asyncio
+async def test_dashboard_scan_guild(mock_client_cls):
+    mock_client = AsyncMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_client.post.return_value = mock_resp
+
+    guild_id = 999
+    resp = await dashboard_scan_guild(guild_id)
+
+    assert resp.headers.get("HX-Refresh") == "true"
+    mock_client.post.assert_called_once()
+    assert "/guilds/999/scan" in mock_client.post.call_args[0][0]
+
+
+@patch("app.ui.dashboard.get_internal_api_client")
+@pytest.mark.asyncio
+async def test_dashboard_ping_bot_online(mock_client_cls):
+    mock_client = AsyncMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "bot": {
+            "latency": 45
+        }
+    }
+    mock_client.get.return_value = mock_resp
+
+    guild_id = 999
+    res = await dashboard_ping_bot(guild_id)
+
+    rendered_str = res.__html__()
+    assert "Connected (45ms)" in rendered_str
+    assert "bot-latency-display-999" in rendered_str
+
+
+@patch("app.ui.dashboard.get_internal_api_client")
+@pytest.mark.asyncio
+async def test_dashboard_ping_bot_offline(mock_client_cls):
+    mock_client = AsyncMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    mock_client.get.side_effect = Exception("Connection error")
+
+    guild_id = 999
+    res = await dashboard_ping_bot(guild_id)
+
+    rendered_str = res.__html__()
+    assert "Disconnected" in rendered_str
+    assert "bot-latency-display-999" in rendered_str
+

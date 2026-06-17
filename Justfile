@@ -180,7 +180,7 @@ _check:
 # Run tests. Usage: just test [--type unit|integration|all]
 [group: "qa"]
 [arg("type", long)]
-test type="": _ensure-db
+test type="": _ensure-db lint
     just _run-with-status _test {{ if type != "" { "--type " + type } else { "" } }}
 alias t := test
 
@@ -198,12 +198,12 @@ _test type="":
 
 # Run tests and generate coverage report
 [group: "qa"]
-coverage: _ensure-db
+coverage: _ensure-db lint
     poetry run pytest --cov=app --cov-report=term-missing
 
 # Run verification tests for the new dashboard features
 [group: "qa"]
-verify-dashboard: _ensure-db
+verify-dashboard: _ensure-db lint
     poetry run pytest tests/unit/test_internal_server.py tests/unit/test_ui_components.py tests/integration/test_admin_routes.py tests/integration/test_public_home.py
 
 

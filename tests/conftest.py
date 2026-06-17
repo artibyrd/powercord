@@ -85,6 +85,21 @@ def fixture_engine(_create_test_db):
     fully disposable — this is safe.
     """
     engine = create_engine(DATABASE_URL)
+    # Import all model classes to ensure SQLModel registers them before create_all
+    from app.db.models import (  # noqa: F401
+        AdminUser,
+        ApiAccessRole,
+        ApiKey,
+        CustomContentItem,
+        DashboardAccessRole,
+        DiscordAuditorConfig,
+        DiscordChannel,
+        DiscordRole,
+        GuildExtensionSettings,
+        SiteSetting,
+        UserSetting,
+        WidgetSettings,
+    )
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     return engine

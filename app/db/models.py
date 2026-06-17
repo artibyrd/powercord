@@ -26,6 +26,7 @@ class WidgetSettings(SQLModel, table=True):
     column_span: int = Field(default=4)  # Width in 12-column grid (1-12)
     grid_x: int = Field(default=0)  # X position in grid (0-11)
     grid_y: int = Field(default=0)  # Y position in grid (row)
+    position_config: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
 
 class AdminUser(SQLModel, table=True):
@@ -183,5 +184,4 @@ class UserSetting(SQLModel, table=True):
     __tablename__ = "user_settings"
 
     user_id: int = Field(sa_column=Column(BigInteger, primary_key=True, autoincrement=False))
-    show_sidebar: bool = Field(default=True)
     show_topbar: bool = Field(default=True)

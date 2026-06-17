@@ -25,19 +25,22 @@ except ImportError:
 @pytest.fixture(autouse=True)
 def clean_db(session: Session):
     from sqlalchemy import text
-
-    session.execute(text("DELETE FROM discord_channels;"))
-    session.execute(text("DELETE FROM discord_roles;"))
-    session.execute(text("DELETE FROM discord_auditor_configs;"))
-    session.execute(text("DELETE FROM guild_extension_settings;"))
-    session.execute(text("DELETE FROM site_settings;"))
-    session.execute(text("DELETE FROM user_settings;"))
-    if HoneypotChannel is not None:
-        try:
-            session.execute(text("DELETE FROM honeypot_channels;"))
-        except Exception:
-            pass
-    session.commit()
+    def do_clean():
+        session.execute(text("DELETE FROM discord_channels;"))
+        session.execute(text("DELETE FROM discord_roles;"))
+        session.execute(text("DELETE FROM discord_auditor_configs;"))
+        session.execute(text("DELETE FROM guild_extension_settings;"))
+        session.execute(text("DELETE FROM site_settings;"))
+        session.execute(text("DELETE FROM user_settings;"))
+        if HoneypotChannel is not None:
+            try:
+                session.execute(text("DELETE FROM honeypot_channels;"))
+            except Exception:
+                pass
+        session.commit()
+    do_clean()
+    yield
+    do_clean()
 
 
 def test_category_permission_baseline(session: Session):
