@@ -150,14 +150,30 @@ class GadgetInspector:
             module_path = f"app.extensions.{extension_name}.widget"
             try:
                 module = importlib.import_module(module_path)
-                # Find public, callable functions in the module.
-                widgets = [
-                    getattr(module, func_name)
-                    for func_name in dir(module)
-                    if callable(getattr(module, func_name))
-                    and not func_name.startswith("_")
-                    and getattr(module, func_name).__module__ == module.__name__
-                ]
+                import inspect
+                # Find public, callable functions in the module that match widget naming conventions.
+                widgets = []
+                for func_name in dir(module):
+                    if func_name.startswith("_"):
+                        continue
+                    obj = getattr(module, func_name)
+                    if not callable(obj):
+                        continue
+                    # Exclude classes (which are callable) and ensure it's a function
+                    if not inspect.isfunction(obj):
+                        continue
+                    # Must be defined within this module
+                    if getattr(obj, "__module__", None) != module.__name__:
+                        continue
+                    # Strictly match widget prefix/suffix conventions to exclude helpers/rules
+                    is_widget = (
+                        func_name.startswith("widget_")
+                        or func_name.endswith("_widget")
+                        or func_name.startswith("admin_")
+                        or func_name.startswith("guild_admin_")
+                    )
+                    if is_widget:
+                        widgets.append(obj)
                 if widgets:
                     widget_report[extension_name] = widgets
             except ImportError as e:
