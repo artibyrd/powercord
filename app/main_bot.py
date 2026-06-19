@@ -2,7 +2,7 @@
 import importlib
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 try:
     # When running as a script (e.g. python app/main_bot.py)
@@ -149,17 +149,21 @@ class Bot(commands.Bot):
                 await self.sync_application_commands(guild_id=guild_id)
                 logging.info(f"Application commands synced successfully for guild {guild_id}.")
             else:
+                app_id = self.application_id
+                if app_id is None:
+                    logging.error("self.application_id is None; cannot sync application commands.")
+                    return
                 # Fetch global commands
-                data = {}
+                data: dict[Optional[int], list[Any]] = {}
                 try:
-                    data[None] = await self.http.get_global_commands(self.application_id)
+                    data[None] = await self.http.get_global_commands(app_id)
                 except Exception as e:
                     logging.error(f"Failed to fetch global commands: {e}")
 
                 # Fetch commands for all guilds the bot is currently in
                 for guild in self.guilds:
                     try:
-                        data[guild.id] = await self.http.get_guild_commands(self.application_id, guild.id)
+                        data[guild.id] = await self.http.get_guild_commands(app_id, guild.id)
                     except Exception as e:
                         logging.error(f"Failed to fetch commands for guild {guild.id}: {e}")
 

@@ -54,6 +54,27 @@ DATABASE_URL = sqlalchemy.engine.URL.create(
     database=TEST_DB_NAME,
 )
 
+from sqlalchemy.pool import NullPool
+
+_test_engine = create_engine(DATABASE_URL, poolclass=NullPool)
+
+import app.common.alchemy
+
+original_init = app.common.alchemy.init_connection_engine
+
+def mocked_init():
+    import inspect
+    for frame_info in inspect.stack():
+        if "test_alchemy" in frame_info.filename:
+            return original_init()
+    app.common.alchemy._engine = _test_engine
+    return _test_engine
+
+app.common.alchemy.init_connection_engine = mocked_init
+app.common.alchemy._engine = _test_engine
+
+
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -84,7 +105,7 @@ def fixture_engine(_create_test_db):
     stale data from prior runs never bleeds into assertions.  The test DB is
     fully disposable — this is safe.
     """
-    engine = create_engine(DATABASE_URL)
+    engine = _test_engine
     # Import all model classes to ensure SQLModel registers them before create_all
     from app.db.models import (  # noqa: F401
         AdminUser,
@@ -103,7 +124,14 @@ def fixture_engine(_create_test_db):
 
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
-    return engine
+    yield engine
+    engine.dispose()
+    try:
+        from app.common.alchemy import _engine
+        if _engine is not None:
+            _engine.dispose()
+    except ImportError:
+        pass
 
 
 @pytest.fixture(name="session")
@@ -111,3 +139,37 @@ def fixture_session(engine):
     """Provide a database session scoped to a single test."""
     with Session(engine) as session:
         yield session
+        try:
+            session.rollback()
+            from sqlalchemy import text
+            for table in SQLModel.metadata.tables.values():
+                try:
+                    session.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
+                    session.commit()
+                except Exception:
+                    session.rollback()
+        except Exception:
+            session.rollback()
+
+
+@pytest.fixture(autouse=True)
+def clear_global_caches():
+    # Clear rule engine cache
+    try:
+        from app.extensions.utilities.widget import SecurityRuleEngine
+        SecurityRuleEngine._evaluation_cache.clear()
+    except ImportError:
+        pass
+    # Clear admin guilds helper cache
+    try:
+        from app.ui.helpers import _admin_guilds_cache
+        _admin_guilds_cache.clear()
+    except ImportError:
+        pass
+    # Stop background backup scheduler
+    try:
+        from app.db.db_tools import BackupService
+        BackupService.stop_scheduler()
+    except ImportError:
+        pass
+

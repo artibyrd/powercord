@@ -143,7 +143,7 @@ class GadgetInspector:
         extension names to a list of their renderable widget functions.
         """
         installed_widgets = self._get_gadgets(GadgetType.WIDGET)
-        widget_report = {}
+        widget_report: dict[str, list[Callable[..., Any]]] = {}
 
         for widget_file in installed_widgets:
             extension_name = widget_file.parent.name
@@ -152,7 +152,7 @@ class GadgetInspector:
                 module = importlib.import_module(module_path)
                 import inspect
                 # Find public, callable functions in the module that match widget naming conventions.
-                widgets = []
+                widgets: list[Callable[..., Any]] = []
                 for func_name in dir(module):
                     if func_name.startswith("_"):
                         continue

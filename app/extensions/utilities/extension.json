@@ -13,12 +13,12 @@
         {
             "widget_name": "guild_admin_security_overview_widget",
             "display_order": 1,
-            "column_span": 12
+            "column_span": 4
         },
         {
             "widget_name": "guild_admin_alerts_widget",
             "display_order": 2,
-            "column_span": 12
+            "column_span": 8
         },
         {
             "widget_name": "guild_admin_auditor_settings_widget",

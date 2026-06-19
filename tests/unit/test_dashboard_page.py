@@ -760,11 +760,20 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
     guild_id = 999123
     extension_name = "utilities"
 
+    mock_client = AsyncMock()
+    mock_client_cls = MagicMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": []}
+    mock_client.get.return_value = mock_resp
+
     try:
         with (
             patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()),
             patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()),
             patch("app.ui.dashboard.get_admin_guilds", return_value={str(guild_id): {"name": "Test Server"}}),
+            patch("app.ui.dashboard.get_internal_api_client", return_value=mock_client_cls),
         ):
             # Create global setting enabling the widget extension
             global_setting = GuildExtensionSettings(

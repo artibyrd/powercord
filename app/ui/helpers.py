@@ -14,7 +14,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))  # noqa: E402
 
 
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from sqlmodel import Session, select
 
@@ -415,8 +415,8 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
                     from sqlmodel import delete
 
                     delete_stmt = delete(WidgetSettings).where(
-                        WidgetSettings.guild_id == guild_id,
-                        WidgetSettings.extension_name == extension_name,
+                        cast(Any, WidgetSettings.guild_id) == guild_id,
+                        cast(Any, WidgetSettings.extension_name) == extension_name,
                     )
                     session.exec(delete_stmt)
 
@@ -428,8 +428,23 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
         logging.error(f"Error updating extension setting: {e}", exc_info=True)
 
 
+import time
+
+_admin_guilds_cache: dict[int, tuple[float, dict[str, dict]]] = {}  # user_id (int) -> (timestamp, dict)
+_CACHE_TTL = 300
+
+
 async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, dict]:
     """Fetches guilds where the user is an admin or has a DashboardAccessRole and the bot is present."""
+    user_id = int(user_id)
+    if user_access_token != "dev-token":  # noqa: S105
+        now = time.time()
+        if user_id in _admin_guilds_cache:
+            ts, cached_res = _admin_guilds_cache[user_id]
+            if now - ts < _CACHE_TTL:
+                logging.info(f"Returning cached admin guilds for user {user_id}")
+                return cached_res
+
     ADMIN_PERM = 1 << 3
     bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
     if not bot_token:
@@ -498,6 +513,19 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
             admin_guilds[gid] = g
 
     logging.info(f"Found {len(admin_guilds)} shared guilds with dashboard access.")
+    if user_access_token != "dev-token":  # noqa: S105
+        # Clean up expired items to prevent memory leaks
+        now = time.time()
+        for uid in list(_admin_guilds_cache.keys()):
+            ts, _ = _admin_guilds_cache[uid]
+            if now - ts >= _CACHE_TTL:
+                _admin_guilds_cache.pop(uid, None)
+        if len(_admin_guilds_cache) >= 1000:
+            # Evict oldest entry
+            oldest = min(_admin_guilds_cache.keys(), key=lambda uid: _admin_guilds_cache[uid][0])
+            _admin_guilds_cache.pop(oldest, None)
+
+        _admin_guilds_cache[user_id] = (time.time(), admin_guilds)
     return admin_guilds
 
 

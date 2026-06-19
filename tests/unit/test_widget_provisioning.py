@@ -49,13 +49,13 @@ def test_widget_provisioning_enable(session):
         # Verify a specific widget's details
         overview_widget = next(w for w in widgets if w.widget_name == "guild_admin_security_overview_widget")
         assert overview_widget.display_order == 1
-        assert overview_widget.column_span == 12
+        assert overview_widget.column_span == 4
         assert overview_widget.is_enabled is True
 
         # Alerts widget
         alerts_widget = next(w for w in widgets if w.widget_name == "guild_admin_alerts_widget")
         assert alerts_widget.display_order == 2
-        assert alerts_widget.column_span == 12
+        assert alerts_widget.column_span == 8
         assert alerts_widget.is_enabled is True
 
         # Auditor settings widget

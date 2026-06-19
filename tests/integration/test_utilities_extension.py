@@ -27,6 +27,17 @@ def session_fixture():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
+        try:
+            session.rollback()
+            from sqlalchemy import text
+            for table in SQLModel.metadata.tables.values():
+                try:
+                    session.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
+                    session.commit()
+                except Exception:
+                    session.rollback()
+        except Exception:
+            session.rollback()
 
 
 # ... (audit test remains mostly same) ...

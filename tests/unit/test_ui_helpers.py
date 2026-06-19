@@ -62,3 +62,46 @@ def test_update_guild_extension_setting_update_existing(mock_session_cls, mock_i
     mock_session.add.assert_called_once_with(existing_record)
     assert existing_record.is_enabled == is_enabled
     mock_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("app.ui.helpers.get_user_guilds")
+@patch("app.ui.helpers.get_bot_guild_ids")
+@patch("app.ui.helpers.Session")
+@patch("app.ui.helpers.os.getenv")
+async def test_get_admin_guilds_caching(mock_getenv, mock_session_cls, mock_get_bot_guild_ids, mock_get_user_guilds):
+    from app.ui.helpers import _admin_guilds_cache, get_admin_guilds
+
+    mock_getenv.return_value = "mock-bot-token"
+    mock_get_user_guilds.return_value = [
+        {"id": "123", "name": "Guild 1", "permissions": str(1 << 3)}
+    ]
+    mock_get_bot_guild_ids.return_value = {"123"}
+
+    # Mock DB
+    mock_session = MagicMock()
+    mock_session_cls.return_value.__enter__.return_value = mock_session
+    mock_session.exec.return_value.all.return_value = []
+
+    # Clear cache before starting
+    _admin_guilds_cache.clear()
+
+    # First call: Should perform the lookup
+    res1 = await get_admin_guilds("real-token", 9999)
+    assert "123" in res1
+    assert mock_get_user_guilds.call_count == 1
+
+    # Second call with same user_id: Should hit cache
+    res2 = await get_admin_guilds("real-token", 9999)
+    assert res2 == res1
+    assert mock_get_user_guilds.call_count == 1  # Still 1, meaning it hit cache!
+
+    # Call with a different user_id type (string of same ID): should still hit cache due to standardization to int
+    res3 = await get_admin_guilds("real-token", "9999")
+    assert res3 == res1
+    assert mock_get_user_guilds.call_count == 1
+
+    # Call with dev-token: should not hit cache and not write to cache
+    res_dev = await get_admin_guilds("dev-token", 9999)
+    assert "000000000000000000" in res_dev
+

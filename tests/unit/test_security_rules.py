@@ -421,3 +421,41 @@ def test_security_rule_engine(session: Session):
     # Expected alerts: LowTierRolePrivileges (high), SuggestiveHoneypotIntegration (low)
     # score = 100 - 15 (high) - 5 (low) = 80
     assert result["score"] == 80
+
+
+def test_security_rule_engine_evaluate_caching(session: Session):
+    guild_id = 12345
+
+    # Seed DB
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+
+    session.add_all([config, sep_role])
+    session.commit()
+
+    # Clear cache before starting
+    SecurityRuleEngine._evaluation_cache.clear()
+
+    # First evaluate
+    res1 = SecurityRuleEngine.evaluate(guild_id, session)
+
+    # Second evaluate (should hit cache)
+    res2 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res2 == res1
+
+    # Verify that there is at least one cached entry
+    assert len(SecurityRuleEngine._evaluation_cache) == 1
+
+    # Modify DB (add a role) - should invalidate checksum and cause cache miss
+    new_role = DiscordRole(id=901, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
+    session.add(new_role)
+    session.commit()
+
+    # Third evaluate (should recalculate and have a lower score)
+    res3 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res3["score"] != res1["score"]
+
+    # Clear by pop (guild_id)
+    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
+    assert len(SecurityRuleEngine._evaluation_cache) == 0
+

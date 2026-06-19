@@ -1,6 +1,7 @@
 # mypy: ignore-errors
 import json
 import logging
+import threading
 from typing import Optional
 
 from fasthtml.common import *
@@ -473,16 +474,17 @@ def guild_admin_security_overview_widget(guild_id: int):
             Div(str(private_channels_count), cls="stat-value text-3xl text-info"),
             cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
         ),
-        cls="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4",
+        cls="grid grid-cols-2 gap-4 w-full flex-1",
     )
 
-    arc_ui = Div(HealthScoreArc(score, len(alerts)), cls="flex justify-center items-center mb-6")
+    arc_ui = Div(HealthScoreArc(score, len(alerts)), cls="flex justify-center items-center mb-6 md:mb-0")
 
     return Card(
         "Security Overview",
         Div(
             arc_ui,
             stats_grid,
+            cls="flex flex-col md:flex-row gap-6 items-center w-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
     )
@@ -1059,22 +1061,126 @@ SECURITY_RULES = [
 ]
 
 
+class EvaluationCache(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.Lock()
+
+    def __getitem__(self, key):
+        with self._lock:
+            return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            super().__setitem__(key, value)
+
+    def __contains__(self, key):
+        with self._lock:
+            return super().__contains__(key)
+
+    def pop(self, key, default=None):
+        with self._lock:
+            val = default
+            if isinstance(key, tuple):
+                if super().__contains__(key):
+                    val = super().pop(key)
+            else:
+                try:
+                    g_id = int(key)
+                except (ValueError, TypeError):
+                    g_id = key
+                to_remove = []
+                for k in list(super().keys()):
+                    if k == g_id:
+                        to_remove.append(k)
+                    elif isinstance(k, tuple) and len(k) > 0 and k[0] == g_id:
+                        to_remove.append(k)
+                for k in to_remove:
+                    val = super().pop(k, default)
+            return val
+
+    def clear(self):
+        with self._lock:
+            super().clear()
+
+
 class SecurityRuleEngine:
-    _evaluation_cache = {}
+    _evaluation_cache = EvaluationCache()
 
     def __init__(self):
         self.rules = [rule_cls() for rule_cls in SECURITY_RULES]
 
     @staticmethod
     def evaluate(guild_id: int, session: Session) -> dict:
-        import sys
-        if "pytest" in sys.modules:
-            return SecurityRuleEngine().run_all(guild_id, session)
-        if guild_id in SecurityRuleEngine._evaluation_cache:
-            return SecurityRuleEngine._evaluation_cache[guild_id]
-        res = SecurityRuleEngine().run_all(guild_id, session)
-        SecurityRuleEngine._evaluation_cache[guild_id] = res
-        return res
+        import hashlib
+        import json
+
+        from sqlmodel import select
+
+        from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole
+
+        guild_id = int(guild_id)
+
+        # Retrieve roles (ordered by id)
+        roles = session.exec(
+            select(DiscordRole)
+            .where(DiscordRole.guild_id == guild_id)
+            .order_by(DiscordRole.id)
+        ).all()
+        # Retrieve channels (ordered by id)
+        channels = session.exec(
+            select(DiscordChannel)
+            .where(DiscordChannel.guild_id == guild_id)
+            .order_by(DiscordChannel.id)
+        ).all()
+        # Retrieve auditor config
+        config = session.exec(
+            select(DiscordAuditorConfig)
+            .where(DiscordAuditorConfig.guild_id == guild_id)
+        ).first()
+
+        state = {
+            "roles": [
+                {
+                    "id": r.id,
+                    "permissions": r.permissions,
+                    "position": r.position,
+                    "name": r.name,
+                    "color": r.color,
+                    "is_hoisted": r.is_hoisted,
+                    "is_managed": r.is_managed,
+                    "is_mentionable": r.is_mentionable,
+                }
+                for r in roles
+            ],
+            "channels": [
+                {
+                    "id": c.id,
+                    "parent_id": c.parent_id,
+                    "name": c.name,
+                    "type": c.type,
+                    "position": c.position,
+                    "overwrites": c.overwrites,
+                }
+                for c in channels
+            ],
+            "config": {
+                "staff_separator_role_id": config.staff_separator_role_id,
+                "staff_channel_ids": config.staff_channel_ids,
+                "announcement_channel_ids": config.announcement_channel_ids,
+            } if config else None
+        }
+        state_str = json.dumps(state, sort_keys=True, default=str)
+        checksum = hashlib.sha256(state_str.encode("utf-8")).hexdigest()
+
+        cache_key = (guild_id, checksum)
+        with SecurityRuleEngine._evaluation_cache._lock:
+            if dict.__contains__(SecurityRuleEngine._evaluation_cache, cache_key):
+                return dict.__getitem__(SecurityRuleEngine._evaluation_cache, cache_key)
+
+            res = SecurityRuleEngine().run_all(guild_id, session)
+            dict.__setitem__(SecurityRuleEngine._evaluation_cache, cache_key, res)
+            return res
 
     def run_all(self, guild_id: int, session: Session) -> dict:
         alerts = []
@@ -1155,7 +1261,11 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
 
     tabs_ui = TabGroup(tabs, f"alerts-list-content-{guild_id}")
     content_id = f"alerts-list-content-{guild_id}"
-    alerts_list_ui = Div(_render_alerts_list(alerts), id=content_id, cls="mt-4")
+    alerts_list_ui = Div(
+        _render_alerts_list(alerts),
+        id=content_id,
+        cls="mt-4 max-h-[320px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
+    )
 
     return Card(
         "Security Alerts",
