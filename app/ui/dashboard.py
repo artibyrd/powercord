@@ -368,6 +368,7 @@ async def dashboard(guild_id: int, sess):
         auth=auth,
         guild_id=guild_id,
         guild_name=guild["name"],
+        guild_icon=guild.get("icon"),
         fixed_widgets=fixed_widgets,
         floating_widgets=floating_widgets,
     )
@@ -814,6 +815,7 @@ async def guild_layout_editor(guild_id: int, sess):
         auth=auth,
         guild_id=guild_id,
         guild_name=guild["name"],
+        guild_icon=guild.get("icon"),
         fixed_widgets=None,
         floating_widgets=None,
     )

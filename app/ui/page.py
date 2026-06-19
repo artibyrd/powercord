@@ -80,7 +80,7 @@ def StandardPage(title: str, *children, auth: dict | None = None):
     )
 
 
-def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name: str | None = None):
+def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name: str | None = None, guild_icon: str | None = None):
     """Navbar for the dashboard view."""
     # Branding
     branding = A(
@@ -94,8 +94,16 @@ def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name:
     guild_info = None
     if guild_id is not None or guild_name is not None:
         display_name = guild_name if guild_name is not None else f"Server: {guild_id}"
+        if guild_id and guild_icon:
+            icon_el = Img(
+                src=f"https://cdn.discordapp.com/icons/{guild_id}/{guild_icon}.png",
+                alt=display_name,
+                cls="w-5 h-5 rounded-full mr-2 object-cover",
+            )
+        else:
+            icon_el = I(cls="fa-solid fa-server text-info mr-2")
         guild_info = Div(
-            I(cls="fa-solid fa-server text-info mr-2"),
+            icon_el,
             Span(display_name, cls="font-semibold text-sm"),
             cls="flex items-center mx-4 bg-base-200 px-3 py-1.5 rounded-lg border border-base-content/10",
         )
@@ -148,6 +156,7 @@ def DashboardPage(
     auth: dict | None = None,
     guild_id: int | None = None,
     guild_name: str | None = None,
+    guild_icon: str | None = None,
     fixed_widgets: list | None = None,
     floating_widgets: list | None = None,
 ):
@@ -284,7 +293,7 @@ def DashboardPage(
 
     main_layout = Div(*layout_children, cls="flex flex-row min-h-screen bg-base-100")
 
-    topbar_el = TopAppBar(auth=auth, guild_id=guild_id, guild_name=guild_name) if show_topbar else None
+    topbar_el = TopAppBar(auth=auth, guild_id=guild_id, guild_name=guild_name, guild_icon=guild_icon) if show_topbar else None
 
     # Construct complete layout elements
     layout_elements = []

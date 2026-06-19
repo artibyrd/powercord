@@ -48,6 +48,22 @@ def test_top_app_bar_with_guild_name():
     assert "Lockdown" not in html
 
 
+def test_top_app_bar_with_guild_icon():
+    """Verify TopAppBar displays the custom guild icon image when provided."""
+    top_bar = TopAppBar(auth=None, guild_id=98765, guild_name="My Cool Server", guild_icon="icon_hash_123")
+    html = str(top_bar)
+    assert "cdn.discordapp.com/icons/98765/icon_hash_123.png" in html
+    assert "fa-server" not in html
+
+
+def test_top_app_bar_with_guild_icon_fallback():
+    """Verify TopAppBar falls back to the generic server icon when no icon hash is provided."""
+    top_bar = TopAppBar(auth=None, guild_id=98765, guild_name="My Cool Server", guild_icon=None)
+    html = str(top_bar)
+    assert "cdn.discordapp.com/icons/" not in html
+    assert "fa-server" in html
+
+
 def test_dashboard_page_accepts_widget_parameters():
     """Verify that DashboardPage signature accepts new widget parameters successfully."""
     title, div = DashboardPage(

@@ -1394,7 +1394,7 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
     toggle_btn = Button(
         help_icon_svg,
         onclick=f"document.getElementById('help-bubble-card-{guild_id}').classList.toggle('hidden')",
-        cls="btn btn-circle btn-primary btn-lg shadow-lg hover:scale-110 active:scale-95 transition-all duration-200",
+        cls="btn btn-circle btn-lg text-primary hover:text-secondary shadow-lg hover:scale-110 active:scale-95 transition-all duration-200",
         style="border-radius: 50% !important; background-color: hsl(var(--n) / 0.8) !important; backdrop-filter: blur(8px) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important;",
     )
 
