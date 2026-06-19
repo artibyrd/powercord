@@ -139,7 +139,7 @@ def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name:
     left_side = Div(branding, guild_info if guild_info else "", cls="flex-1 flex items-center")
     right_side = Div(login_section, cls="flex-none flex items-center gap-2")
 
-    return Div(left_side, right_side, cls="navbar bg-base-100 shadow-md border-b border-base-content/10 px-4 py-2")
+    return Div(left_side, right_side, cls="navbar bg-base-100 shadow-md border-b border-base-content/10 px-4 py-2 sticky top-0 z-[50]")
 
 
 def DashboardPage(
@@ -245,14 +245,14 @@ def DashboardPage(
 
     content_style = "min-width: 0; "
     if left_fixed:
-        content_style += "margin-left: 280px; "
+        content_style += "margin-left: 312px; "
     if right_fixed:
-        content_style += "margin-right: 280px; "
+        content_style += "margin-right: 312px; "
 
     left_sidebar = (
         Div(
             *left_fixed,
-            style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;",
+            style="position: fixed; left: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;",
         )
         if left_fixed
         else None
@@ -260,7 +260,7 @@ def DashboardPage(
     right_sidebar = (
         Div(
             *right_fixed,
-            style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;",
+            style="position: fixed; right: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;",
         )
         if right_fixed
         else None

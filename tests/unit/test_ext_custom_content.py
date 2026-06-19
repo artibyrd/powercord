@@ -149,6 +149,12 @@ async def test_dynamic_widget_injection():
     from app.extensions.custom_content.widget import _inject_dynamic_widget
 
     engine = init_connection_engine()
+    try:
+        with engine.connect():
+            pass
+    except Exception:
+        pytest.skip("Database is not available")
+
     with Session(engine) as session:
         # Create a test item
         item = CustomContentItem(name="test_widget_1", format="html", content="<p>Test</p>")

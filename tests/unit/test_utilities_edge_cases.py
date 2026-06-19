@@ -26,6 +26,11 @@ def test_security_rule_engine_with_honeypot_enabled(session):
     """Verify that SecurityRuleEngine returns a perfect score of 100 when honeypot is enabled and no issues exist."""
     guild_id = 54321
 
+    from sqlmodel import delete
+    session.exec(delete(DiscordRole).where(DiscordRole.guild_id == guild_id))
+    session.exec(delete(DiscordChannel).where(DiscordChannel.guild_id == guild_id))
+    session.commit()
+
     # Enable honeypot globally and locally
     global_ext = GuildExtensionSettings(guild_id=0, extension_name="honeypot", gadget_type="widget", is_enabled=True)
     local_ext = GuildExtensionSettings(

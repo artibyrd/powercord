@@ -403,7 +403,19 @@ def _get_ordered_widgets(scope_id: int) -> list[dict]:
                 continue  # Guild dashboard only shows guild admin widgets
 
             ws = settings.get(wname, {})
-            pos_cfg = ws.get("position_config") or getattr(func, "position_config", None)
+            pos_cfg = ws.get("position_config")
+
+            # Lookup default position config of the widget function by its name
+            default_pos = getattr(func, "default_pos", None) or getattr(func, "position_config", None)
+
+            # Classify and normalize/default pos_cfg
+            if default_pos in ("left", "right"):
+                if pos_cfg != "right":
+                    pos_cfg = "left"
+            elif default_pos in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                if pos_cfg not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                    pos_cfg = "bottom-right"
+
             widgets.append(
                 {
                     "ext": ext_name,
@@ -412,10 +424,19 @@ def _get_ordered_widgets(scope_id: int) -> list[dict]:
                     "span": ws.get("column_span", 4),
                     "order": ws.get("display_order", 99),
                     "position_config": pos_cfg,
+                    "default_pos": default_pos,
                 }
             )
     # Enabled widgets first (sorted by order), then disabled (sorted by order)
-    widgets.sort(key=lambda w: (not w["enabled"], w["order"]))
+    # Force non-grid layout widgets to the bottom of the list of enabled widgets.
+    # Update to push sidebar/floating widgets to the bottom by checking default_pos
+    widgets.sort(
+        key=lambda w: (
+            not w["enabled"],
+            w["enabled"] and w.get("default_pos") in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left"),
+            w["order"],
+        )
+    )
     return widgets
 
 
@@ -449,15 +470,74 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
     # Determine target route based on scope for clarity, though we use same update/move routes
     # We just need to pass scope_id
 
+    inspector = GadgetInspector()
+    all_widgets_by_ext = inspector.inspect_widgets()
+    widget_defaults = {}
+    for _ext_name, widget_funcs in all_widgets_by_ext.items():
+        for func in widget_funcs:
+            wname = get_widget_name(func)
+            if wname:
+                widget_defaults[wname] = getattr(func, "default_pos", None) or getattr(func, "position_config", None)
+
+    # Check for position collisions among enabled sidebar/floating widgets using normalized positions
+    active_positions = {}
+    for w in widgets:
+        if w.get("enabled"):
+            wname = w["widget"]
+            default_pos = w.get("default_pos")
+            if default_pos is None:
+                default_pos = widget_defaults.get(wname)
+            if default_pos is None:
+                default_pos = w.get("position_config")
+            pos_cfg = w.get("position_config")
+
+            # Normalize pos_cfg
+            if default_pos in ("left", "right"):
+                if pos_cfg != "right":
+                    pos_cfg = "left"
+            elif default_pos in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                if pos_cfg not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                    pos_cfg = "bottom-right"
+            else:
+                pos_cfg = None
+
+            if pos_cfg:
+                active_positions[pos_cfg] = active_positions.get(pos_cfg, 0) + 1
+
+    collisions = [pos for pos, count in active_positions.items() if count > 1]
+    warning_banner = None
+    if collisions:
+        pos_names = {
+            "left": "Left Sidebar",
+            "right": "Right Sidebar",
+            "bottom-right": "Bottom Right",
+            "bottom-left": "Bottom Left",
+            "top-right": "Top Right",
+            "top-left": "Top Left"
+        }
+        collision_labels = [pos_names.get(pos, pos) for pos in collisions]
+        warning_banner = Div(
+            Span(f"⚠️ Position Conflict: Multiple widgets are active in: {', '.join(collision_labels)}. They may overlap.", cls="font-semibold"),
+            cls="alert alert-warning mb-4"
+        )
+
     rows = []
     for idx, w in enumerate(widgets):
         label = f"{w['ext'].replace('_', ' ').title()}: {_humanize_widget_name(w['ext'], w['widget'])}"
+        wname = w["widget"]
+        default_pos = w.get("default_pos")
+        if default_pos is None:
+            default_pos = widget_defaults.get(wname)
+        if default_pos is None:
+            default_pos = w.get("position_config")
         pos_cfg = w.get("position_config")
-        is_fixed_or_floating = pos_cfg in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left")
 
-        # Position Config Column
-        if pos_cfg in ("left", "right"):
-            pos_td = Td(
+        # Classify each widget and normalize/default pos_cfg
+        if default_pos in ("left", "right"):
+            if pos_cfg != "right":
+                pos_cfg = "left"
+            widget_type = "Sidebar"
+            config_td = Td(
                 Form(
                     Select(
                         Option("Left Sidebar", value="left", selected=(pos_cfg == "left")),
@@ -475,8 +555,11 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                     hx_swap="innerHTML",
                 )
             )
-        elif pos_cfg in ("bottom-right", "bottom-left", "top-right", "top-left"):
-            pos_td = Td(
+        elif default_pos in ("bottom-right", "bottom-left", "top-right", "top-left"):
+            if pos_cfg not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                pos_cfg = "bottom-right"
+            widget_type = "Floating"
+            config_td = Td(
                 Form(
                     Select(
                         Option("Bottom Right", value="bottom-right", selected=(pos_cfg == "bottom-right")),
@@ -497,7 +580,27 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                 )
             )
         else:
-            pos_td = Td("Grid Layout", cls="opacity-50 text-sm")
+            widget_type = "Grid"
+            config_td = Td(
+                Form(
+                    Select(
+                        *[Option(f"{n} Columns", value=str(n), selected=(n == w["span"])) for n in range(1, 13)],
+                        name="value",
+                        cls="select select-sm select-bordered",
+                    ),
+                    Hidden(name="ext", value=w["ext"]),
+                    Hidden(name="widget", value=w["widget"]),
+                    Hidden(name="field", value="column_span"),
+                    Hidden(name="scope_id", value=str(scope_id)),
+                    hx_post="/admin/layout/update",
+                    hx_trigger="change",
+                    hx_target="#layout-editor",
+                    hx_swap="innerHTML",
+                )
+            )
+
+        type_td = Td(widget_type)
+        is_fixed_or_floating = default_pos in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left")
 
         rows.append(
             Tr(
@@ -523,26 +626,10 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                         hx_swap="innerHTML",
                     )
                 ),
-                # Column span selector
-                Td(
-                    Form(
-                        Select(
-                            *[Option(str(n), value=str(n), selected=(n == w["span"])) for n in range(1, 13)],
-                            name="value",
-                            cls="select select-sm select-bordered w-20",
-                        ),
-                        Hidden(name="ext", value=w["ext"]),
-                        Hidden(name="widget", value=w["widget"]),
-                        Hidden(name="field", value="column_span"),
-                        Hidden(name="scope_id", value=str(scope_id)),
-                        hx_post="/admin/layout/update",
-                        hx_trigger="change",
-                        hx_target="#layout-editor",
-                        hx_swap="innerHTML",
-                    )
-                ),
-                # Position Config Column
-                pos_td,
+                # Widget Type
+                type_td,
+                # Widget Config
+                config_td,
                 # Reorder buttons
                 Td(
                     ""
@@ -586,8 +673,8 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                     Tr(
                         Th("Widget"),
                         Th("Enabled"),
-                        Th("Columns (1-12)"),
-                        Th("Position Config"),
+                        Th("Widget Type"),
+                        Th("Widget Config"),
                         Th("Order"),
                     )
                 ),
@@ -601,6 +688,14 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
     # Live preview: shows widgets in a 12-column CSS grid
     preview_items = []
     for w in widgets:
+        wname = w["widget"]
+        default_pos = w.get("default_pos")
+        if default_pos is None:
+            default_pos = widget_defaults.get(wname)
+        if default_pos is None:
+            default_pos = w.get("position_config")
+        if default_pos in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left"):
+            continue  # Exclude from main grid live preview
         opacity = "opacity-100" if w["enabled"] else "opacity-30"
         # Styling widget boxes as mini-cards
         preview_items.append(
@@ -624,7 +719,11 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
         cls="mt-8",
     )
 
-    return Div(table_card, preview_section)
+    children = []
+    if warning_banner:
+        children.append(warning_banner)
+    children.extend([table_card, preview_section])
+    return Div(*children)
 
 
 @dashboard_router("/admin/layout")
@@ -1036,6 +1135,9 @@ async def post_auditor_settings(guild_id: int, req):
         config.announcement_channel_ids = json.dumps(ann_channel_ids)
         session.commit()
 
+    from app.extensions.utilities.widget import SecurityRuleEngine
+    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
+
     return Response(
         content='<div class="alert alert-success mt-4">✅ Auditor settings updated successfully!</div>',
         headers={"HX-Refresh": "true"},
@@ -1075,6 +1177,9 @@ async def dashboard_scan_guild(guild_id: int):
                 logging.error(f"Failed to scan guild {guild_id}: Bot returned status {resp.status_code}")
     except Exception as e:
         logging.error(f"Failed to scan guild {guild_id}: {e}")
+
+    from app.extensions.utilities.widget import SecurityRuleEngine
+    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
 
     return Response(headers={"HX-Refresh": "true"})
 

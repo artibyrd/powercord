@@ -13,12 +13,12 @@
         {
             "widget_name": "guild_admin_security_overview_widget",
             "display_order": 1,
-            "column_span": 4
+            "column_span": 12
         },
         {
             "widget_name": "guild_admin_alerts_widget",
             "display_order": 2,
-            "column_span": 8
+            "column_span": 12
         },
         {
             "widget_name": "guild_admin_auditor_settings_widget",
@@ -28,12 +28,12 @@
         {
             "widget_name": "guild_admin_audit_roles_widget",
             "display_order": 4,
-            "column_span": 12
+            "column_span": 6
         },
         {
             "widget_name": "guild_admin_audit_channels_widget",
             "display_order": 5,
-            "column_span": 12
+            "column_span": 6
         },
         {
             "widget_name": "guild_admin_audit_permissions_widget",
@@ -42,13 +42,13 @@
         },
         {
             "widget_name": "guild_admin_utilities_sidebar",
-            "display_order": 7,
+            "display_order": 9,
             "column_span": 12,
             "position_config": "left"
         },
         {
             "widget_name": "guild_admin_utilities_help_bubble",
-            "display_order": 8,
+            "display_order": 10,
             "column_span": 12,
             "position_config": "bottom-right"
         }

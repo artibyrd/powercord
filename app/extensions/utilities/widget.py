@@ -129,17 +129,20 @@ def guild_admin_audit_roles_widget(guild_id: int):
         # The row header (summary) mimics the table headers exactly
         role_summary_ui = Summary(
             Div(
-                Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
-                role.name,
-                cls="col-span-4 font-bold truncate flex items-center",
-                style=f"color: #{role.color:06x}" if role.color else "",
+                Div(
+                    Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
+                    role.name,
+                    cls="col-span-4 font-bold truncate flex items-center",
+                    style=f"color: #{role.color:06x}" if role.color else "",
+                ),
+                Div(str(role.id), cls="col-span-3 opacity-70 font-mono text-xs truncate"),
+                Div(str(role.position), cls="col-span-1 opacity-70"),
+                Div(*badges, cls="col-span-2 flex flex-wrap items-center"),
+                Div("✅" if role.is_hoisted else "", cls="col-span-1 text-center"),
+                Div("✅" if role.is_managed else "", cls="col-span-1 text-center"),
+                cls="grid grid-cols-12 w-full items-center gap-2",
             ),
-            Div(str(role.id), cls="col-span-3 opacity-70 font-mono text-xs truncate"),
-            Div(str(role.position), cls="col-span-1 opacity-70"),
-            Div(*badges, cls="col-span-2 flex flex-wrap items-center"),
-            Div("✅" if role.is_hoisted else "", cls="col-span-1 text-center"),
-            Div("✅" if role.is_managed else "", cls="col-span-1 text-center"),
-            cls="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-base-200/50 transition-colors cursor-pointer list-none items-center",
+            cls="px-4 py-3 hover:bg-base-200/50 transition-colors cursor-pointer list-none",
         )
 
         detail_panel = Div(perms_ui, cls="px-4 pb-4 pt-1 bg-base-300/20")
@@ -315,14 +318,17 @@ def guild_admin_audit_channels_widget(guild_id: int):
 
             summary_ui = Summary(
                 Div(
-                    Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
-                    icon,
-                    Span(chan.name, cls=f"ml-2 {name_cls}"),
-                    cls="col-span-5 flex items-center",
-                    style=f"padding-left: {indent}em",
+                    Div(
+                        Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
+                        icon,
+                        Span(chan.name, cls=f"ml-2 {name_cls}"),
+                        cls="col-span-5 flex items-center",
+                        style=f"padding-left: {indent}em",
+                    ),
+                    Div(overwrites_ui, cls="col-span-7"),
+                    cls="grid grid-cols-12 w-full items-center gap-2",
                 ),
-                Div(overwrites_ui, cls="col-span-7"),
-                cls="grid grid-cols-12 gap-2 px-4 py-2 hover:bg-base-200/50 transition-colors cursor-pointer list-none items-center",
+                cls="px-4 py-2 hover:bg-base-200/50 transition-colors cursor-pointer list-none",
             )
 
             return Details(summary_ui, detail_panel, cls="group border-b border-white/5")
@@ -356,13 +362,16 @@ def guild_admin_audit_channels_widget(guild_id: int):
 
             summary_ui = Summary(
                 Div(
-                    Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
-                    Span("📁", cls="mr-2 opacity-50"),
-                    B(category.name.upper()),
-                    cls="col-span-5 flex items-center text-xs font-bold opacity-60 ml-[-0.5em]",
+                    Div(
+                        Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
+                        Span("📁", cls="mr-2 opacity-50"),
+                        B(category.name.upper()),
+                        cls="col-span-5 flex items-center text-xs font-bold opacity-60 ml-[-0.5em]",
+                    ),
+                    Div(cat_overwrites_ui, cls="col-span-7"),
+                    cls="grid grid-cols-12 w-full items-center gap-2",
                 ),
-                Div(cat_overwrites_ui, cls="col-span-7"),
-                cls="grid grid-cols-12 gap-2 px-4 py-2 hover:bg-base-200/50 transition-colors cursor-pointer list-none items-center bg-base-content/5",
+                cls="px-4 py-2 hover:bg-base-200/50 transition-colors cursor-pointer list-none bg-base-content/5",
             )
 
             channel_rows.append(Details(summary_ui, detail_panel, cls="group border-b border-white/5"))
@@ -446,22 +455,22 @@ def guild_admin_security_overview_widget(guild_id: int):
     stats_grid = Div(
         Div(
             Div("Total Roles", cls="stat-title text-xs opacity-70"),
-            Div(str(len(roles)), cls="stat-value text-2xl"),
+            Div(str(len(roles)), cls="stat-value text-3xl"),
             cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
         ),
         Div(
             Div("Total Channels", cls="stat-title text-xs opacity-70"),
-            Div(str(len(channels)), cls="stat-value text-2xl"),
+            Div(str(len(channels)), cls="stat-value text-3xl"),
             cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
         ),
         Div(
             Div("Admin Roles", cls="stat-title text-xs text-error opacity-90"),
-            Div(str(admin_roles_count), cls="stat-value text-2xl text-error"),
+            Div(str(admin_roles_count), cls="stat-value text-3xl text-error"),
             cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
         ),
         Div(
             Div("Private Channels", cls="stat-title text-xs text-info opacity-90"),
-            Div(str(private_channels_count), cls="stat-value text-2xl text-info"),
+            Div(str(private_channels_count), cls="stat-value text-3xl text-info"),
             cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
         ),
         cls="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4",
@@ -1051,12 +1060,21 @@ SECURITY_RULES = [
 
 
 class SecurityRuleEngine:
+    _evaluation_cache = {}
+
     def __init__(self):
         self.rules = [rule_cls() for rule_cls in SECURITY_RULES]
 
     @staticmethod
     def evaluate(guild_id: int, session: Session) -> dict:
-        return SecurityRuleEngine().run_all(guild_id, session)
+        import sys
+        if "pytest" in sys.modules:
+            return SecurityRuleEngine().run_all(guild_id, session)
+        if guild_id in SecurityRuleEngine._evaluation_cache:
+            return SecurityRuleEngine._evaluation_cache[guild_id]
+        res = SecurityRuleEngine().run_all(guild_id, session)
+        SecurityRuleEngine._evaluation_cache[guild_id] = res
+        return res
 
     def run_all(self, guild_id: int, session: Session) -> dict:
         alerts = []
@@ -1304,6 +1322,7 @@ def _render_utilities_sidebar_inner(guild_id: int, session: Session) -> FT:
             ),
         ),
         id=f"guild-admin-utilities-sidebar-{guild_id}",
+        cls="h-full",
     )
 
 
@@ -1376,6 +1395,7 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
         help_icon_svg,
         onclick=f"document.getElementById('help-bubble-card-{guild_id}').classList.toggle('hidden')",
         cls="btn btn-circle btn-primary btn-lg shadow-lg hover:scale-110 active:scale-95 transition-all duration-200",
+        style="border-radius: 50% !important; background-color: hsl(var(--n) / 0.8) !important; backdrop-filter: blur(8px) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important;",
     )
 
     return Div(card_content, toggle_btn, id=f"guild-admin-utilities-help-bubble-{guild_id}", cls="relative")

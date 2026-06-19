@@ -49,13 +49,13 @@ def test_widget_provisioning_enable(session):
         # Verify a specific widget's details
         overview_widget = next(w for w in widgets if w.widget_name == "guild_admin_security_overview_widget")
         assert overview_widget.display_order == 1
-        assert overview_widget.column_span == 4
+        assert overview_widget.column_span == 12
         assert overview_widget.is_enabled is True
 
         # Alerts widget
         alerts_widget = next(w for w in widgets if w.widget_name == "guild_admin_alerts_widget")
         assert alerts_widget.display_order == 2
-        assert alerts_widget.column_span == 8
+        assert alerts_widget.column_span == 12
         assert alerts_widget.is_enabled is True
 
         # Auditor settings widget
@@ -67,13 +67,13 @@ def test_widget_provisioning_enable(session):
         # Audit roles widget
         audit_roles_widget = next(w for w in widgets if w.widget_name == "guild_admin_audit_roles_widget")
         assert audit_roles_widget.display_order == 4
-        assert audit_roles_widget.column_span == 12
+        assert audit_roles_widget.column_span == 6
         assert audit_roles_widget.is_enabled is True
 
         # Audit channels widget
         audit_channels_widget = next(w for w in widgets if w.widget_name == "guild_admin_audit_channels_widget")
         assert audit_channels_widget.display_order == 5
-        assert audit_channels_widget.column_span == 12
+        assert audit_channels_widget.column_span == 6
         assert audit_channels_widget.is_enabled is True
 
         # Audit permissions widget
@@ -84,14 +84,14 @@ def test_widget_provisioning_enable(session):
 
         # Sidebar widget
         sidebar_widget = next(w for w in widgets if w.widget_name == "guild_admin_utilities_sidebar")
-        assert sidebar_widget.display_order == 7
+        assert sidebar_widget.display_order == 9
         assert sidebar_widget.column_span == 12
         assert sidebar_widget.position_config == "left"
         assert sidebar_widget.is_enabled is True
 
         # Help bubble widget
         help_bubble_widget = next(w for w in widgets if w.widget_name == "guild_admin_utilities_help_bubble")
-        assert help_bubble_widget.display_order == 8
+        assert help_bubble_widget.display_order == 10
         assert help_bubble_widget.column_span == 12
         assert help_bubble_widget.position_config == "bottom-right"
         assert help_bubble_widget.is_enabled is True

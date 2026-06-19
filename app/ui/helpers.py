@@ -109,6 +109,80 @@ async def get_discord_username(user_id: int) -> str:
         return "Error"
 
 
+def seed_global_settings_if_empty(session: Session):
+    """
+    Checks if there are any extension settings for guild_id=0. If empty,
+    provisions defaults for all cogs, widgets, sprockets.
+    """
+    existing = session.exec(
+        select(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0)
+    ).first()
+    if existing:
+        return
+
+    from app.common.extension_manager import EXTENSIONS_DIR, load_manifest
+
+    inspector = GadgetInspector()
+    all_extensions = inspector.inspect_extensions()
+
+    for ext_name, gadgets in all_extensions.items():
+        # Check if default_disabled: true in manifest
+        ext_path = EXTENSIONS_DIR / ext_name
+        default_disabled = False
+        if ext_path.exists():
+            try:
+                manifest = load_manifest(ext_path)
+                default_disabled = manifest.get("default_disabled", False)
+            except Exception as e:
+                logging.error(f"Error loading manifest for {ext_name} during seeding: {e}")
+
+        is_enabled = not default_disabled
+
+        # Add setting for each gadget type
+        for g_type in gadgets:
+            g_setting = GuildExtensionSettings(
+                guild_id=0,
+                extension_name=ext_name,
+                gadget_type=g_type,
+                is_enabled=is_enabled,
+            )
+            session.add(g_setting)
+
+            # Symmetrically provision default widgets in WidgetSettings if it's enabled
+            if g_type == "widget" and is_enabled:
+                if ext_path.exists():
+                    try:
+                        manifest = load_manifest(ext_path)
+                        default_widgets = manifest.get("default_widgets", [])
+                        for dw in default_widgets:
+                            widget_name = dw.get("widget_name")
+                            display_order = dw.get("display_order", 99)
+                            column_span = dw.get("column_span", 4)
+                            position_config = dw.get("position_config", None)
+
+                            w_stmt = select(WidgetSettings).where(
+                                WidgetSettings.guild_id == 0,
+                                WidgetSettings.extension_name == ext_name,
+                                WidgetSettings.widget_name == widget_name,
+                            )
+                            existing_widget = session.exec(w_stmt).first()
+                            if not existing_widget:
+                                new_widget = WidgetSettings(
+                                    guild_id=0,
+                                    extension_name=ext_name,
+                                    widget_name=widget_name,
+                                    is_enabled=True,
+                                    display_order=display_order,
+                                    column_span=column_span,
+                                    position_config=position_config,
+                                )
+                                session.add(new_widget)
+                    except Exception as e:
+                        logging.error(f"Error seeding default widgets for {ext_name}: {e}")
+
+    session.commit()
+
+
 def is_gadget_enabled(guild_id: int, extension_name: str, gadget_type: str) -> bool:
     """
     Checks if a gadget is enabled.
@@ -121,6 +195,7 @@ def is_gadget_enabled(guild_id: int, extension_name: str, gadget_type: str) -> b
     engine = init_connection_engine()
     try:
         with Session(engine) as session:
+            seed_global_settings_if_empty(session)
             # 1. Check Global Setting
             global_stmt = select(GuildExtensionSettings).where(
                 GuildExtensionSettings.guild_id == 0,
@@ -174,6 +249,7 @@ def _get_enabled_gadgets(guild_id: int, gadget_type: str) -> list[str]:
     # Get all globally enabled extensions of this type
     try:
         with Session(engine) as session:
+            seed_global_settings_if_empty(session)
             global_stmt = select(GuildExtensionSettings).where(
                 GuildExtensionSettings.guild_id == 0,
                 GuildExtensionSettings.gadget_type == gadget_type,
@@ -218,6 +294,7 @@ def get_widget_settings(guild_id: int) -> dict[str, dict]:
 
     try:
         with Session(engine) as session:
+            seed_global_settings_if_empty(session)
             statement = select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)
             results = session.exec(statement).all()
 

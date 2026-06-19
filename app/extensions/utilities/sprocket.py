@@ -106,6 +106,7 @@ async def update_auditor_config(
 
     session.add(config)
     session.commit()
+    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
     session.refresh(config)
 
     try:

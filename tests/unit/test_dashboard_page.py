@@ -181,16 +181,16 @@ def test_dashboard_page_fixed_and_floating_widgets_layout():
 
     html = str(div)
 
-    # 1. Verify margin-left: 280px; and margin-right: 280px; in the content panel.
-    assert "margin-left: 280px;" in html
-    assert "margin-right: 280px;" in html
+    # 1. Verify margin-left: 312px; and margin-right: 312px; in the content panel.
+    assert "margin-left: 312px;" in html
+    assert "margin-right: 312px;" in html
 
     # 2. Verify left and right panels with exact styles and existence of fixed widgets.
     assert (
-        'style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;"' in html
+        'style="position: fixed; left: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;"' in html
     )
     assert (
-        'style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;"' in html
+        'style="position: fixed; right: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;"' in html
     )
     assert "Left Widget Component" in html
     assert "Right Widget Component" in html
@@ -215,7 +215,7 @@ def test_dashboard_page_multiple_widgets_same_side():
         fixed_widgets=[Div("Left Widget 1", position_config="left"), Div("Left Widget 2", position_config="left")],
     )
     html_left = str(div_left)
-    assert html_left.count("margin-left: 280px;") == 1
+    assert html_left.count("margin-left: 312px;") == 1
     assert "Left Widget 1" in html_left
     assert "Left Widget 2" in html_left
 
@@ -226,7 +226,7 @@ def test_dashboard_page_multiple_widgets_same_side():
         fixed_widgets=[Div("Right Widget 1", position_config="right"), Div("Right Widget 2", position_config="right")],
     )
     html_right = str(div_right)
-    assert html_right.count("margin-right: 280px;") == 1
+    assert html_right.count("margin-right: 312px;") == 1
     assert "Right Widget 1" in html_right
     assert "Right Widget 2" in html_right
 
@@ -237,8 +237,8 @@ def test_dashboard_page_multiple_widgets_same_side():
         fixed_widgets=[Div("Left Widget", position_config="left"), Div("Right Widget", position_config="right")],
     )
     html_both = str(div_both)
-    assert html_both.count("margin-left: 280px;") == 1
-    assert html_both.count("margin-right: 280px;") == 1
+    assert html_both.count("margin-left: 312px;") == 1
+    assert html_both.count("margin-right: 312px;") == 1
 
 
 def test_dashboard_page_non_iterable_containers_crash():
@@ -271,8 +271,8 @@ def test_dashboard_page_string_directly_char_by_char():
     # and appends them all to the left sidebar, which triggers margin-left: 280px.
     _, div = DashboardPage("Title", Div("Content"), fixed_widgets="right")
     html = str(div)
-    assert "margin-left: 280px;" in html
-    assert "margin-right: 280px;" not in html
+    assert "margin-left: 312px;" in html
+    assert "margin-right: 312px;" not in html
 
 
 @patch("app.ui.dashboard.get_widget_settings")
@@ -352,8 +352,9 @@ def test_render_layout_editor_rendering():
     rendered = _render_layout_editor(widgets, 2)
     html = str(rendered)
 
-    # 1. Verify "Position Config" column header is present
-    assert "Position Config" in html
+    # 1. Verify "Widget Config" and "Widget Type" column headers are present
+    assert "Widget Config" in html
+    assert "Widget Type" in html
 
     # 2. Verify select dropdown for fixed widgets (options: Left/Right Sidebar)
     assert 'value="left"' in html
@@ -368,7 +369,7 @@ def test_render_layout_editor_rendering():
     assert "Bottom Left" in html
 
     # 4. Verify placeholder for other (grid) widgets
-    assert "Grid Layout" in html
+    assert "Grid" in html
 
 
 @pytest.mark.asyncio
@@ -532,8 +533,8 @@ def test_render_layout_editor_invalid_position_config():
     rendered = _render_layout_editor(widgets, 2)
     html = str(rendered)
 
-    # 1. Verify it renders "Grid Layout"
-    assert "Grid Layout" in html
+    # 1. Verify it renders "Grid"
+    assert "Grid" in html
 
     # 2. Verify it has the up/down reorder buttons because is_fixed_or_floating is False
     assert "fa-solid fa-arrow-up" in html
@@ -677,8 +678,8 @@ def test_dashboard_page_with_provisioned_widgets(session):
     html = str(div)
 
     # Verify that the generated HTML has the correct margin classes
-    assert "margin-left: 280px;" in html
-    assert "margin-right: 280px;" not in html
+    assert "margin-left: 312px;" in html
+    assert "margin-right: 312px;" not in html
 
     # Verify that it includes specific sidebar and corner elements
     assert "guild_admin_utilities_sidebar" in html
@@ -692,28 +693,28 @@ def test_dashboard_page_fixed_sidebar_rendering_margins_isolated():
     left_w.position_config = "left"
     _, div_left = DashboardPage("Title", Div("Content"), fixed_widgets=[left_w])
     html_left = str(div_left)
-    assert "margin-left: 280px;" in html_left
-    assert "margin-right: 280px;" not in html_left
+    assert "margin-left: 312px;" in html_left
+    assert "margin-right: 312px;" not in html_left
 
     # If only a right sidebar is active
     right_w = Div("Right Widget")
     right_w.position_config = "right"
     _, div_right = DashboardPage("Title", Div("Content"), fixed_widgets=[right_w])
     html_right = str(div_right)
-    assert "margin-right: 280px;" in html_right
-    assert "margin-left: 280px;" not in html_right
+    assert "margin-right: 312px;" in html_right
+    assert "margin-left: 312px;" not in html_right
 
     # If both are active
     _, div_both = DashboardPage("Title", Div("Content"), fixed_widgets=[left_w, right_w])
     html_both = str(div_both)
-    assert "margin-left: 280px;" in html_both
-    assert "margin-right: 280px;" in html_both
+    assert "margin-left: 312px;" in html_both
+    assert "margin-right: 312px;" in html_both
 
     # If neither is active
     _, div_neither = DashboardPage("Title", Div("Content"), fixed_widgets=[])
     html_neither = str(div_neither)
-    assert "margin-left: 280px;" not in html_neither
-    assert "margin-right: 280px;" not in html_neither
+    assert "margin-left: 312px;" not in html_neither
+    assert "margin-right: 312px;" not in html_neither
 
 
 def test_dashboard_page_floating_widgets_all_corners_isolated():

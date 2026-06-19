@@ -115,6 +115,7 @@ def test_post_auditor_config_new(client, session):
     assert data["announcement_channel_ids"] == [666]
 
     # Verify saved to database
+    session.expire_all()
     db_config = session.get(DiscordAuditorConfig, guild_id)
     assert db_config is not None
     assert db_config.staff_separator_role_id == 999

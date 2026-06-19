@@ -124,7 +124,7 @@ def HealthScoreArc(score: int, alert_count: int = 0):
                 y="46",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls=f"text-xl font-bold fill-current {color_class}",
+                cls=f"text-2xl font-black fill-current {color_class}",
             ),
             SvgText(
                 f"{alert_count} alert{'s' if alert_count != 1 else ''}",
@@ -132,7 +132,7 @@ def HealthScoreArc(score: int, alert_count: int = 0):
                 y="64",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[9px] font-semibold fill-base-content/70",
+                cls="text-[11px] font-bold fill-base-content/70",
             ),
             viewBox="0 0 100 100",
             cls="w-32 h-32",
@@ -147,11 +147,16 @@ def TabGroup(tabs: list[tuple[str, str, bool]], target_id: str):
     """
     target = target_id if target_id.startswith("#") else f"#{target_id}"
     tab_elements = []
+    click_script = (
+        "const tabs = Array.from(this.parentElement.children); "
+        "tabs.forEach(t => t.classList.remove('tab-active', '!bg-primary', '!text-primary-content', 'font-bold', 'shadow-md')); "
+        "this.classList.add('tab-active', '!bg-primary', '!text-primary-content', 'font-bold', 'shadow-md');"
+    )
     for label, url, is_active in tabs:
         cls = "tab"
         if is_active:
-            cls += " tab-active"
-        tab_elements.append(A(label, cls=cls, hx_get=url, hx_target=target, hx_swap="innerHTML"))
+            cls += " tab-active !bg-primary !text-primary-content font-bold shadow-md"
+        tab_elements.append(A(label, cls=cls, hx_get=url, hx_target=target, hx_swap="innerHTML", onclick=click_script))
     return Div(*tab_elements, cls="tabs tabs-boxed")
 
 
@@ -163,6 +168,6 @@ def Accordion(title: str, *children, open: bool = False, **kwargs):
     return Details(
         Summary(title, cls="collapse-title text-lg font-medium"),
         Div(*children, cls="collapse-content"),
-        cls="collapse collapse-arrow bg-base-200",
+        cls="collapse collapse-arrow bg-base-200 card border border-base-content/20",
         **{**open_kwargs, **kwargs},
     )
