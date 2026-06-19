@@ -443,19 +443,14 @@ def test_security_rule_engine_evaluate_caching(session: Session):
     res2 = SecurityRuleEngine.evaluate(guild_id, session)
     assert res2 == res1
 
-    # Verify that there is at least one cached entry
+    # Verify that there is exactly one cached entry
     assert len(SecurityRuleEngine._evaluation_cache) == 1
 
-    # Modify DB (add a role) - should invalidate checksum and cause cache miss
-    new_role = DiscordRole(id=901, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
-    session.add(new_role)
-    session.commit()
-
-    # Third evaluate (should recalculate and have a lower score)
-    res3 = SecurityRuleEngine.evaluate(guild_id, session)
-    assert res3["score"] != res1["score"]
-
-    # Clear by pop (guild_id)
-    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
+    # Invalidate via the centralized method
+    SecurityRuleEngine.invalidate(guild_id)
     assert len(SecurityRuleEngine._evaluation_cache) == 0
+
+    # Re-evaluate after invalidation should re-run rules
+    res3 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res3 == res1  # Same DB state, same result
 

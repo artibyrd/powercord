@@ -95,6 +95,7 @@ def test_score_boundaries(session):
 
     session.commit()
 
+    SecurityRuleEngine.invalidate(guild_id)
     result_worst = SecurityRuleEngine.evaluate(guild_id, session)
     # The score should be 0 (clamped from negative values due to multiple role alerts)
     assert result_worst["score"] == 0

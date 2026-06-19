@@ -1138,7 +1138,7 @@ async def post_auditor_settings(guild_id: int, req):
         session.commit()
 
     from app.extensions.utilities.widget import SecurityRuleEngine
-    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
+    SecurityRuleEngine.invalidate(guild_id)
 
     return Response(
         content='<div class="alert alert-success mt-4">✅ Auditor settings updated successfully!</div>',
@@ -1181,7 +1181,7 @@ async def dashboard_scan_guild(guild_id: int):
         logging.error(f"Failed to scan guild {guild_id}: {e}")
 
     from app.extensions.utilities.widget import SecurityRuleEngine
-    SecurityRuleEngine._evaluation_cache.pop(guild_id, None)
+    SecurityRuleEngine.invalidate(guild_id)
 
     return Response(headers={"HX-Refresh": "true"})
 
