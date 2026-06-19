@@ -1,19 +1,53 @@
 steps:
-  # 0. Install dependencies and run QA
+  # 0. Start local PostgreSQL database for QA step
+  - name: "gcr.io/cloud-builders/docker"
+    id: "Start Postgres"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        docker run -d \
+          --name postgres \
+          --network cloudbuild \
+          -e POSTGRES_USER=powercord \
+          -e POSTGRES_PASSWORD=test_pass \
+          -e POSTGRES_DB=postgres \
+          postgres:15-alpine
+
+  # 1. Install dependencies and run QA
   - name: "python:3.12"
     id: "Run QA"
     entrypoint: "bash"
+    env:
+      - "POWERCORD_DB_HOST=postgres:5432"
     args:
       - "-c"
       - |
         pip install poetry
         poetry install
+        # Wait for Postgres to be ready
+        poetry run python -c "import textwrap; exec(textwrap.dedent('''
+        import time
+        from sqlalchemy import create_engine
+        url = 'postgresql+pg8000://powercord:test_pass@postgres:5432/postgres'
+        for i in range(30):
+            try:
+                engine = create_engine(url)
+                with engine.connect() as conn:
+                    print('PostgreSQL is ready!')
+                    break
+            except Exception as e:
+                print(f'Waiting for database... ({e})')
+                time.sleep(1)
+        else:
+            raise RuntimeError('Database did not start in time')
+        '''))"
         poetry run ruff check .
         poetry run ruff format --check .
         poetry run mypy .
         poetry run pytest tests -m "not integration"
 
-  # 1. Build the Docker image
+  # 2. Build the Docker image
   - name: "gcr.io/cloud-builders/docker"
     id: "Build Docker Image"
     args:
@@ -26,7 +60,7 @@ steps:
         ".",
       ]
 
-  # 2. Push the Docker image to Artifact Registry
+  # 3. Push the Docker image to Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
     id: "Push Docker Image"
     args:
@@ -36,7 +70,7 @@ steps:
         "us-central1-docker.pkg.dev/$PROJECT_ID/powercord/powercord-app",
       ]
 
-  # 3. Initialize Terraform
+  # 4. Initialize Terraform
   - name: "hashicorp/terraform:latest"
     id: "Terraform Init"
     dir: "terraform"
@@ -44,7 +78,7 @@ steps:
       - "init"
       - "-backend-config=bucket=${PROJECT_ID}-tf-state"
 
-  # 4. Apply Terraform Infrastructure
+  # 5. Apply Terraform Infrastructure
   - name: "hashicorp/terraform:latest"
     id: "Terraform Apply"
     dir: "terraform"
