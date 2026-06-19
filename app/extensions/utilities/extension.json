@@ -11,32 +11,32 @@
     "internal": true,
     "default_widgets": [
         {
-            "widget_name": "guild_admin_security_overview",
+            "widget_name": "guild_admin_security_overview_widget",
             "display_order": 1,
             "column_span": 4
         },
         {
-            "widget_name": "guild_admin_alerts",
+            "widget_name": "guild_admin_alerts_widget",
             "display_order": 2,
             "column_span": 8
         },
         {
-            "widget_name": "guild_admin_auditor_settings",
+            "widget_name": "guild_admin_auditor_settings_widget",
             "display_order": 3,
             "column_span": 12
         },
         {
-            "widget_name": "guild_admin_audit_roles",
+            "widget_name": "guild_admin_audit_roles_widget",
             "display_order": 4,
             "column_span": 12
         },
         {
-            "widget_name": "guild_admin_audit_channels",
+            "widget_name": "guild_admin_audit_channels_widget",
             "display_order": 5,
             "column_span": 12
         },
         {
-            "widget_name": "guild_admin_audit_permissions",
+            "widget_name": "guild_admin_audit_permissions_widget",
             "display_order": 6,
             "column_span": 12
         },

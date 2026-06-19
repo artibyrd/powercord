@@ -33,23 +33,10 @@ def test_score_boundaries(session):
     # 1. Test 100/100 (Perfect Score)
     # Enable honeypot setting
     session.add(
-        GuildExtensionSettings(
-            guild_id=guild_id,
-            extension_name="honeypot",
-            gadget_type="widget",
-            is_enabled=True
-        )
+        GuildExtensionSettings(guild_id=guild_id, extension_name="honeypot", gadget_type="widget", is_enabled=True)
     )
     # Add an @everyone role
-    session.add(
-        DiscordRole(
-            id=guild_id,
-            guild_id=guild_id,
-            name="@everyone",
-            permissions=0,
-            position=0
-        )
-    )
+    session.add(DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0))
     session.commit()
 
     result_perfect = SecurityRuleEngine.evaluate(guild_id, session)
@@ -64,49 +51,23 @@ def test_score_boundaries(session):
             guild_id=guild_id,
             staff_separator_role_id=1111,
             staff_channel_ids="[2222]",
-            announcement_channel_ids="[3333]"
+            announcement_channel_ids="[3333]",
         )
     )
     # Add staff separator role
-    session.add(
-        DiscordRole(
-            id=1111,
-            guild_id=guild_id,
-            name="StaffSeparator",
-            permissions=0,
-            position=5
-        )
-    )
+    session.add(DiscordRole(id=1111, guild_id=guild_id, name="StaffSeparator", permissions=0, position=5))
     # Add low-tier role (pos=2) with Administrator permission (1 << 3) - LowTierRolePrivileges (high: -15)
-    session.add(
-        DiscordRole(
-            id=1112,
-            guild_id=guild_id,
-            name="LowTierAdmin",
-            permissions=1 << 3,
-            position=2
-        )
-    )
+    session.add(DiscordRole(id=1112, guild_id=guild_id, name="LowTierAdmin", permissions=1 << 3, position=2))
     # Add low-tier role (pos=3) set to mentionable - GeneralRoleMentionability (low: -5)
     session.add(
         DiscordRole(
-            id=1113,
-            guild_id=guild_id,
-            name="LowTierMentionable",
-            permissions=0,
-            position=3,
-            is_mentionable=True
+            id=1113, guild_id=guild_id, name="LowTierMentionable", permissions=0, position=3, is_mentionable=True
         )
     )
     # Add managed bot role with excessive privileges (1 << 5) - OverPrivilegedBotIntegrations (medium: -10)
     session.add(
         DiscordRole(
-            id=1114,
-            guild_id=guild_id,
-            name="OverprivilegedBot",
-            permissions=1 << 5,
-            position=6,
-            is_managed=True
+            id=1114, guild_id=guild_id, name="OverprivilegedBot", permissions=1 << 5, position=6, is_managed=True
         )
     )
     # Add a public announcement channel (pos=1) allowing @everyone (id=guild_id) to send messages (1 << 11) - PublicAnnouncementProtection (high: -15)
@@ -116,21 +77,11 @@ def test_score_boundaries(session):
             guild_id=guild_id,
             name="rules-and-announcements",
             type="text",
-            overwrites=json.dumps({
-                str(guild_id): {"allow": 1 << 11, "deny": 0}
-            })
+            overwrites=json.dumps({str(guild_id): {"allow": 1 << 11, "deny": 0}}),
         )
     )
     # Add exposed staff channel visible to @everyone (View Channel 1 << 10 not denied) - ExposedStaffChannels (high: -15)
-    session.add(
-        DiscordChannel(
-            id=2222,
-            guild_id=guild_id,
-            name="staff-chat",
-            type="text",
-            overwrites="{}"
-        )
-    )
+    session.add(DiscordChannel(id=2222, guild_id=guild_id, name="staff-chat", type="text", overwrites="{}"))
     # Add non-text location (voice channel) allowing low-tier role to send messages (1 << 11) - UnauthorizedChatPings (medium: -10)
     session.add(
         DiscordChannel(
@@ -138,9 +89,7 @@ def test_score_boundaries(session):
             guild_id=guild_id,
             name="Lounge Voice",
             type="voice",
-            overwrites=json.dumps({
-                "1112": {"allow": 1 << 11, "deny": 0}
-            })
+            overwrites=json.dumps({"1112": {"allow": 1 << 11, "deny": 0}}),
         )
     )
 
@@ -157,36 +106,18 @@ def test_evaluate_malformed_overwrites(session):
     guild_id = 90003
 
     # Add @everyone role
-    session.add(
-        DiscordRole(
-            id=guild_id,
-            guild_id=guild_id,
-            name="@everyone",
-            permissions=0,
-            position=0
-        )
-    )
+    session.add(DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0))
 
     # 1. Non-JSON string overwrites
     session.add(
         DiscordChannel(
-            id=50001,
-            guild_id=guild_id,
-            name="broken-json-channel",
-            type="text",
-            overwrites="not-valid-json"
+            id=50001, guild_id=guild_id, name="broken-json-channel", type="text", overwrites="not-valid-json"
         )
     )
 
     # 2. JSON list instead of dict overwrites
     session.add(
-        DiscordChannel(
-            id=50002,
-            guild_id=guild_id,
-            name="list-json-channel",
-            type="text",
-            overwrites="[1, 2, 3]"
-        )
+        DiscordChannel(id=50002, guild_id=guild_id, name="list-json-channel", type="text", overwrites="[1, 2, 3]")
     )
 
     # 3. None/null values in keys
@@ -196,9 +127,7 @@ def test_evaluate_malformed_overwrites(session):
             guild_id=guild_id,
             name="null-values-channel",
             type="text",
-            overwrites=json.dumps({
-                "12345": {"allow": None, "deny": None}
-            })
+            overwrites=json.dumps({"12345": {"allow": None, "deny": None}}),
         )
     )
 
@@ -209,9 +138,7 @@ def test_evaluate_malformed_overwrites(session):
             guild_id=guild_id,
             name="string-values-channel",
             type="text",
-            overwrites=json.dumps({
-                "12345": {"allow": "not_an_int", "deny": 1024}
-            })
+            overwrites=json.dumps({"12345": {"allow": "not_an_int", "deny": 1024}}),
         )
     )
 
@@ -234,11 +161,7 @@ def test_large_guild_stress(session):
     for i in range(500):
         roles.append(
             DiscordRole(
-                id=10000 + i,
-                guild_id=guild_id,
-                name=f"Role-{i}",
-                permissions=1 << 11 if i % 10 == 0 else 0,
-                position=i
+                id=10000 + i, guild_id=guild_id, name=f"Role-{i}", permissions=1 << 11 if i % 10 == 0 else 0, position=i
             )
         )
 
@@ -254,9 +177,7 @@ def test_large_guild_stress(session):
                 name=f"CATEGORY-{cat_idx}",
                 type="category",
                 position=cat_idx,
-                overwrites=json.dumps({
-                    "10000": {"allow": 1 << 10, "deny": 0}
-                })
+                overwrites=json.dumps({"10000": {"allow": 1 << 10, "deny": 0}}),
             )
         )
         # 19 child channels per category
@@ -270,9 +191,7 @@ def test_large_guild_stress(session):
                     name=f"channel-{cat_idx}-{chan_idx}",
                     type="text" if chan_idx % 2 == 0 else "voice",
                     position=chan_idx,
-                    overwrites=json.dumps({
-                        "10001": {"allow": 0, "deny": 1 << 10}
-                    })
+                    overwrites=json.dumps({"10001": {"allow": 0, "deny": 1 << 10}}),
                 )
             )
 

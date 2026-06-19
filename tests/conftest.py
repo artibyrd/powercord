@@ -100,6 +100,7 @@ def fixture_engine(_create_test_db):
         UserSetting,
         WidgetSettings,
     )
+
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     return engine

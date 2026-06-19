@@ -41,7 +41,7 @@ from app.ui.helpers import (
     notify_api_of_config_change,
     update_guild_extension_setting,
 )
-from app.ui.page import StandardPage
+from app.ui.page import DashboardPage
 
 gsecrets.load_env()
 
@@ -222,7 +222,7 @@ def public_home(sess: dict):
         else P("No widgets are currently enabled."),
     ]
 
-    return StandardPage(
+    return DashboardPage(
         "Welcome",
         *content,
         auth=auth,
@@ -462,7 +462,7 @@ async def profile_page(sess):
 
     client_keys_section = await _render_client_keys(sess)
 
-    return StandardPage(
+    return DashboardPage(
         "Profile",
         H1(f"Welcome, {username}!", cls="text-2xl font-extrabold mb-8"),
         server_list,
@@ -561,12 +561,16 @@ async def admin_home(sess):
             Code(logs_content, cls="language-log font-mono text-[#00ff00]"),
             style="white-space: pre; word-break: normal; overflow-x: auto;",
         ),
-        cls="p-4 max-h-[400px] overflow-y-auto bg-black rounded-b-lg font-mono text-sm",
+        cls="p-4 max-h-[400px] overflow-y-auto overflow-x-hidden bg-black rounded-b-lg font-mono text-sm w-full",
     )
 
     logs_component = Div(
         Div("System Terminal", cls="text-lg font-bold mb-2 ml-1 opacity-70"),
-        Div(terminal_header, terminal_body, cls="border border-[#444444] rounded-lg shadow-xl"),
+        Div(
+            terminal_header,
+            terminal_body,
+            cls="border border-[#444444] rounded-lg shadow-xl w-full overflow-hidden",
+        ),
         cls="mb-8 w-full",
     )
 
@@ -761,7 +765,7 @@ async def admin_home(sess):
         cls="mb-8",
     )
 
-    return StandardPage(
+    return DashboardPage(
         "Admin Dashboard",
         H1("System Administration", cls="text-2xl font-extrabold mb-8"),
         stats_grid,

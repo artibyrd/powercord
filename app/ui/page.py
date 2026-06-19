@@ -200,7 +200,7 @@ def DashboardPage(
     # Separate and group fixed & floating widgets safely
     left_fixed = []
     right_fixed = []
-    for w in (fixed_widgets or []):
+    for w in fixed_widgets or []:
         if w is None:
             continue
         if isinstance(w, dict):
@@ -217,7 +217,7 @@ def DashboardPage(
             left_fixed.append(comp)
 
     floating_containers = []
-    for w in (floating_widgets or []):
+    for w in floating_widgets or []:
         if w is None:
             continue
         if isinstance(w, dict):
@@ -243,18 +243,35 @@ def DashboardPage(
 
         floating_containers.append(Div(comp, style=style))
 
-    content_style = ""
+    content_style = "min-width: 0; "
     if left_fixed:
         content_style += "margin-left: 280px; "
     if right_fixed:
         content_style += "margin-right: 280px; "
 
-    left_sidebar = Div(*left_fixed, style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;") if left_fixed else None
-    right_sidebar = Div(*right_fixed, style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;") if right_fixed else None
+    left_sidebar = (
+        Div(
+            *left_fixed,
+            style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;",
+        )
+        if left_fixed
+        else None
+    )
+    right_sidebar = (
+        Div(
+            *right_fixed,
+            style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;",
+        )
+        if right_fixed
+        else None
+    )
 
     # Render layout
     content_area = Div(
-        Div(id="lockdown-target", cls="w-full mb-4"), *children, cls="flex-1 p-6 min-h-[calc(100vh-200px)]", style=content_style.strip() or None
+        Div(id="lockdown-target", cls="w-full mb-4"),
+        *children,
+        cls="flex-1 min-w-0 p-6 min-h-[calc(100vh-200px)]",
+        style=content_style.strip() or None,
     )
 
     layout_children = []

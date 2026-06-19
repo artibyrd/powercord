@@ -25,6 +25,7 @@ except ImportError:
 @pytest.fixture(autouse=True)
 def clean_db(session: Session):
     from sqlalchemy import text
+
     def do_clean():
         session.execute(text("DELETE FROM discord_channels;"))
         session.execute(text("DELETE FROM discord_roles;"))
@@ -38,6 +39,7 @@ def clean_db(session: Session):
             except Exception:
                 pass
         session.commit()
+
     do_clean()
     yield
     do_clean()

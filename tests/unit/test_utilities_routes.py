@@ -80,7 +80,6 @@ async def test_get_alerts_list(mock_evaluate, mock_session_cls, mock_init_engine
     assert "Rule B" not in rendered_str
 
 
-
 @patch("app.ui.dashboard.get_internal_api_client")
 @pytest.mark.asyncio
 async def test_dashboard_scan_guild(mock_client_cls):
@@ -107,11 +106,7 @@ async def test_dashboard_ping_bot_online(mock_client_cls):
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {
-        "bot": {
-            "latency": 45
-        }
-    }
+    mock_resp.json.return_value = {"bot": {"latency": 45}}
     mock_client.get.return_value = mock_resp
 
     guild_id = 999
@@ -136,4 +131,3 @@ async def test_dashboard_ping_bot_offline(mock_client_cls):
     rendered_str = res.__html__()
     assert "Disconnected" in rendered_str
     assert "bot-latency-display-999" in rendered_str
-

@@ -329,7 +329,7 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
                                         is_enabled=True,
                                         display_order=display_order,
                                         column_span=column_span,
-                                        position_config=position_config, # Save position layout
+                                        position_config=position_config,  # Save position layout
                                     )
                                     session.add(new_widget)
                         except Exception as e:

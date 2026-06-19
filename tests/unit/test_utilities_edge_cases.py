@@ -27,17 +27,9 @@ def test_security_rule_engine_with_honeypot_enabled(session):
     guild_id = 54321
 
     # Enable honeypot globally and locally
-    global_ext = GuildExtensionSettings(
-        guild_id=0,
-        extension_name="honeypot",
-        gadget_type="widget",
-        is_enabled=True
-    )
+    global_ext = GuildExtensionSettings(guild_id=0, extension_name="honeypot", gadget_type="widget", is_enabled=True)
     local_ext = GuildExtensionSettings(
-        guild_id=guild_id,
-        extension_name="honeypot",
-        gadget_type="widget",
-        is_enabled=True
+        guild_id=guild_id, extension_name="honeypot", gadget_type="widget", is_enabled=True
     )
     session.add(global_ext)
     session.add(local_ext)
@@ -94,12 +86,7 @@ def test_security_rule_engine_invalid_overwrites_json(session):
     guild_id = 99999
 
     # Enable honeypot
-    ext = GuildExtensionSettings(
-        guild_id=guild_id,
-        extension_name="honeypot",
-        gadget_type="widget",
-        is_enabled=True
-    )
+    ext = GuildExtensionSettings(guild_id=guild_id, extension_name="honeypot", gadget_type="widget", is_enabled=True)
     session.add(ext)
 
     # Insert role
@@ -114,12 +101,7 @@ def test_security_rule_engine_invalid_overwrites_json(session):
 
     # Insert channel with malformed JSON overwrites
     channel = DiscordChannel(
-        id=101,
-        guild_id=guild_id,
-        name="rules",
-        type="text",
-        position=1,
-        overwrites="{invalid_json_here"
+        id=101, guild_id=guild_id, name="rules", type="text", position=1, overwrites="{invalid_json_here"
     )
     session.add(channel)
     session.commit()
@@ -143,9 +125,7 @@ def test_get_effective_channel_permissions_none_everyone():
     role = DiscordRole(id=111, guild_id=999, name="Test", permissions=1024, position=1)
     channel = DiscordChannel(id=222, guild_id=999, name="chan", type="text", position=1)
 
-    overwrites = {
-        "111": {"allow": 2048, "deny": 0}
-    }
+    overwrites = {"111": {"allow": 2048, "deny": 0}}
 
     # Should not crash and should resolve permissions based on role.guild_id as fallback key
     perms = get_effective_channel_permissions(role, channel, None, overwrites)

@@ -287,7 +287,7 @@ async def dashboard(guild_id: int, sess):
     all_widgets = inspector.inspect_widgets()
     settings = get_widget_settings(guild_id)
     if not settings:
-        for ext_name in enabled_widgets:
+        for ext_name in global_widgets:
             update_guild_extension_setting(guild_id, ext_name, "widget", True)
         settings = get_widget_settings(guild_id)
 
@@ -337,9 +337,7 @@ async def dashboard(guild_id: int, sess):
     floating_widgets.sort(key=lambda x: x["order"])
     grid_widgets.sort(key=lambda x: x["order"])
 
-    rendered_guild_widgets = [
-        Div(c["component"], style=f"grid-column: span {c['span']};") for c in grid_widgets
-    ]
+    rendered_guild_widgets = [Div(c["component"], style=f"grid-column: span {c['span']};") for c in grid_widgets]
 
     guild_widgets = Div(
         Div(
@@ -547,7 +545,9 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                 pos_td,
                 # Reorder buttons
                 Td(
-                    "" if is_fixed_or_floating else Div(
+                    ""
+                    if is_fixed_or_floating
+                    else Div(
                         Form(
                             Hidden(name="ext", value=w["ext"]),
                             Hidden(name="widget", value=w["widget"]),
@@ -1066,6 +1066,7 @@ async def get_alerts_list(guild_id: int, req, category: str = "all"):
 @dashboard_router("/dashboard/{guild_id:int}/scan", methods=["POST"])
 async def dashboard_scan_guild(guild_id: int):
     import os
+
     bot_port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
     try:
         async with get_internal_api_client() as client:
@@ -1081,6 +1082,7 @@ async def dashboard_scan_guild(guild_id: int):
 @dashboard_router("/dashboard/{guild_id:int}/ping-bot", methods=["GET"])
 async def dashboard_ping_bot(guild_id: int):
     import os
+
     bot_port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
     latency = None
     try:
@@ -1100,4 +1102,3 @@ async def dashboard_ping_bot(guild_id: int):
         cls_color = "badge-error text-error-content"
 
     return Span(text, id=f"bot-latency-display-{guild_id}", cls=f"badge {cls_color} badge-sm")
-

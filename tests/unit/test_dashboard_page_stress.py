@@ -72,7 +72,7 @@ def test_widget_parameters_robustness():
     _, div_malformed_dict = DashboardPage(
         "Title",
         fixed_widgets=[w_missing_comp, w_missing_pos, w_empty_dict],
-        floating_widgets=[w_missing_comp, w_missing_pos, w_empty_dict]
+        floating_widgets=[w_missing_comp, w_missing_pos, w_empty_dict],
     )
     html_malformed = str(div_malformed_dict)
 
@@ -85,6 +85,7 @@ def test_widget_parameters_robustness():
     class DummyWidget:
         def __init__(self, name):
             self.name = name
+
         def __ft__(self):
             return Div(self.name, id=self.name)
 
@@ -100,9 +101,7 @@ def test_widget_parameters_robustness():
     w_invalid_pos_float = {"component": Div("Invalid Float", id="invalid-float"), "position_config": "invalid-corner"}
 
     _, div_invalid_pos = DashboardPage(
-        "Title",
-        fixed_widgets=[w_invalid_pos_fixed],
-        floating_widgets=[w_invalid_pos_float]
+        "Title", fixed_widgets=[w_invalid_pos_fixed], floating_widgets=[w_invalid_pos_float]
     )
     html_invalid = str(div_invalid_pos)
 
@@ -164,27 +163,22 @@ def test_type_error_crashes():
 # ADVERSARIAL & STRESS TESTS FOR LAYOUT RENDERING
 # ==============================================================================
 
+
 def test_layout_rendering_dozens_of_sidebars():
     """Verify performance and correct rendering with large numbers of widgets."""
     left_widgets = [
-        {"component": Div(f"Left Widget {i}", id=f"left-w-{i}"), "position_config": "left"}
-        for i in range(100)
+        {"component": Div(f"Left Widget {i}", id=f"left-w-{i}"), "position_config": "left"} for i in range(100)
     ]
     right_widgets = [
-        {"component": Div(f"Right Widget {i}", id=f"right-w-{i}"), "position_config": "right"}
-        for i in range(100)
+        {"component": Div(f"Right Widget {i}", id=f"right-w-{i}"), "position_config": "right"} for i in range(100)
     ]
     floating_widgets = [
-        {"component": Div(f"Float Widget {i}", id=f"float-w-{i}"), "position_config": "bottom-left"}
-        for i in range(100)
+        {"component": Div(f"Float Widget {i}", id=f"float-w-{i}"), "position_config": "bottom-left"} for i in range(100)
     ]
 
     start_time = time.perf_counter()
     _, div = DashboardPage(
-        "Dozens Title",
-        Div("Content"),
-        fixed_widgets=left_widgets + right_widgets,
-        floating_widgets=floating_widgets
+        "Dozens Title", Div("Content"), fixed_widgets=left_widgets + right_widgets, floating_widgets=floating_widgets
     )
     html = str(div)
     duration = time.perf_counter() - start_time
@@ -207,10 +201,12 @@ def test_layout_rendering_dozens_of_sidebars():
 
 def test_layout_rendering_malformed_coordinates_and_objects():
     """Verify that malformed position configs and abnormal objects default gracefully."""
+
     class PoisonWidget:
         @property
         def position_config(self):
             raise AttributeError("Poison attribute access!")
+
         def __ft__(self):
             return Div("Poison Component")
 
@@ -224,7 +220,7 @@ def test_layout_rendering_malformed_coordinates_and_objects():
         "Malformed Test",
         Div("Main"),
         fixed_widgets=[PoisonWidget(), w_none_component, w_non_string_pos, w_empty_list_pos, w_none_pos],
-        floating_widgets=[{"component": Div("Float None pos"), "position_config": None}, None]
+        floating_widgets=[{"component": Div("Float None pos"), "position_config": None}, None],
     )
     html = str(div)
 
@@ -248,11 +244,7 @@ def test_layout_rendering_extremely_large_strings():
 
     start = time.perf_counter()
     title_res, div_res = DashboardPage(
-        huge_title,
-        Div("Main"),
-        guild_name=huge_guild_name,
-        guild_id=12345,
-        fixed_widgets=[large_widget]
+        huge_title, Div("Main"), guild_name=huge_guild_name, guild_id=12345, fixed_widgets=[large_widget]
     )
     html = str(div_res)
     duration = time.perf_counter() - start
@@ -266,6 +258,7 @@ def test_layout_rendering_extremely_large_strings():
 # ==============================================================================
 # AUTO-PROVISIONING LOGIC ROBUSTNESS TESTS
 # ==============================================================================
+
 
 @pytest.mark.asyncio
 async def test_auto_provisioning_sequential_requests(session, engine):
@@ -286,16 +279,14 @@ async def test_auto_provisioning_sequential_requests(session, engine):
 
     try:
         # Patch init_connection_engine to point to our test DB connection
-        with patch("app.ui.helpers.init_connection_engine", return_value=engine), \
-             patch("app.common.alchemy.init_connection_engine", return_value=engine), \
-             patch("app.ui.dashboard.get_admin_guilds", return_value={str(guild_id): {"name": "Test Server"}}):
-
+        with (
+            patch("app.ui.helpers.init_connection_engine", return_value=engine),
+            patch("app.common.alchemy.init_connection_engine", return_value=engine),
+            patch("app.ui.dashboard.get_admin_guilds", return_value={str(guild_id): {"name": "Test Server"}}),
+        ):
             # Enable widget globally
             global_setting = GuildExtensionSettings(
-                guild_id=0,
-                extension_name=extension_name,
-                gadget_type="widget",
-                is_enabled=True
+                guild_id=0, extension_name=extension_name, gadget_type="widget", is_enabled=True
             )
             session.add(global_setting)
             session.commit()
@@ -309,22 +300,20 @@ async def test_auto_provisioning_sequential_requests(session, engine):
 
             widgets_after_first = session.exec(
                 select(WidgetSettings).where(
-                    WidgetSettings.guild_id == guild_id,
-                    WidgetSettings.extension_name == extension_name
+                    WidgetSettings.guild_id == guild_id, WidgetSettings.extension_name == extension_name
                 )
             ).all()
             assert len(widgets_after_first) == 8
 
             # 2. Modify one widget setting (disable guild_admin_alerts)
-            target_widget = "guild_admin_alerts"
+            target_widget = "guild_admin_alerts_widget"
             update_widget_setting(guild_id, extension_name, target_widget, "is_enabled", False)
             session.expire_all()
 
             # Verify the modification in the database
             db_widget = session.exec(
                 select(WidgetSettings).where(
-                    WidgetSettings.guild_id == guild_id,
-                    WidgetSettings.widget_name == target_widget
+                    WidgetSettings.guild_id == guild_id, WidgetSettings.widget_name == target_widget
                 )
             ).one()
             assert db_widget.is_enabled is False
@@ -335,16 +324,14 @@ async def test_auto_provisioning_sequential_requests(session, engine):
 
             widgets_after_second = session.exec(
                 select(WidgetSettings).where(
-                    WidgetSettings.guild_id == guild_id,
-                    WidgetSettings.extension_name == extension_name
+                    WidgetSettings.guild_id == guild_id, WidgetSettings.extension_name == extension_name
                 )
             ).all()
             assert len(widgets_after_second) == 8
 
             db_widget_after = session.exec(
                 select(WidgetSettings).where(
-                    WidgetSettings.guild_id == guild_id,
-                    WidgetSettings.widget_name == target_widget
+                    WidgetSettings.guild_id == guild_id, WidgetSettings.widget_name == target_widget
                 )
             ).one()
             assert db_widget_after.is_enabled is False
@@ -352,6 +339,7 @@ async def test_auto_provisioning_sequential_requests(session, engine):
     finally:
         # Proper cleanup of any database mutations in finally block
         from sqlmodel import delete
+
         session.exec(delete(WidgetSettings).where(WidgetSettings.guild_id == guild_id))
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == guild_id))
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0))
@@ -373,9 +361,10 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
     extension_name = "utilities"
 
     try:
-        with patch("app.ui.helpers.init_connection_engine", return_value=engine), \
-             patch("app.common.alchemy.init_connection_engine", return_value=engine):
-
+        with (
+            patch("app.ui.helpers.init_connection_engine", return_value=engine),
+            patch("app.common.alchemy.init_connection_engine", return_value=engine),
+        ):
             # Enable the extension: first time
             update_guild_extension_setting(guild_id, extension_name, "widget", True)
             session.expire_all()
@@ -385,7 +374,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
                 select(GuildExtensionSettings).where(
                     GuildExtensionSettings.guild_id == guild_id,
                     GuildExtensionSettings.extension_name == extension_name,
-                    GuildExtensionSettings.gadget_type == "widget"
+                    GuildExtensionSettings.gadget_type == "widget",
                 )
             ).all()
             assert len(ext_settings) == 1
@@ -393,8 +382,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
 
             widgets = session.exec(
                 select(WidgetSettings).where(
-                    WidgetSettings.guild_id == guild_id,
-                    WidgetSettings.extension_name == extension_name
+                    WidgetSettings.guild_id == guild_id, WidgetSettings.extension_name == extension_name
                 )
             ).all()
             assert len(widgets) == 8
@@ -406,8 +394,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
             # Ensure no duplication occurred
             ext_settings = session.exec(
                 select(GuildExtensionSettings).where(
-                    GuildExtensionSettings.guild_id == guild_id,
-                    GuildExtensionSettings.extension_name == extension_name
+                    GuildExtensionSettings.guild_id == guild_id, GuildExtensionSettings.extension_name == extension_name
                 )
             ).all()
             assert len(ext_settings) == 1
@@ -420,8 +407,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
             # Ensure disabled and WidgetSettings are cleaned up
             ext_settings = session.exec(
                 select(GuildExtensionSettings).where(
-                    GuildExtensionSettings.guild_id == guild_id,
-                    GuildExtensionSettings.extension_name == extension_name
+                    GuildExtensionSettings.guild_id == guild_id, GuildExtensionSettings.extension_name == extension_name
                 )
             ).all()
             assert len(ext_settings) == 1
@@ -436,6 +422,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
     finally:
         # Proper cleanup of any database mutations in finally block
         from sqlmodel import delete
+
         session.exec(delete(WidgetSettings).where(WidgetSettings.guild_id == guild_id))
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == guild_id))
         session.commit()

@@ -55,7 +55,7 @@ def test_dashboard_page_accepts_widget_parameters():
         Div("Content"),
         guild_name="Some Guild Name",
         fixed_widgets=["mock_widget"],
-        floating_widgets=["mock_widget"]
+        floating_widgets=["mock_widget"],
     )
     assert "Test Title" in str(title)
     assert "Content" in str(div)
@@ -96,14 +96,9 @@ def test_dashboard_page_widget_parameters_details():
 
     # Populated lists (various types of data)
     title_filled, div_filled = DashboardPage(
-        "Title",
-        Div("Content"),
-        fixed_widgets=["widget1", {"name": "widget2"}],
-        floating_widgets=[None, 123]
+        "Title", Div("Content"), fixed_widgets=["widget1", {"name": "widget2"}], floating_widgets=[None, 123]
     )
     assert "Content" in str(div_filled)
-
-
 
 
 @pytest.mark.asyncio
@@ -181,7 +176,7 @@ def test_dashboard_page_fixed_and_floating_widgets_layout():
         "Layout Test",
         Div("Main Content Area", id="main-content"),
         fixed_widgets=[left_widget, right_widget],
-        floating_widgets=[float_br, float_bl, float_tr, float_tl]
+        floating_widgets=[float_br, float_bl, float_tr, float_tl],
     )
 
     html = str(div)
@@ -191,8 +186,12 @@ def test_dashboard_page_fixed_and_floating_widgets_layout():
     assert "margin-right: 280px;" in html
 
     # 2. Verify left and right panels with exact styles and existence of fixed widgets.
-    assert 'style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;"' in html
-    assert 'style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;"' in html
+    assert (
+        'style="position: fixed; left: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;"' in html
+    )
+    assert (
+        'style="position: fixed; right: 0; top: 80px; bottom: 0; width: 280px; overflow-y: auto; z-index: 40;"' in html
+    )
     assert "Left Widget Component" in html
     assert "Right Widget Component" in html
 
@@ -213,10 +212,7 @@ def test_dashboard_page_multiple_widgets_same_side():
     _, div_left = DashboardPage(
         "Title",
         Div("Content"),
-        fixed_widgets=[
-            Div("Left Widget 1", position_config="left"),
-            Div("Left Widget 2", position_config="left")
-        ]
+        fixed_widgets=[Div("Left Widget 1", position_config="left"), Div("Left Widget 2", position_config="left")],
     )
     html_left = str(div_left)
     assert html_left.count("margin-left: 280px;") == 1
@@ -227,10 +223,7 @@ def test_dashboard_page_multiple_widgets_same_side():
     _, div_right = DashboardPage(
         "Title",
         Div("Content"),
-        fixed_widgets=[
-            Div("Right Widget 1", position_config="right"),
-            Div("Right Widget 2", position_config="right")
-        ]
+        fixed_widgets=[Div("Right Widget 1", position_config="right"), Div("Right Widget 2", position_config="right")],
     )
     html_right = str(div_right)
     assert html_right.count("margin-right: 280px;") == 1
@@ -241,10 +234,7 @@ def test_dashboard_page_multiple_widgets_same_side():
     _, div_both = DashboardPage(
         "Title",
         Div("Content"),
-        fixed_widgets=[
-            Div("Left Widget", position_config="left"),
-            Div("Right Widget", position_config="right")
-        ]
+        fixed_widgets=[Div("Left Widget", position_config="left"), Div("Right Widget", position_config="right")],
     )
     html_both = str(div_both)
     assert html_both.count("margin-left: 280px;") == 1
@@ -288,17 +278,18 @@ def test_dashboard_page_string_directly_char_by_char():
 @patch("app.ui.dashboard.get_widget_settings")
 @patch("app.ui.dashboard.is_gadget_enabled")
 @patch("app.ui.dashboard.GadgetInspector")
-def test_get_ordered_widgets_includes_position_config(mock_inspector_cls, mock_is_gadget_enabled, mock_get_widget_settings):
+def test_get_ordered_widgets_includes_position_config(
+    mock_inspector_cls, mock_is_gadget_enabled, mock_get_widget_settings
+):
     # Setup mock widget function with position_config attribute
     def mock_widget_func():
         pass
+
     mock_widget_func.position_config = "left"
     mock_widget_func.__name__ = "guild_admin_test_widget"
 
     mock_inspector = MagicMock()
-    mock_inspector.inspect_widgets.return_value = {
-        "test_ext": [mock_widget_func]
-    }
+    mock_inspector.inspect_widgets.return_value = {"test_ext": [mock_widget_func]}
     mock_inspector_cls.return_value = mock_inspector
 
     mock_is_gadget_enabled.return_value = True
@@ -308,11 +299,12 @@ def test_get_ordered_widgets_includes_position_config(mock_inspector_cls, mock_i
             "is_enabled": True,
             "column_span": 6,
             "display_order": 2,
-            "position_config": "right"
+            "position_config": "right",
         }
     }
 
     from app.ui.dashboard import _get_ordered_widgets
+
     widgets = _get_ordered_widgets(2)
 
     assert len(widgets) == 1
@@ -320,11 +312,7 @@ def test_get_ordered_widgets_includes_position_config(mock_inspector_cls, mock_i
 
     # Test 2: fallback to function default when settings position_config is None
     mock_get_widget_settings.return_value = {
-        "guild_admin_test_widget": {
-            "is_enabled": True,
-            "column_span": 6,
-            "display_order": 2
-        }
+        "guild_admin_test_widget": {"is_enabled": True, "column_span": 6, "display_order": 2}
     }
     widgets = _get_ordered_widgets(2)
     assert len(widgets) == 1
@@ -339,7 +327,7 @@ def test_render_layout_editor_rendering():
             "enabled": True,
             "span": 4,
             "order": 1,
-            "position_config": "left"
+            "position_config": "left",
         },
         {
             "ext": "test_ext",
@@ -347,7 +335,7 @@ def test_render_layout_editor_rendering():
             "enabled": True,
             "span": 4,
             "order": 2,
-            "position_config": "bottom-right"
+            "position_config": "bottom-right",
         },
         {
             "ext": "test_ext",
@@ -355,11 +343,12 @@ def test_render_layout_editor_rendering():
             "enabled": True,
             "span": 4,
             "order": 3,
-            "position_config": None
-        }
+            "position_config": None,
+        },
     ]
 
     from app.ui.dashboard import _render_layout_editor
+
     rendered = _render_layout_editor(widgets, 2)
     html = str(rendered)
 
@@ -390,13 +379,15 @@ async def test_layout_update_position_config(mock_render, mock_get_ordered, mock
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "field": "position_config",
-        "value": "right",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext",
+            "widget": "guild_admin_widget",
+            "field": "position_config",
+            "value": "right",
+            "scope_id": "2",
+        }
+    )
 
     mock_get_ordered.return_value = []
     mock_render.return_value = Div("Mocked Layout Editor")
@@ -412,6 +403,7 @@ async def test_layout_update_position_config(mock_render, mock_get_ordered, mock
 @patch("app.ui.dashboard._render_layout_editor")
 async def test_layout_update_missing_keys(mock_render, mock_get_ordered, mock_update_setting):
     from app.ui.dashboard import layout_update
+
     # 1. Completely empty form payload
     mock_req = MagicMock()
     mock_req.form = AsyncMock(return_value={})
@@ -425,11 +417,9 @@ async def test_layout_update_missing_keys(mock_render, mock_get_ordered, mock_up
 
     # 2. Missing field key, but ext and widget exist
     mock_req_missing_field = MagicMock()
-    mock_req_missing_field.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "scope_id": "2"
-    })
+    mock_req_missing_field.form = AsyncMock(
+        return_value={"ext": "test_ext", "widget": "guild_admin_widget", "scope_id": "2"}
+    )
     resp = await layout_update(mock_req_missing_field)
     assert "Unknown field" in str(resp)
     mock_update_setting.assert_not_called()
@@ -438,14 +428,17 @@ async def test_layout_update_missing_keys(mock_render, mock_get_ordered, mock_up
 @pytest.mark.asyncio
 async def test_layout_update_malformed_scope_id():
     from app.ui.dashboard import layout_update
+
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "field": "position_config",
-        "value": "right",
-        "scope_id": "malformed_string"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext",
+            "widget": "guild_admin_widget",
+            "field": "position_config",
+            "value": "right",
+            "scope_id": "malformed_string",
+        }
+    )
     # scope_id of "malformed_string" should raise ValueError
     with pytest.raises(ValueError):
         await layout_update(mock_req)
@@ -454,14 +447,17 @@ async def test_layout_update_malformed_scope_id():
 @pytest.mark.asyncio
 async def test_layout_update_column_span_non_integer():
     from app.ui.dashboard import layout_update
+
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "field": "column_span",
-        "value": "not_an_int",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext",
+            "widget": "guild_admin_widget",
+            "field": "column_span",
+            "value": "not_an_int",
+            "scope_id": "2",
+        }
+    )
     # value of "not_an_int" for column_span should raise ValueError
     with pytest.raises(ValueError):
         await layout_update(mock_req)
@@ -473,15 +469,18 @@ async def test_layout_update_column_span_non_integer():
 @patch("app.ui.dashboard._render_layout_editor")
 async def test_layout_update_column_span_extreme_values(mock_render, mock_get_ordered, mock_update_setting):
     from app.ui.dashboard import layout_update
+
     # Value is extremely large integer
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "field": "column_span",
-        "value": "999999999",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext",
+            "widget": "guild_admin_widget",
+            "field": "column_span",
+            "value": "999999999",
+            "scope_id": "2",
+        }
+    )
     mock_get_ordered.return_value = []
     mock_render.return_value = Div("Mocked Layout Editor")
 
@@ -495,20 +494,25 @@ async def test_layout_update_column_span_extreme_values(mock_render, mock_get_or
 @patch("app.ui.dashboard._render_layout_editor")
 async def test_layout_update_position_config_arbitrary_values(mock_render, mock_get_ordered, mock_update_setting):
     from app.ui.dashboard import layout_update
+
     # Check that any arbitrary string is accepted and sent to the database helper
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "field": "position_config",
-        "value": "arbitrary_unsafe_value_xyz",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext",
+            "widget": "guild_admin_widget",
+            "field": "position_config",
+            "value": "arbitrary_unsafe_value_xyz",
+            "scope_id": "2",
+        }
+    )
     mock_get_ordered.return_value = []
     mock_render.return_value = Div("Mocked Layout Editor")
 
     await layout_update(mock_req)
-    mock_update_setting.assert_called_once_with(2, "test_ext", "guild_admin_widget", "position_config", "arbitrary_unsafe_value_xyz")
+    mock_update_setting.assert_called_once_with(
+        2, "test_ext", "guild_admin_widget", "position_config", "arbitrary_unsafe_value_xyz"
+    )
 
 
 def test_render_layout_editor_invalid_position_config():
@@ -520,10 +524,11 @@ def test_render_layout_editor_invalid_position_config():
             "enabled": True,
             "span": 4,
             "order": 1,
-            "position_config": "invalid_position_config_here"
+            "position_config": "invalid_position_config_here",
         }
     ]
     from app.ui.dashboard import _render_layout_editor
+
     rendered = _render_layout_editor(widgets, 2)
     html = str(rendered)
 
@@ -545,17 +550,12 @@ async def test_layout_move_fixed_or_floating_widget(mock_render, mock_get_ordere
     # We mock _get_ordered_widgets to return a list of widgets, where index 0 is fixed
     mock_get_ordered.return_value = [
         {"ext": "ext1", "widget": "fixed_w", "enabled": True, "span": 4, "order": 0, "position_config": "left"},
-        {"ext": "ext2", "widget": "grid_w", "enabled": True, "span": 4, "order": 1, "position_config": None}
+        {"ext": "ext2", "widget": "grid_w", "enabled": True, "span": 4, "order": 1, "position_config": None},
     ]
     mock_render.return_value = Div("Mocked Layout Editor")
 
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "ext1",
-        "widget": "fixed_w",
-        "direction": "down",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(return_value={"ext": "ext1", "widget": "fixed_w", "direction": "down", "scope_id": "2"})
 
     await layout_move(mock_req)
 
@@ -575,18 +575,22 @@ async def test_layout_update_sql_injection_attempt(mock_render, mock_get_ordered
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext",
-        "widget": "guild_admin_widget",
-        "field": "position_config",
-        "value": "'; DROP TABLE widget_settings; --",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext",
+            "widget": "guild_admin_widget",
+            "field": "position_config",
+            "value": "'; DROP TABLE widget_settings; --",
+            "scope_id": "2",
+        }
+    )
     mock_get_ordered.return_value = []
     mock_render.return_value = Div("Mocked Layout Editor")
 
     await layout_update(mock_req)
-    mock_update_setting.assert_called_once_with(2, "test_ext", "guild_admin_widget", "position_config", "'; DROP TABLE widget_settings; --")
+    mock_update_setting.assert_called_once_with(
+        2, "test_ext", "guild_admin_widget", "position_config", "'; DROP TABLE widget_settings; --"
+    )
 
 
 @pytest.mark.asyncio
@@ -597,18 +601,22 @@ async def test_layout_update_null_byte_value(mock_render, mock_get_ordered, mock
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
-    mock_req.form = AsyncMock(return_value={
-        "ext": "test_ext\x00",
-        "widget": "guild_admin_widget\x00",
-        "field": "position_config",
-        "value": "right\x00",
-        "scope_id": "2"
-    })
+    mock_req.form = AsyncMock(
+        return_value={
+            "ext": "test_ext\x00",
+            "widget": "guild_admin_widget\x00",
+            "field": "position_config",
+            "value": "right\x00",
+            "scope_id": "2",
+        }
+    )
     mock_get_ordered.return_value = []
     mock_render.return_value = Div("Mocked Layout Editor")
 
     await layout_update(mock_req)
-    mock_update_setting.assert_called_once_with(2, "test_ext\x00", "guild_admin_widget\x00", "position_config", "right\x00")
+    mock_update_setting.assert_called_once_with(
+        2, "test_ext\x00", "guild_admin_widget\x00", "position_config", "right\x00"
+    )
 
 
 def test_dashboard_page_with_provisioned_widgets(session):
@@ -622,9 +630,10 @@ def test_dashboard_page_with_provisioned_widgets(session):
     extension_name = "utilities"
 
     # Patch init_connection_engine for both page rendering and widget updating
-    with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()), \
-         patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
-
+    with (
+        patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()),
+        patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()),
+    ):
         # Provision the default widgets in the database
         update_guild_extension_setting(
             guild_id=guild_id,
@@ -681,11 +690,7 @@ def test_dashboard_page_fixed_sidebar_rendering_margins_isolated():
     # If only a left sidebar is active
     left_w = Div("Left Widget")
     left_w.position_config = "left"
-    _, div_left = DashboardPage(
-        "Title",
-        Div("Content"),
-        fixed_widgets=[left_w]
-    )
+    _, div_left = DashboardPage("Title", Div("Content"), fixed_widgets=[left_w])
     html_left = str(div_left)
     assert "margin-left: 280px;" in html_left
     assert "margin-right: 280px;" not in html_left
@@ -693,31 +698,19 @@ def test_dashboard_page_fixed_sidebar_rendering_margins_isolated():
     # If only a right sidebar is active
     right_w = Div("Right Widget")
     right_w.position_config = "right"
-    _, div_right = DashboardPage(
-        "Title",
-        Div("Content"),
-        fixed_widgets=[right_w]
-    )
+    _, div_right = DashboardPage("Title", Div("Content"), fixed_widgets=[right_w])
     html_right = str(div_right)
     assert "margin-right: 280px;" in html_right
     assert "margin-left: 280px;" not in html_right
 
     # If both are active
-    _, div_both = DashboardPage(
-        "Title",
-        Div("Content"),
-        fixed_widgets=[left_w, right_w]
-    )
+    _, div_both = DashboardPage("Title", Div("Content"), fixed_widgets=[left_w, right_w])
     html_both = str(div_both)
     assert "margin-left: 280px;" in html_both
     assert "margin-right: 280px;" in html_both
 
     # If neither is active
-    _, div_neither = DashboardPage(
-        "Title",
-        Div("Content"),
-        fixed_widgets=[]
-    )
+    _, div_neither = DashboardPage("Title", Div("Content"), fixed_widgets=[])
     html_neither = str(div_neither)
     assert "margin-left: 280px;" not in html_neither
     assert "margin-right: 280px;" not in html_neither
@@ -731,11 +724,7 @@ def test_dashboard_page_floating_widgets_all_corners_isolated():
         Div("Top Right", position_config="top-right"),
         Div("Top Left", position_config="top-left"),
     ]
-    _, div = DashboardPage(
-        "Title",
-        Div("Content"),
-        floating_widgets=floating_widgets
-    )
+    _, div = DashboardPage("Title", Div("Content"), floating_widgets=floating_widgets)
     html = str(div)
     assert 'style="position: fixed; z-index: 50; bottom: 20px; right: 20px;"' in html
     assert 'style="position: fixed; z-index: 50; bottom: 20px; left: 20px;"' in html
@@ -755,24 +744,20 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
     extension_name = "utilities"
 
     try:
-        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()), \
-             patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()), \
-             patch("app.ui.dashboard.get_admin_guilds", return_value={str(guild_id): {"name": "Test Server"}}):
-
+        with (
+            patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()),
+            patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()),
+            patch("app.ui.dashboard.get_admin_guilds", return_value={str(guild_id): {"name": "Test Server"}}),
+        ):
             # Create global setting enabling the widget extension
             global_setting = GuildExtensionSettings(
-                guild_id=0,
-                extension_name=extension_name,
-                gadget_type="widget",
-                is_enabled=True
+                guild_id=0, extension_name=extension_name, gadget_type="widget", is_enabled=True
             )
             session.add(global_setting)
             session.commit()
 
             # Check that WidgetSettings is currently empty for this guild
-            existing_settings = session.exec(
-                select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)
-            ).all()
+            existing_settings = session.exec(select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)).all()
             assert len(existing_settings) == 0
 
             # Call dashboard router function (representing first load)
@@ -791,12 +776,12 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
             widget_names = {w.widget_name for w in widgets}
 
             expected_widgets = {
-                "guild_admin_security_overview",
-                "guild_admin_alerts",
-                "guild_admin_auditor_settings",
-                "guild_admin_audit_roles",
-                "guild_admin_audit_channels",
-                "guild_admin_audit_permissions",
+                "guild_admin_security_overview_widget",
+                "guild_admin_alerts_widget",
+                "guild_admin_auditor_settings_widget",
+                "guild_admin_audit_roles_widget",
+                "guild_admin_audit_channels_widget",
+                "guild_admin_audit_permissions_widget",
                 "guild_admin_utilities_sidebar",
                 "guild_admin_utilities_help_bubble",
             }
@@ -807,10 +792,8 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
             assert len(widgets) == 8
     finally:
         from sqlmodel import delete
+
         session.exec(delete(WidgetSettings).where(WidgetSettings.guild_id == guild_id))
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == guild_id))
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0))
         session.commit()
-
-
-

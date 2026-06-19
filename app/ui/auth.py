@@ -213,9 +213,9 @@ def login(req, sess):
         cls="max-w-md w-full",
     )
 
-    from app.ui.page import StandardPage
+    from app.ui.page import DashboardPage
 
-    return StandardPage(
+    return DashboardPage(
         "Login | Powercord", Div(login_card, cls="flex items-center justify-center min-h-[60vh]"), auth=None
     )
 
