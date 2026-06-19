@@ -27,6 +27,7 @@ def test_security_rule_engine_with_honeypot_enabled(session):
     guild_id = 54321
 
     from sqlmodel import delete
+
     session.exec(delete(DiscordRole).where(DiscordRole.guild_id == guild_id))
     session.exec(delete(DiscordChannel).where(DiscordChannel.guild_id == guild_id))
     session.commit()

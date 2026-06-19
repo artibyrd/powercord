@@ -3,7 +3,7 @@ from typing import cast
 
 from sqlmodel import Session
 
-from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole
+from app.db.models import DiscordAuditorConfig, DiscordRole
 from app.extensions.utilities.widget import SecurityRuleEngine
 
 
@@ -38,16 +38,16 @@ def test_cache_key_boundaries(session: Session):
     # 4. Invalidate with string key - should also work
     _ = SecurityRuleEngine.evaluate(guild_id, session)
     assert len(SecurityRuleEngine._evaluation_cache) == 1
-    SecurityRuleEngine.invalidate(str(guild_id))
+    SecurityRuleEngine.invalidate(str(guild_id))  # type: ignore[arg-type]
     assert len(SecurityRuleEngine._evaluation_cache) == 0
 
     # 5. Invalidate with non-numeric string - should not crash
     _ = SecurityRuleEngine.evaluate(guild_id, session)
-    SecurityRuleEngine.invalidate("invalid_guild_id")
+    SecurityRuleEngine.invalidate("invalid_guild_id")  # type: ignore[arg-type]
     assert len(SecurityRuleEngine._evaluation_cache) == 1
 
     # 6. Invalidate with None - should not crash
-    SecurityRuleEngine.invalidate(None)
+    SecurityRuleEngine.invalidate(None)  # type: ignore[arg-type]
     assert len(SecurityRuleEngine._evaluation_cache) == 1
 
 
@@ -65,7 +65,7 @@ def test_invalidation_isolates_guilds(session: Session):
     session.add(DiscordRole(id=82001, guild_id=guild_b, name="--- Staff ---", permissions=0, position=5))
     session.commit()
 
-    res_a = SecurityRuleEngine.evaluate(guild_a, session)
+    SecurityRuleEngine.evaluate(guild_a, session)
     res_b = SecurityRuleEngine.evaluate(guild_b, session)
     assert len(SecurityRuleEngine._evaluation_cache) == 2
 

@@ -19,7 +19,7 @@ from app.extensions.utilities.widget import (
 try:
     from app.extensions.honeypot.blueprint import HoneypotChannel
 except ImportError:
-    HoneypotChannel = None
+    HoneypotChannel = None  # type: ignore[misc,assignment]
 
 
 @pytest.fixture(autouse=True)
@@ -453,4 +453,3 @@ def test_security_rule_engine_evaluate_caching(session: Session):
     # Re-evaluate after invalidation should re-run rules
     res3 = SecurityRuleEngine.evaluate(guild_id, session)
     assert res3 == res1  # Same DB state, same result
-

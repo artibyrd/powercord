@@ -1,9 +1,9 @@
 # mypy: ignore-errors
 import json
 import logging
-from cachetools import TTLCache
 from typing import Optional
 
+from cachetools import TTLCache
 from fasthtml.common import *
 from sqlmodel import Session, select
 
@@ -320,7 +320,9 @@ def guild_admin_audit_channels_widget(guild_id: int):
             summary_ui = Summary(
                 Div(
                     Div(
-                        Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
+                        Span(
+                            "▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"
+                        ),
                         icon,
                         Span(chan.name, cls=f"ml-2 {name_cls}"),
                         cls="col-span-5 flex items-center",
@@ -364,7 +366,9 @@ def guild_admin_audit_channels_widget(guild_id: int):
             summary_ui = Summary(
                 Div(
                     Div(
-                        Span("▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"),
+                        Span(
+                            "▶", cls="text-[8px] opacity-40 mr-2 group-open:rotate-90 transition-transform inline-block"
+                        ),
                         Span("📁", cls="mr-2 opacity-50"),
                         B(category.name.upper()),
                         cls="col-span-5 flex items-center text-xs font-bold opacity-60 ml-[-0.5em]",

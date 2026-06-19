@@ -73,9 +73,7 @@ async def test_get_admin_guilds_caching(mock_getenv, mock_session_cls, mock_get_
     from app.ui.helpers import _admin_guilds_cache, get_admin_guilds
 
     mock_getenv.return_value = "mock-bot-token"
-    mock_get_user_guilds.return_value = [
-        {"id": "123", "name": "Guild 1", "permissions": str(1 << 3)}
-    ]
+    mock_get_user_guilds.return_value = [{"id": "123", "name": "Guild 1", "permissions": str(1 << 3)}]
     mock_get_bot_guild_ids.return_value = {"123"}
 
     # Mock DB
@@ -104,4 +102,3 @@ async def test_get_admin_guilds_caching(mock_getenv, mock_session_cls, mock_get_
     # Call with dev-token: should not hit cache and not write to cache
     res_dev = await get_admin_guilds("dev-token", 9999)
     assert "000000000000000000" in res_dev
-

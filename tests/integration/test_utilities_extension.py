@@ -30,6 +30,7 @@ def session_fixture():
         try:
             session.rollback()
             from sqlalchemy import text
+
             for table in SQLModel.metadata.tables.values():
                 try:
                     session.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))

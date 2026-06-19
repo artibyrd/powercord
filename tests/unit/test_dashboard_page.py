@@ -203,10 +203,12 @@ def test_dashboard_page_fixed_and_floating_widgets_layout():
 
     # 2. Verify left and right panels with exact styles and existence of fixed widgets.
     assert (
-        'style="position: fixed; left: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;"' in html
+        'style="position: fixed; left: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;"'
+        in html
     )
     assert (
-        'style="position: fixed; right: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;"' in html
+        'style="position: fixed; right: 16px; top: 80px; bottom: 16px; width: 280px; overflow-y: auto; z-index: 40;"'
+        in html
     )
     assert "Left Widget Component" in html
     assert "Right Widget Component" in html

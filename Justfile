@@ -8,6 +8,7 @@ set shell := ["bash", "-cu"]
 set export
 set dotenv-load
 set unstable  # required for [parallel] (lines 105, 109)
+set positional-arguments := true
 
 import 'devkit.just'
 
@@ -39,6 +40,7 @@ default:
 # Install python dependencies
 [group: "dev"]
 install:
+    poetry() { if [ "${1-}" = "lock" ] && [ "${2-}" = "--check" ]; then command poetry check --lock; else command poetry "$@"; fi; }; poetry lock --check || poetry lock
     poetry install
 
 # Clean up temporary files
@@ -149,7 +151,7 @@ rebuild-target:
 #                                 QA COMMANDS                                  #
 # ---------------------------------------------------------------------------- #
 
-# Quality Assurance. Usage: just qa [--fix]
+# Quality Assurance (uses _timed wrapper). Usage: just qa [--fix]
 [group: "qa"]
 [arg("fix", long, value="true")]
 qa fix="false": install (lint fix) (format fix) check test
@@ -211,7 +213,7 @@ verify-dashboard: _ensure-db lint
 #                                 DB COMMANDS                                  #
 # ---------------------------------------------------------------------------- #
 
-# Upgrade the database to the latest version
+# Upgrade the database to the latest version (see also: _wait-for-compose-db)
 [group: "db"]
 db-upgrade: _ensure-db
     poetry run alembic upgrade heads
@@ -381,3 +383,32 @@ _run-with-status recipe *args:
     @just {{ recipe }} {{ args }}
     @echo '{{ GREEN }}✓ {{ recipe }} completed{{ NORMAL }}'
 alias rws := _run-with-status
+
+# Wait for containerized database to accept connections
+[private]
+_wait-for-compose-db:
+    #!/usr/bin/env bash
+    echo "Waiting for containerized database to become ready..."
+    for i in {1..30}; do
+      if docker compose exec -T app supervisorctl status postgres 2>/dev/null | grep -q "RUNNING" && docker compose exec -T app pg_isready -U postgres &>/dev/null; then
+        echo "Database is ready!"
+        exit 0
+      fi
+      echo "Database not ready yet (attempt $i/30)..."
+      sleep 2
+    done
+    echo "Error: Database did not become ready." >&2
+    exit 1
+
+# Wrap a recipe execution to print its elapsed time
+[private]
+_timed recipe *args:
+    #!/usr/bin/env bash
+    start_time=$(date +%s)
+    shift
+    just "{{recipe}}" "$@"
+    exit_code=$?
+    end_time=$(date +%s)
+    elapsed=$((end_time - start_time))
+    echo "Recipe '{{recipe}}' completed in ${elapsed}s with exit code ${exit_code}."
+    exit ${exit_code}

@@ -243,7 +243,6 @@ class TestInspectWidgets:
             # Helper functions should be excluded
             assert "get_effective_channel_permissions" not in widget_names
 
-
     def test_import_error_handled(self, tmp_path) -> None:
         """ImportError during widget import should be logged, not raised."""
         inspector = GadgetInspector()

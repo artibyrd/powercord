@@ -62,18 +62,19 @@ import app.common.alchemy
 
 original_init = app.common.alchemy.init_connection_engine
 
+
 def mocked_init():
     import inspect
+
     for frame_info in inspect.stack():
         if "test_alchemy" in frame_info.filename:
             return original_init()
     app.common.alchemy._engine = _test_engine
     return _test_engine
 
+
 app.common.alchemy.init_connection_engine = mocked_init
 app.common.alchemy._engine = _test_engine
-
-
 
 
 @pytest.fixture(scope="session")
@@ -128,6 +129,7 @@ def fixture_engine(_create_test_db):
     engine.dispose()
     try:
         from app.common.alchemy import _engine
+
         if _engine is not None:
             _engine.dispose()
     except ImportError:
@@ -142,6 +144,7 @@ def fixture_session(engine):
         try:
             session.rollback()
             from sqlalchemy import text
+
             for table in SQLModel.metadata.tables.values():
                 try:
                     session.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
@@ -157,19 +160,21 @@ def clear_global_caches():
     # Clear rule engine cache
     try:
         from app.extensions.utilities.widget import SecurityRuleEngine
+
         SecurityRuleEngine._evaluation_cache.clear()
     except ImportError:
         pass
     # Clear admin guilds helper cache
     try:
         from app.ui.helpers import _admin_guilds_cache
+
         _admin_guilds_cache.clear()
     except ImportError:
         pass
     # Stop background backup scheduler
     try:
         from app.db.db_tools import BackupService
+
         BackupService.stop_scheduler()
     except ImportError:
         pass
-

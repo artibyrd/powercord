@@ -114,9 +114,7 @@ def seed_global_settings_if_empty(session: Session):
     Checks if there are any extension settings for guild_id=0. If empty,
     provisions defaults for all cogs, widgets, sprockets.
     """
-    existing = session.exec(
-        select(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0)
-    ).first()
+    existing = session.exec(select(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0)).first()
     if existing:
         return
 
@@ -428,7 +426,7 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
         logging.error(f"Error updating extension setting: {e}", exc_info=True)
 
 
-from cachetools import TTLCache
+from cachetools import TTLCache  # type: ignore[import-untyped]
 
 _admin_guilds_cache: TTLCache = TTLCache(maxsize=1024, ttl=300)
 
@@ -439,7 +437,7 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
     if user_access_token != "dev-token":  # noqa: S105
         if user_id in _admin_guilds_cache:
             logging.info(f"Returning cached admin guilds for user {user_id}")
-            return _admin_guilds_cache[user_id]
+            return cast(dict[str, dict], _admin_guilds_cache[user_id])
 
     ADMIN_PERM = 1 << 3
     bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")

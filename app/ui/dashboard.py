@@ -434,7 +434,8 @@ def _get_ordered_widgets(scope_id: int) -> list[dict]:
     widgets.sort(
         key=lambda w: (
             not w["enabled"],
-            w["enabled"] and w.get("default_pos") in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left"),
+            w["enabled"]
+            and w.get("default_pos") in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left"),
             w["order"],
         )
     )
@@ -514,12 +515,15 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
             "bottom-right": "Bottom Right",
             "bottom-left": "Bottom Left",
             "top-right": "Top Right",
-            "top-left": "Top Left"
+            "top-left": "Top Left",
         }
         collision_labels = [pos_names.get(pos, pos) for pos in collisions]
         warning_banner = Div(
-            Span(f"⚠️ Position Conflict: Multiple widgets are active in: {', '.join(collision_labels)}. They may overlap.", cls="font-semibold"),
-            cls="alert alert-warning mb-4"
+            Span(
+                f"⚠️ Position Conflict: Multiple widgets are active in: {', '.join(collision_labels)}. They may overlap.",
+                cls="font-semibold",
+            ),
+            cls="alert alert-warning mb-4",
         )
 
     rows = []
@@ -1138,6 +1142,7 @@ async def post_auditor_settings(guild_id: int, req):
         session.commit()
 
     from app.extensions.utilities.widget import SecurityRuleEngine
+
     SecurityRuleEngine.invalidate(guild_id)
 
     return Response(
@@ -1181,6 +1186,7 @@ async def dashboard_scan_guild(guild_id: int):
         logging.error(f"Failed to scan guild {guild_id}: {e}")
 
     from app.extensions.utilities.widget import SecurityRuleEngine
+
     SecurityRuleEngine.invalidate(guild_id)
 
     return Response(headers={"HX-Refresh": "true"})

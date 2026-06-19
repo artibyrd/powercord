@@ -151,6 +151,7 @@ class GadgetInspector:
             try:
                 module = importlib.import_module(module_path)
                 import inspect
+
                 # Find public, callable functions in the module that match widget naming conventions.
                 widgets: list[Callable[..., Any]] = []
                 for func_name in dir(module):

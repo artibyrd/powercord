@@ -1,6 +1,7 @@
+# syntax=docker/dockerfile:1
 # --- Build Stage ---
 # Use an official Python runtime as a parent image
-FROM python:3.12-slim-bookworm as builder
+FROM python:3.12-slim-bookworm AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -20,7 +21,7 @@ RUN pip install --no-cache-dir poetry
 COPY pyproject.toml poetry.lock ./
 
 # Install dependencies without installing the project itself
-RUN poetry install --no-root --without dev,test
+RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --no-root --without dev,test
 
 # Copy only what's needed for the application to keep the build context clean
 COPY app ./app
@@ -29,7 +30,7 @@ COPY alembic.ini .
 COPY .example.env ./.example.env
 
 # Install the project itself
-RUN poetry install --without dev,test
+RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --without dev,test
 
 
 # --- Final Stage ---
@@ -43,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     postgresql \
     openssl \
+    && ln -sf /etc/supervisor/supervisord.conf /etc/supervisord.conf \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual environment and application code from the builder stage

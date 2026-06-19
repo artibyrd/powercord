@@ -80,7 +80,9 @@ def StandardPage(title: str, *children, auth: dict | None = None):
     )
 
 
-def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name: str | None = None, guild_icon: str | None = None):
+def TopAppBar(
+    auth: dict | None = None, guild_id: int | None = None, guild_name: str | None = None, guild_icon: str | None = None
+):
     """Navbar for the dashboard view."""
     # Branding
     branding = A(
@@ -147,7 +149,11 @@ def TopAppBar(auth: dict | None = None, guild_id: int | None = None, guild_name:
     left_side = Div(branding, guild_info if guild_info else "", cls="flex-1 flex items-center")
     right_side = Div(login_section, cls="flex-none flex items-center gap-2")
 
-    return Div(left_side, right_side, cls="navbar bg-base-100 shadow-md border-b border-base-content/10 px-4 py-2 sticky top-0 z-[50]")
+    return Div(
+        left_side,
+        right_side,
+        cls="navbar bg-base-100 shadow-md border-b border-base-content/10 px-4 py-2 sticky top-0 z-[50]",
+    )
 
 
 def DashboardPage(
@@ -293,7 +299,9 @@ def DashboardPage(
 
     main_layout = Div(*layout_children, cls="flex flex-row min-h-screen bg-base-100")
 
-    topbar_el = TopAppBar(auth=auth, guild_id=guild_id, guild_name=guild_name, guild_icon=guild_icon) if show_topbar else None
+    topbar_el = (
+        TopAppBar(auth=auth, guild_id=guild_id, guild_name=guild_name, guild_icon=guild_icon) if show_topbar else None
+    )
 
     # Construct complete layout elements
     layout_elements = []
