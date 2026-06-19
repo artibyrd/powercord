@@ -198,8 +198,8 @@ def public_home(sess: dict):
             if not widget_name:
                 continue
 
-            # Skip admin widgets on public page
-            if widget_name.startswith("admin_"):
+            # Skip admin and guild admin widgets on public page
+            if widget_name.startswith("admin_") or widget_name.startswith("guild_admin_"):
                 continue
 
             widget_setting = settings.get(widget_name, {})
