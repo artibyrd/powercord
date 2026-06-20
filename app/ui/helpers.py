@@ -629,3 +629,52 @@ def get_extension_details_modal(extension_name: str, access_token: str | None = 
         # Auto-open when injected
         open=True,
     )
+
+
+def restore_default_widget_settings(guild_id: int):
+    """Restore default widget settings for a guild (or global: 0) from manifests."""
+    engine = init_connection_engine()
+    try:
+        with Session(engine) as session:
+            # 1. Delete all existing widget settings for this guild_id
+            from sqlmodel import delete
+
+            delete_stmt = delete(WidgetSettings).where(cast(Any, WidgetSettings.guild_id) == guild_id)
+            session.exec(delete_stmt)
+
+            # 2. Get all extensions
+            inspector = GadgetInspector()
+            all_extensions = inspector.inspect_extensions()
+
+            from app.common.extension_manager import EXTENSIONS_DIR, load_manifest
+
+            for ext_name in all_extensions.keys():
+                # Check if widget gadget is enabled for this guild
+                if is_gadget_enabled(guild_id, ext_name, "widget"):
+                    ext_path = EXTENSIONS_DIR / ext_name
+                    if ext_path.exists():
+                        try:
+                            manifest = load_manifest(ext_path)
+                            default_widgets = manifest.get("default_widgets", [])
+                            for dw in default_widgets:
+                                widget_name = dw.get("widget_name")
+                                display_order = dw.get("display_order", 99)
+                                column_span = dw.get("column_span", 4)
+                                position_config = dw.get("position_config", None)
+
+                                new_widget = WidgetSettings(
+                                    guild_id=guild_id,
+                                    extension_name=ext_name,
+                                    widget_name=widget_name,
+                                    is_enabled=True,
+                                    display_order=display_order,
+                                    column_span=column_span,
+                                    position_config=position_config,
+                                )
+                                session.add(new_widget)
+                        except Exception as e:
+                            logging.error(f"Error seeding default widgets for {ext_name} on restore: {e}")
+            session.commit()
+            logging.info(f"Successfully restored default widget settings for guild {guild_id}")
+    except Exception as e:
+        logging.error(f"Error restoring default widget settings for guild {guild_id}: {e}")

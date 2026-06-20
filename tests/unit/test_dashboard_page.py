@@ -825,3 +825,82 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == guild_id))
         session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0))
         session.commit()
+
+
+@pytest.mark.asyncio
+async def test_restore_default_widget_settings(session):
+    """Verify restore_default_widget_settings resets a guild's widgets to manifest defaults."""
+    from sqlmodel import select
+
+    from app.db.models import GuildExtensionSettings, WidgetSettings
+    from app.ui.helpers import restore_default_widget_settings
+
+    guild_id = 999124
+    extension_name = "utilities"
+
+    try:
+        with (
+            patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()),
+            patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()),
+        ):
+            # 1. Enable extension globally
+            global_setting = GuildExtensionSettings(
+                guild_id=0, extension_name=extension_name, gadget_type="widget", is_enabled=True
+            )
+            session.add(global_setting)
+            session.commit()
+
+            # 2. Insert customized layout widget settings for guild
+            custom_widget = WidgetSettings(
+                guild_id=guild_id,
+                extension_name=extension_name,
+                widget_name="guild_admin_security_overview_widget",
+                is_enabled=False,  # default is True
+                display_order=12,  # custom
+                column_span=8,  # custom
+            )
+            session.add(custom_widget)
+            session.commit()
+
+            # 3. Call restore default widget settings
+            restore_default_widget_settings(guild_id)
+
+            # 4. Assert that customized setting was reset to default
+            restored = session.exec(
+                select(WidgetSettings).where(
+                    WidgetSettings.guild_id == guild_id,
+                    WidgetSettings.widget_name == "guild_admin_security_overview_widget",
+                )
+            ).first()
+
+            assert restored is not None
+            assert restored.is_enabled is True
+            assert restored.column_span == 4  # default from manifest
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(WidgetSettings).where(WidgetSettings.guild_id == guild_id))
+        session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == guild_id))
+        session.exec(delete(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0))
+        session.commit()
+
+
+@pytest.mark.asyncio
+@patch("app.ui.dashboard._render_layout_editor")
+@patch("app.ui.dashboard._get_ordered_widgets")
+@patch("app.ui.helpers.restore_default_widget_settings")
+async def test_layout_restore_route(mock_restore, mock_get_ordered, mock_render):
+    """Verify that layout_restore route calls restore function and renders the layout editor."""
+    from app.ui.dashboard import layout_restore
+
+    mock_req = AsyncMock()
+    mock_req.form.return_value = {"scope_id": "999124"}
+    mock_render.return_value = Div("Mocked Layout Editor")
+
+    resp = await layout_restore(mock_req)
+
+    mock_restore.assert_called_once_with(999124)
+    mock_get_ordered.assert_called_once_with(999124)
+    mock_render.assert_called_once()
+    assert str(resp) == "<div>Mocked Layout Editor</div>"

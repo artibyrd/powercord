@@ -670,8 +670,22 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
             )
         )
 
-    table_card = Card(
-        "Widget Configuration",
+    card_content = []
+    if scope_id > 1:
+        restore_form = Form(
+            Hidden(name="scope_id", value=str(scope_id)),
+            Button(
+                "Restore Default Layout",
+                cls="btn btn-outline btn-warning btn-sm mb-4",
+                hx_confirm="Are you sure you want to restore the default layout? All custom positioning and sizing changes will be lost.",
+            ),
+            hx_post="/admin/layout/restore",
+            hx_target="#layout-editor",
+            hx_swap="innerHTML",
+        )
+        card_content.append(restore_form)
+
+    card_content.append(
         Div(
             Table(
                 Thead(
@@ -687,7 +701,12 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
                 cls="table table-zebra w-full",
             ),
             cls="overflow-x-auto",
-        ),
+        )
+    )
+
+    table_card = Card(
+        "Widget Configuration",
+        Div(*card_content),
     )
 
     # Live preview: shows widgets in a 12-column CSS grid
@@ -883,6 +902,21 @@ async def layout_move(req):
     # Persist new order
     for new_order, w in enumerate(widgets):
         update_widget_setting(scope_id, w["ext"], w["widget"], "display_order", new_order)
+
+    widgets = _get_ordered_widgets(scope_id)
+    return _render_layout_editor(widgets, scope_id)
+
+
+@dashboard_router("/admin/layout/restore", methods=["POST"])
+async def layout_restore(req):
+    """Handles restoring the default widget layout for a given scope/guild."""
+    form = await req.form()
+    raw_scope = form.get("scope_id", "")
+    scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
+
+    from app.ui.helpers import restore_default_widget_settings
+
+    restore_default_widget_settings(scope_id)
 
     widgets = _get_ordered_widgets(scope_id)
     return _render_layout_editor(widgets, scope_id)
