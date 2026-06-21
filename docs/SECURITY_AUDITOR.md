@@ -31,29 +31,29 @@ The engine implements 8 rules to identify leaks and misconfigurations:
 
 ### 1. Category Permission Baseline
 - **Category**: `exposure`
-- **Severity**: `Medium` (escalates to `High` if View Channel `1 << 10` is exposed)
-- **Conditions**: Compares explicit permission overrides of child channels against their parent category. An alert is raised if a target (role or member) has less restricted permissions in the child channel than in the category (e.g., additional allows or removed denies).
-- **Risks**: Silent permission drift or exposure where sensitive content becomes visible or actions become possible to users restricted at the category level.
+- **Severity**: `Medium` (escalates to `High` if View Channel `1 << 10` is exposed; downgrades to `Low` if the leak is inert)
+- **Conditions**: Compares explicit permission overrides of child channels against their parent category. An alert is raised if a target (role or member) has less restricted permissions in the child channel than in the category (e.g., additional allows or removed denies). If the leaked permissions are rendered inert because View Channel is effectively denied for the target (either at the child level or inherited from the parent category), the alert is downgraded to `Low` severity and annotated as `[INERT]`.
+- **Risks**: Silent permission drift or exposure where sensitive content becomes visible or actions become possible to users restricted at the category level. Inert leaks indicate misconfigured overwrites that, while not currently exploitable, may become active if View Channel restrictions change.
 - **Remediation**: Synchronize the channel's overrides to match the parent category, or remove the conflicting explicit permissions from the child channel.
 
 ### 2. Public Announcement Protection
 - **Category**: `pings`
 - **Severity**: `High`
-- **Conditions**: Evaluates announcement/rules channels (configured via `announcement_channel_ids`, or containing "announcement" or "rules" in their name). Checks if any non-staff role (e.g. `@everyone` or roles below the staff separator) has Send Messages (`1 << 11`), Mention Everyone (`1 << 17`), or global Administrator (`1 << 3`) permissions.
+- **Conditions**: Evaluates announcement/rules channels (configured via `announcement_channel_ids`, or containing "announcement" or "rules" in their name). Checks if any non-staff role (e.g. `@everyone` or roles below the staff separator) has Send Messages (`1 << 11`), Mention Everyone (`1 << 17`), or global Administrator (`1 << 3`) permissions. Alerts are only raised when the role has effective View Channel (`1 << 10`) access, including permissions inherited from the parent category.
 - **Risks**: Malicious or regular users sending unauthorized messages or pinging `@everyone`/`@here`, causing server-wide disruption, announcement contamination, or mass ping spam.
 - **Remediation**: Explicitly deny Send Messages and Mention Everyone permissions in the announcement channel for `@everyone` and any non-staff roles.
 
 ### 3. Exposed Staff Channels
 - **Category**: `exposure`
 - **Severity**: `High`
-- **Conditions**: Checks channels designated as staff channels (configured via `staff_channel_ids`, or containing "staff", "admin", or "moderator" in their name). An alert is triggered if any non-staff role (e.g. `@everyone` or roles below the staff separator) has View Channel (`1 << 10`) permission.
+- **Conditions**: Checks channels designated as staff channels (configured via `staff_channel_ids`, or containing "staff", "admin", or "moderator" in their name). An alert is triggered if any non-staff role (e.g. `@everyone` or roles below the staff separator) has View Channel (`1 << 10`) permission. Effective permissions are computed using the shared permission computation function, which accounts for parent category overwrite inheritance.
 - **Risks**: Leakage of confidential moderation logs, internal discussions, bot commands, or security procedures to general members.
 - **Remediation**: Edit the channel permissions to ensure the `@everyone` role and all non-staff roles are explicitly denied the View Channel permission.
 
 ### 4. Unauthorized Chat Pings in Non-Text Locations
 - **Category**: `pings`
 - **Severity**: `Medium`
-- **Conditions**: Scans non-text locations (Voice channels, Stage channels, Threads, and Forums). Triggers an alert if any non-staff role (e.g. `@everyone` or roles below the staff separator) has Send Messages (`1 << 11`), Mention Everyone (`1 << 17`), or global Administrator (`1 << 3`) permissions.
+- **Conditions**: Scans non-text locations (Voice channels, Stage channels, Threads, and Forums). Triggers an alert if any non-staff role (e.g. `@everyone` or roles below the staff separator) has Send Messages (`1 << 11`), Mention Everyone (`1 << 17`), or global Administrator (`1 << 3`) permissions. Alerts are only raised when the role has effective View Channel (`1 << 10`) access, including permissions inherited from the parent category.
 - **Risks**: Spamming text messages, triggering push notifications, or sending mass pings inside voice chats or forum threads, bypassing standard text-channel moderation structures.
 - **Remediation**: Revoke the Send Messages / Send Messages in Threads and Mention Everyone permissions for low-tier roles in these channels.
 

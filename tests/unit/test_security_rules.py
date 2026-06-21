@@ -227,7 +227,7 @@ def test_public_announcement_protection(session: Session):
     low_role = DiscordRole(id=222, guild_id=guild_id, name="Members", permissions=0, position=1)
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
 
-    # Channels
+    # Channels — grant View Channel + Send Messages so the alert fires
     ann_channel = DiscordChannel(
         id=201,
         guild_id=guild_id,
@@ -236,7 +236,7 @@ def test_public_announcement_protection(session: Session):
         type="text",
         overwrites=json.dumps(
             {
-                "222": {"allow": 1 << 11, "deny": 0}  # Allow low_role to send messages
+                "222": {"allow": (1 << 10) | (1 << 11), "deny": 0}  # View Channel + Send Messages
             }
         ),
     )
@@ -250,7 +250,8 @@ def test_public_announcement_protection(session: Session):
     assert len(alerts) > 0
     ann_alerts = [a for a in alerts if a["rule"] == "Public Announcement Protection"]
     assert len(ann_alerts) == 1
-    assert "has effective permissions 'Send Messages' in announcement channel." in ann_alerts[0]["details"]
+    assert "has effective permissions" in ann_alerts[0]["details"]
+    assert "Send Messages" in ann_alerts[0]["details"]
 
 
 def test_announcement_admin_bypass(session: Session):
@@ -274,11 +275,87 @@ def test_announcement_admin_bypass(session: Session):
     assert len(alerts) > 0
 
 
+def test_public_announcement_no_alert_when_view_channel_denied(session: Session):
+    """@everyone has Send Messages in base permissions but View Channel is denied on the channel -> no alert."""
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    ann_channel = DiscordChannel(
+        id=201,
+        guild_id=guild_id,
+        parent_id=None,
+        name="announcements",
+        type="text",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),  # Deny View Channel
+    )
+    session.add_all([config, everyone, sep_role, ann_channel])
+    session.commit()
+    rule = PublicAnnouncementProtection()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 0
+
+
+def test_public_announcement_no_alert_when_category_denies_view(session: Session):
+    """Announcement channel has no overwrites, but parent category denies View Channel -> no alert."""
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    category = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Staff Category",
+        type="category",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),  # Category denies View Channel
+    )
+    ann_channel = DiscordChannel(
+        id=201,
+        guild_id=guild_id,
+        parent_id=100,
+        name="announcements",
+        type="text",
+        overwrites="{}",  # No channel-level overwrites — inherits category deny
+    )
+    session.add_all([config, everyone, sep_role, category, ann_channel])
+    session.commit()
+    rule = PublicAnnouncementProtection()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 0
+
+
+def test_public_announcement_alert_when_view_channel_allowed(session: Session):
+    """Role can see the channel AND has Send Messages -> alert fires (regression guard)."""
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    ann_channel = DiscordChannel(
+        id=201,
+        guild_id=guild_id,
+        parent_id=None,
+        name="announcements",
+        type="text",
+        overwrites="{}",  # No overwrites — base permissions include View Channel + Send Messages
+    )
+    session.add_all([config, everyone, sep_role, ann_channel])
+    session.commit()
+    rule = PublicAnnouncementProtection()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 1
+    assert "@everyone" in alerts[0]["message"]
+    assert "Send Messages" in alerts[0]["details"]
+
+
 def test_exposed_staff_channels(session: Session):
     guild_id = 12345
 
     # Config
     config = DiscordAuditorConfig(guild_id=guild_id, staff_channel_ids="[301]")
+
+    # @everyone with View Channel in base permissions (realistic Discord default)
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=1 << 10, position=0)
 
     # Staff channel that doesn't explicitly deny view_channel
     channel_exposed = DiscordChannel(
@@ -294,7 +371,7 @@ def test_exposed_staff_channels(session: Session):
         overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),
     )
 
-    session.add_all([config, channel_exposed, channel_secure])
+    session.add_all([config, everyone, channel_exposed, channel_secure])
     session.commit()
 
     rule = ExposedStaffChannels()
@@ -351,14 +428,14 @@ def test_unauthorized_chat_pings(session: Session):
     everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=0, position=0)
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
 
-    # Voice channel allowing @everyone to Send Messages
+    # Voice channel allowing @everyone to View Channel + Send Messages
     voice_chan = DiscordChannel(
         id=401,
         guild_id=guild_id,
         parent_id=None,
         name="General Voice",
         type="voice",
-        overwrites=json.dumps({str(guild_id): {"allow": 1 << 11, "deny": 0}}),
+        overwrites=json.dumps({str(guild_id): {"allow": (1 << 10) | (1 << 11), "deny": 0}}),
     )
 
     session.add_all([config, everyone, sep_role, voice_chan])
@@ -369,7 +446,7 @@ def test_unauthorized_chat_pings(session: Session):
 
     assert len(alerts) == 1
     assert alerts[0]["rule"] == "Unauthorized Chat Pings in Non-Text Locations"
-    assert "Allowed permissions: 'Send Messages'." in alerts[0]["details"]
+    assert "Send Messages" in alerts[0]["details"]
 
 
 def test_unauthorized_chat_pings_admin_bypass(session: Session):
@@ -392,6 +469,56 @@ def test_unauthorized_chat_pings_admin_bypass(session: Session):
     alerts = rule.evaluate(guild_id, session)
     assert len(alerts) == 1
     assert "Low Admin" in alerts[0]["message"]
+
+
+def test_unauthorized_chat_pings_no_alert_when_view_channel_denied(session: Session):
+    """Voice channel allows Send Messages but View Channel is denied -> no alert."""
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    voice_chan = DiscordChannel(
+        id=401,
+        guild_id=guild_id,
+        parent_id=None,
+        name="General Voice",
+        type="voice",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),  # Deny View Channel
+    )
+    session.add_all([config, everyone, sep_role, voice_chan])
+    session.commit()
+    rule = UnauthorizedChatPings()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 0
+
+
+def test_unauthorized_chat_pings_category_inheritance(session: Session):
+    """Voice channel inherits View Channel deny from parent category -> no alert."""
+    guild_id = 12345
+    config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
+    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
+    category = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Private Category",
+        type="category",
+        overwrites=json.dumps({str(guild_id): {"allow": 0, "deny": 1 << 10}}),
+    )
+    voice_chan = DiscordChannel(
+        id=401,
+        guild_id=guild_id,
+        parent_id=100,
+        name="General Voice",
+        type="voice",
+        overwrites="{}",  # No channel overwrites — inherits category deny
+    )
+    session.add_all([config, everyone, sep_role, category, voice_chan])
+    session.commit()
+    rule = UnauthorizedChatPings()
+    alerts = rule.evaluate(guild_id, session)
+    assert len(alerts) == 0
 
 
 def test_low_tier_role_privileges(session: Session):
@@ -556,3 +683,88 @@ def test_security_rule_engine_evaluate_caching(session: Session):
     # Re-evaluate after invalidation should re-run rules
     res3 = SecurityRuleEngine.evaluate(guild_id, session)
     assert res3 == res1  # Same DB state, same result
+
+
+def test_category_baseline_inert_leak_annotation(session: Session):
+    """Child channel allows Send Messages but also denies View Channel (matching parent) -> low severity + INERT marker."""
+    guild_id = 12345
+
+    parent = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Category",
+        type="category",
+        overwrites=json.dumps(
+            {
+                "999": {"allow": 0, "deny": 1 << 10}  # Deny View Channel at parent
+            }
+        ),
+    )
+    # Child allows Send Messages but ALSO denies View Channel (matching parent).
+    # The Send Messages leak is inert because View Channel is denied.
+    child = DiscordChannel(
+        id=101,
+        guild_id=guild_id,
+        parent_id=100,
+        name="restricted-channel",
+        type="text",
+        overwrites=json.dumps(
+            {
+                "999": {"allow": 1 << 11, "deny": 1 << 10}  # Allow Send Messages + Deny View Channel
+            }
+        ),
+    )
+
+    session.add_all([parent, child])
+    session.commit()
+
+    rule = CategoryPermissionBaseline()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert alerts[0]["severity"] == "low"
+    assert "[INERT" in alerts[0]["details"]
+    assert "View Channel denied" in alerts[0]["details"]
+    assert "Send Messages" in alerts[0]["details"]
+
+
+def test_category_baseline_active_leak_not_annotated(session: Session):
+    """Child channel allows Send Messages AND View Channel is allowed -> normal severity, no INERT marker."""
+    guild_id = 12345
+
+    parent = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Category",
+        type="category",
+        overwrites=json.dumps(
+            {
+                "999": {"allow": 0, "deny": 0}  # No restrictions at parent
+            }
+        ),
+    )
+    # Child allows Send Messages; View Channel is NOT denied anywhere
+    child = DiscordChannel(
+        id=101,
+        guild_id=guild_id,
+        parent_id=100,
+        name="open-channel",
+        type="text",
+        overwrites=json.dumps(
+            {
+                "999": {"allow": 1 << 11, "deny": 0}  # Allow Send Messages
+            }
+        ),
+    )
+
+    session.add_all([parent, child])
+    session.commit()
+
+    rule = CategoryPermissionBaseline()
+    alerts = rule.evaluate(guild_id, session)
+
+    assert len(alerts) == 1
+    assert alerts[0]["severity"] == "medium"  # Not downgraded
+    assert "[INERT" not in alerts[0]["details"]

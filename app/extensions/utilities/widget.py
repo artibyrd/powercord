@@ -647,6 +647,23 @@ class CategoryPermissionBaseline(SecurityRule):
                     is_view_leak = bool((leaked_allows & (1 << 10)) or (leaked_denies & (1 << 10)))
                     alert_severity = "high" if is_view_leak else self.severity
 
+                    # Check if this leak is inert because View Channel is effectively denied
+                    view_channel_bit = 1 << 10
+                    target_has_view = False
+                    if c_allow & view_channel_bit:
+                        target_has_view = True
+                    elif not (c_deny & view_channel_bit):
+                        # Not denied at child level — check parent
+                        if not (p_deny & view_channel_bit):
+                            target_has_view = True
+
+                    is_inert = not target_has_view and not is_view_leak
+                    if is_inert:
+                        alert_severity = "low"
+                        inert_label = " [INERT — View Channel denied; this leak has no practical effect]"
+                    else:
+                        inert_label = ""
+
                     target_meta = child_ov.get(target_id, {})
                     t_type = target_meta.get("type")
                     t_name = target_meta.get("name")
@@ -674,7 +691,7 @@ class CategoryPermissionBaseline(SecurityRule):
                             "category": self.category,
                             "severity": alert_severity,
                             "message": f"Channel #{child.name} has permission exposure leak compared to parent category {parent.name}.",
-                            "details": f"Target {display_name} has less restricted overwrites. Leaked allows: {decode_permissions(leaked_allows)}, leaked denies: {decode_permissions(leaked_denies)}.",
+                            "details": f"Target {display_name} has less restricted overwrites. Leaked allows: {decode_permissions(leaked_allows)}, leaked denies: {decode_permissions(leaked_denies)}.{inert_label}",
                             "action_buttons": [],
                         }
                     )
@@ -682,11 +699,19 @@ class CategoryPermissionBaseline(SecurityRule):
 
 
 def get_effective_channel_permissions(
-    role: DiscordRole, channel: DiscordChannel, everyone_role: Optional[DiscordRole], overwrites: dict
+    role: DiscordRole,
+    channel: DiscordChannel,
+    everyone_role: Optional[DiscordRole],
+    overwrites: dict,
+    parent_overwrites: Optional[dict] = None,
 ) -> int:
+    # Merge parent category overwrites as base layer; channel entries take full precedence per target
+    effective_ow = dict(parent_overwrites) if parent_overwrites else {}
+    effective_ow.update(overwrites)
+
     base_everyone = everyone_role.permissions if everyone_role else 0
     if role.position == 0 or (everyone_role and role.id == everyone_role.id):
-        ev_ov = overwrites.get(str(role.id), {})
+        ev_ov = effective_ow.get(str(role.id), {})
         allow_ev = ev_ov.get("allow", 0)
         deny_ev = ev_ov.get("deny", 0)
         p = (base_everyone & ~deny_ev) | allow_ev
@@ -696,13 +721,13 @@ def get_effective_channel_permissions(
 
     base_role = role.permissions | base_everyone
     ev_id = str(everyone_role.id) if everyone_role else str(role.guild_id)
-    ev_ov = overwrites.get(ev_id, {})
+    ev_ov = effective_ow.get(ev_id, {})
     allow_ev = ev_ov.get("allow", 0)
     deny_ev = ev_ov.get("deny", 0)
 
     p = (base_role & ~deny_ev) | allow_ev
 
-    role_ov = overwrites.get(str(role.id), {})
+    role_ov = effective_ow.get(str(role.id), {})
     allow_r = role_ov.get("allow", 0)
     deny_r = role_ov.get("deny", 0)
 
@@ -739,6 +764,7 @@ class PublicAnnouncementProtection(SecurityRule):
                 sep_pos = sep_role.position
 
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        categories = {c.id: c for c in channels if c.type == "category"}
         alerts = []
 
         for c in channels:
@@ -753,11 +779,23 @@ class PublicAnnouncementProtection(SecurityRule):
             except Exception:  # noqa: S112
                 continue
 
+            # Resolve parent category overwrites for inheritance
+            parent_overwrites = None
+            parent = categories.get(c.parent_id) if c.parent_id else None
+            if parent:
+                try:
+                    parent_overwrites = json.loads(parent.overwrites or "{}")
+                except Exception:  # noqa: S110
+                    pass
+
             for r in roles:
                 is_everyone = r.position == 0 or r.id == guild_id
                 is_below_sep = sep_pos is not None and r.position < sep_pos
                 if is_everyone or is_below_sep:
-                    p = get_effective_channel_permissions(r, c, everyone_role, overwrites)
+                    p = get_effective_channel_permissions(r, c, everyone_role, overwrites, parent_overwrites)
+                    # Skip alert if the role can't even see the channel
+                    if not (p & (1 << 10)):
+                        continue
                     # Check for send messages (1<<11), mention everyone (1<<17), or global Administrator (1<<3)
                     if (p & (1 << 11)) or (p & (1 << 17)) or (r.permissions & (1 << 3)):
                         alerts.append(
@@ -825,33 +863,18 @@ class ExposedStaffChannels(SecurityRule):
             except Exception:
                 overwrites = {}
 
-            # Inherit parent overwrites
+            # Resolve parent category overwrites for inheritance
+            parent_overwrites = None
             parent = categories.get(c.parent_id) if c.parent_id else None
             if parent:
                 try:
-                    parent_ov = json.loads(parent.overwrites or "{}")
-                except Exception:
-                    parent_ov = {}
-                effective_overwrites = dict(parent_ov)
-                effective_overwrites.update(overwrites)
-            else:
-                effective_overwrites = overwrites
+                    parent_overwrites = json.loads(parent.overwrites or "{}")
+                except Exception:  # noqa: S110
+                    pass
 
             for r in non_staff_roles:
-                # Compute View Channel permission access
-                if r.position == 0 or r.id == guild_id:
-                    everyone_ov = effective_overwrites.get(str(r.id), {})
-                    has_view = (everyone_ov.get("deny", 0) & (1 << 10)) == 0
-                else:
-                    r_ov = effective_overwrites.get(str(r.id), {})
-                    everyone_ov = effective_overwrites.get(str(guild_id), {})
-                    everyone_denied = (everyone_ov.get("deny", 0) & (1 << 10)) != 0
-
-                    has_view = (
-                        bool(r.permissions & (1 << 3))
-                        or bool(r_ov.get("allow", 0) & (1 << 10))
-                        or (not everyone_denied and (r_ov.get("deny", 0) & (1 << 10)) == 0)
-                    )
+                p = get_effective_channel_permissions(r, c, everyone_role, overwrites, parent_overwrites)
+                has_view = bool(p & (1 << 10))
 
                 if has_view:
                     alerts.append(
@@ -886,6 +909,7 @@ class UnauthorizedChatPings(SecurityRule):
                 sep_pos = sep_role.position
 
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        categories = {c.id: c for c in channels if c.type == "category"}
         alerts = []
 
         for c in channels:
@@ -897,11 +921,23 @@ class UnauthorizedChatPings(SecurityRule):
             except Exception:  # noqa: S112
                 continue
 
+            # Resolve parent category overwrites for inheritance
+            parent_overwrites = None
+            parent = categories.get(c.parent_id) if c.parent_id else None
+            if parent:
+                try:
+                    parent_overwrites = json.loads(parent.overwrites or "{}")
+                except Exception:  # noqa: S110
+                    pass
+
             for r in roles:
                 is_everyone = r.position == 0 or r.id == guild_id
                 is_below_sep = sep_pos is not None and r.position < sep_pos
                 if is_everyone or is_below_sep:
-                    p = get_effective_channel_permissions(r, c, everyone_role, overwrites)
+                    p = get_effective_channel_permissions(r, c, everyone_role, overwrites, parent_overwrites)
+                    # Skip alert if the role can't even see the channel
+                    if not (p & (1 << 10)):
+                        continue
                     if (p & (1 << 11)) or (p & (1 << 17)) or (r.permissions & (1 << 3)):
                         alerts.append(
                             {
