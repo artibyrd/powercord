@@ -6,7 +6,6 @@ from fasthtml.common import (
     Div,
     Input,
     Label,
-    Progress,
     Span,
     Summary,
 )
@@ -130,15 +129,19 @@ def HealthScoreArc(score: int, alert_count: int = 0):
                 y="45",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls=f"text-3xl font-black fill-current {color_class}",
+                fill=stroke_color,
+                cls=f"font-black {color_class}",
+                style="font-size: 24px; font-family: 'Orbitron', sans-serif;",
             ),
             SvgText(
                 f"{alert_count} alert{'s' if alert_count != 1 else ''}",
                 x="50",
-                y="65",
+                y="68",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[13px] font-bold fill-base-content/70",
+                fill="var(--bc)",
+                fill_opacity="0.7",
+                style="font-size: 10px; font-family: 'Share Tech Mono', monospace;",
             ),
             viewBox="0 0 100 100",
             cls="w-32 h-32",
@@ -229,8 +232,8 @@ def SegmentedDigit(value: int, label: str, color_cls: str):
             *digits_ui,
             cls="flex gap-1.5 p-2 bg-black/60 rounded-md border border-neutral-700 shadow-inner justify-center items-center",
         ),
-        Span(label, cls=f"text-sm font-bold mt-2 {color_cls} opacity-90"),
-        cls="bg-base-200/30 rounded-box p-3 shadow-inner flex flex-col items-center justify-center",
+        Span(label, cls=f"text-xs font-bold tracking-wider uppercase mt-2 {color_cls} opacity-90"),
+        cls="bg-black/20 rounded-md p-3 border border-white/5 flex flex-col items-center justify-center w-full",
     )
 
 
@@ -239,25 +242,23 @@ def ProgressBarStat(label: str, current: int, max_limit: int):
     A labeled horizontal progress bar displaying current vs max limit.
     """
     percent = min(100, int((current / max_limit) * 100))
-    if percent > 80:
-        bar_color = "progress-error"
-    elif percent > 50:
-        bar_color = "progress-warning"
-    else:
-        bar_color = "progress-primary"
 
     return Div(
         Div(
-            Span(label, cls="text-sm opacity-80 font-bold"),
-            Span(f"{current} / {max_limit}", cls="text-sm font-mono font-bold"),
-            cls="flex justify-between items-center mb-1",
+            Span(
+                label.upper(), cls="text-[10px] font-bold tracking-wider uppercase text-secondary/90 whitespace-nowrap"
+            ),
+            Span(f"{current} / {max_limit}", cls="text-xs font-mono font-bold text-info whitespace-nowrap"),
+            cls="flex justify-between items-center mb-1.5 w-full",
         ),
-        Progress(
-            value=str(current),
-            max=str(max_limit),
-            cls=f"progress {bar_color} w-full h-2.5 bg-base-300",
+        Div(
+            Div(
+                cls="bg-gradient-to-r from-primary to-secondary h-full rounded-full",
+                style=f"width: {percent}%",
+            ),
+            cls="w-full bg-black/40 h-2.5 rounded-full overflow-hidden border border-white/5",
         ),
-        cls="bg-base-200/30 rounded-box p-3 shadow-inner flex flex-col justify-center",
+        cls="bg-black/20 rounded-md p-3 border border-white/5 flex flex-col justify-center w-full",
     )
 
 
@@ -328,18 +329,21 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
                 y="68",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[13px] font-black fill-base-content",
+                fill="var(--bc)",
+                style="font-size: 11px; font-family: 'Orbitron', sans-serif; font-weight: bold;",
             ),
             SvgText(
                 f"{alert_pct}%",
                 x="50",
-                y="85",
+                y="82",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[11px] font-bold fill-base-content/70",
+                fill="var(--bc)",
+                fill_opacity="0.7",
+                style="font-size: 10px; font-family: 'Share Tech Mono', monospace;",
             ),
             viewBox="0 0 100 100",
             cls="w-32 h-32",
         ),
-        cls="flex flex-col items-center justify-center bg-base-200/30 rounded-box p-3 shadow-inner col-span-2",
+        cls="flex flex-col items-center justify-center",
     )
