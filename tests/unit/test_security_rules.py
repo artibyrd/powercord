@@ -102,7 +102,6 @@ def test_category_permission_baseline(session: Session):
     assert "leaked denies: 'View Channel'" in alerts[0]["details"]
 
 
-
 def test_category_permission_baseline_fully_synced(session: Session):
     guild_id = 12345
     parent = DiscordChannel(
@@ -254,7 +253,6 @@ def test_public_announcement_protection(session: Session):
     assert "has effective permissions 'Send Messages' in announcement channel." in ann_alerts[0]["details"]
 
 
-
 def test_announcement_admin_bypass(session: Session):
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
@@ -374,7 +372,6 @@ def test_unauthorized_chat_pings(session: Session):
     assert "Allowed permissions: 'Send Messages'." in alerts[0]["details"]
 
 
-
 def test_unauthorized_chat_pings_admin_bypass(session: Session):
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
@@ -416,7 +413,6 @@ def test_low_tier_role_privileges(session: Session):
     assert len(alerts) == 1
     assert "Low Admin" in alerts[0]["message"]
     assert "has sensitive permissions: 'Administrator'." in alerts[0]["details"]
-
 
 
 def test_general_role_mentionability(session: Session):
@@ -508,7 +504,6 @@ def test_over_privileged_bot_integrations(session: Session):
     assert len(alerts) == 1
     assert "Overprivileged Bot" in alerts[0]["message"]
     assert "has sensitive permissions: 'Administrator'." in alerts[0]["details"]
-
 
 
 def test_security_rule_engine(session: Session):
