@@ -93,14 +93,14 @@ def HealthScoreArc(score: int, alert_count: int = 0):
     Standardized SVG circular progress indicator displaying score and alert counts.
     """
     if score >= 80:
+        stroke_color = "var(--success)"
         color_class = "text-success"
-        stroke_class = "stroke-success"
     elif score >= 50:
+        stroke_color = "var(--warning)"
         color_class = "text-warning"
-        stroke_class = "stroke-warning"
     else:
+        stroke_color = "var(--error)"
         color_class = "text-error"
-        stroke_class = "stroke-error"
 
     r = 36
     c = 226.19  # Approx 2 * pi * 36
@@ -108,13 +108,17 @@ def HealthScoreArc(score: int, alert_count: int = 0):
 
     return Div(
         Svg(
-            Circle(cx="50", cy="50", r=str(r), stroke_width="8", cls="stroke-base-300 fill-transparent"),
+            Circle(
+                cx="50", cy="50", r=str(r), stroke_width="8", stroke="rgba(255, 255, 255, 0.15)", fill="transparent"
+            ),
             Circle(
                 cx="50",
                 cy="50",
                 r=str(r),
                 stroke_width="8",
-                cls=f"{stroke_class} fill-transparent transition-all duration-500 ease-in-out",
+                stroke=stroke_color,
+                fill="transparent",
+                cls="transition-all duration-500 ease-in-out",
                 stroke_dasharray=str(c),
                 stroke_dashoffset=f"{offset:.2f}",
                 transform="rotate(-90 50 50)",
@@ -262,14 +266,11 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
     SVG semi-circular alerts gauge with needle indicator.
     """
     if alert_pct <= 20:
-        color_class = "text-success"
-        stroke_class = "stroke-success"
+        stroke_color = "var(--success)"
     elif alert_pct <= 50:
-        color_class = "text-warning"
-        stroke_class = "stroke-warning"
+        stroke_color = "var(--warning)"
     else:
-        color_class = "text-error"
-        stroke_class = "stroke-error"
+        stroke_color = "var(--error)"
 
     r = 36
     c = 226.19
@@ -284,7 +285,8 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
                 cy="50",
                 r=str(r),
                 stroke_width="8",
-                cls="stroke-base-300 fill-transparent",
+                stroke="rgba(255, 255, 255, 0.15)",
+                fill="transparent",
                 stroke_dasharray=f"{semi_c} {c}",
                 transform="rotate(-180 50 50)",
                 stroke_linecap="round",
@@ -294,7 +296,9 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
                 cy="50",
                 r=str(r),
                 stroke_width="8",
-                cls=f"{stroke_class} fill-transparent transition-all duration-500 ease-in-out",
+                stroke=stroke_color,
+                fill="transparent",
+                cls="transition-all duration-500 ease-in-out",
                 stroke_dasharray=f"{semi_c} {c}",
                 stroke_dashoffset=f"{offset:.2f}",
                 transform="rotate(-180 50 50)",
@@ -306,17 +310,17 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
                 y1="50",
                 x2="50",
                 y2="22",
-                stroke="currentColor",
+                stroke=stroke_color,
                 stroke_width="3",
                 stroke_linecap="round",
-                cls=f"{color_class} transition-transform duration-500 ease-in-out",
+                cls="transition-transform duration-500 ease-in-out",
                 transform=f"rotate({needle_angle} 50 50)",
             ),
             Circle(
                 cx="50",
                 cy="50",
                 r="5",
-                cls=f"fill-current {color_class}",
+                fill=stroke_color,
             ),
             SvgText(
                 f"{alert_count} Alert{'s' if alert_count != 1 else ''}",

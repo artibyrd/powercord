@@ -480,3 +480,10 @@ details[open] summary .fa-chevron-down {
     transform: rotate(180deg);
 }
 
+.tooltip::before {
+    background-color: #221551 !important;
+    color: #f8c6eb !important;
+    border: 1px solid var(--border-col) !important;
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.3) !important;
+}
+

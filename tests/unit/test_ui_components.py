@@ -169,7 +169,7 @@ def test_format_details():
 
     # Test 1: CategoryPermissionBaseline
     details1 = (
-        "Target Role '@everyone' has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: none."
+        "Target Role '@everyone' has less restricted overwrites. Leaked allows: 'Administrator', leaked denies: none."
     )
     res1 = format_details(details1)
     assert res1.tag == "div"
@@ -177,7 +177,7 @@ def test_format_details():
     assert "Target Role" in html_str
     assert "@everyone" in html_str
     assert "has less restricted overwrites" in html_str
-    assert "View Channel" in html_str
+    assert "Administrator" in html_str
     assert "badge-error" in html_str  # leaked allows color
     assert "None" in html_str  # leaked denies none
 

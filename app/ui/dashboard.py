@@ -337,7 +337,9 @@ async def dashboard(guild_id: int, sess):
     floating_widgets.sort(key=lambda x: x["order"])
     grid_widgets.sort(key=lambda x: x["order"])
 
-    rendered_guild_widgets = [Div(c["component"], style=f"grid-column: span {c['span']};") for c in grid_widgets]
+    rendered_guild_widgets = [
+        Div(c["component"], style=f"grid-column: span {c['span']};", cls="h-full") for c in grid_widgets
+    ]
 
     guild_widgets = Div(
         Div(

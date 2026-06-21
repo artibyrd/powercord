@@ -503,7 +503,7 @@ def guild_admin_security_overview_widget(guild_id: int):
             cls="flex flex-col gap-6 items-center w-full h-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
-        cls="min-h-[420px]",
+        cls="min-h-[420px] h-full",
     )
 
 
@@ -1153,6 +1153,44 @@ def format_details(details: str) -> FT:
     if not details:
         return ""
 
+    high_risk_perms = {
+        "Administrator",
+        "Manage Server",
+        "Manage Roles",
+        "Manage Channels",
+        "Kick Members",
+        "Ban Members",
+        "Manage Messages",
+        "Mention Everyone",
+        "Moderate Members",
+        "Manage Webhooks",
+    }
+    medium_risk_perms = {
+        "View Audit Log",
+        "Mute Members",
+        "Deafen Members",
+        "Move Members",
+        "Manage Emojis & Stickers",
+        "Manage Events",
+        "View Channel",
+        "Send Messages",
+        "Send Messages in Threads",
+        "Create Public Threads",
+        "Create Private Threads",
+        "Manage Nicknames",
+    }
+
+    def make_perm_badge(p_name: str) -> FT:
+        p_clean = p_name.strip("' ")
+        if p_clean.lower() == "none":
+            return Span("None", cls="text-xs opacity-50 font-mono")
+        if p_clean in high_risk_perms:
+            return Span(p_clean, cls="badge badge-error badge-outline badge-xs mr-1 mb-1 font-bold shadow-sm")
+        elif p_clean in medium_risk_perms:
+            return Span(p_clean, cls="badge badge-warning badge-outline badge-xs mr-1 mb-1 font-semibold")
+        else:
+            return Span(p_clean, cls="badge badge-info badge-outline badge-xs mr-1 mb-1 font-medium")
+
     # 1. Check if CategoryPermissionBaseline
     if "Leaked allows:" in details:
         parts = details.split("Leaked allows:")
@@ -1169,19 +1207,8 @@ def format_details(details: str) -> FT:
         allows = [p.strip("' ") for p in allows_str.split(",") if p.strip()]
         denies = [p.strip("' ") for p in denies_str.split(",") if p.strip()]
 
-        allows_badges = []
-        for p in allows:
-            if p.lower() != "none":
-                allows_badges.append(Span(p, cls="badge badge-error badge-outline badge-xs mr-1 mb-1 font-semibold"))
-            else:
-                allows_badges.append(Span("None", cls="text-xs opacity-50 font-mono"))
-
-        denies_badges = []
-        for p in denies:
-            if p.lower() != "none":
-                denies_badges.append(Span(p, cls="badge badge-success badge-outline badge-xs mr-1 mb-1 font-semibold"))
-            else:
-                denies_badges.append(Span("None", cls="text-xs opacity-50 font-mono"))
+        allows_badges = [make_perm_badge(p) for p in allows]
+        denies_badges = [make_perm_badge(p) for p in denies]
 
         return Div(
             P(prefix, cls="text-sm font-semibold text-secondary/90 mb-2"),
@@ -1217,12 +1244,7 @@ def format_details(details: str) -> FT:
             perms_str = perms_str[1:].strip()
 
         perms = [p.strip("' ") for p in perms_str.split(",") if p.strip()]
-        perms_badges = []
-        for p in perms:
-            if p.lower() != "none":
-                perms_badges.append(Span(p, cls="badge badge-warning badge-outline badge-xs mr-1 mb-1 font-semibold"))
-            else:
-                perms_badges.append(Span("None", cls="text-xs opacity-50 font-mono"))
+        perms_badges = [make_perm_badge(p) for p in perms]
 
         return Div(
             P(prefix, cls="text-sm font-semibold text-secondary/90 mb-2"),
@@ -1336,7 +1358,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     alerts_list_ui = Div(
         _render_alerts_list(alerts),
         id=content_id,
-        cls="mt-4 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
+        cls="mt-4 flex-1 min-h-0 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
     )
 
     return Card(
@@ -1344,9 +1366,10 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         Div(
             tabs_ui,
             alerts_list_ui,
+            cls="flex flex-col h-full",
         ),
         id=f"guild-admin-alerts-{guild_id}",
-        cls="min-h-[420px]",
+        cls="min-h-[420px] h-full",
     )
 
 
