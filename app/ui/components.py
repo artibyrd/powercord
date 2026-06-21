@@ -123,18 +123,18 @@ def HealthScoreArc(score: int, alert_count: int = 0):
             SvgText(
                 f"{score}%",
                 x="50",
-                y="46",
+                y="45",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls=f"text-2xl font-black fill-current {color_class}",
+                cls=f"text-3xl font-black fill-current {color_class}",
             ),
             SvgText(
                 f"{alert_count} alert{'s' if alert_count != 1 else ''}",
                 x="50",
-                y="64",
+                y="65",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[11px] font-bold fill-base-content/70",
+                cls="text-[13px] font-bold fill-base-content/70",
             ),
             viewBox="0 0 100 100",
             cls="w-32 h-32",
@@ -225,7 +225,7 @@ def SegmentedDigit(value: int, label: str, color_cls: str):
             *digits_ui,
             cls="flex gap-1.5 p-2 bg-black/60 rounded-md border border-neutral-700 shadow-inner justify-center items-center",
         ),
-        Span(label, cls=f"text-xs font-bold mt-2 {color_cls} opacity-90"),
+        Span(label, cls=f"text-sm font-bold mt-2 {color_cls} opacity-90"),
         cls="bg-base-200/30 rounded-box p-3 shadow-inner flex flex-col items-center justify-center",
     )
 
@@ -244,14 +244,14 @@ def ProgressBarStat(label: str, current: int, max_limit: int):
 
     return Div(
         Div(
-            Span(label, cls="text-xs opacity-70 font-semibold"),
-            Span(f"{current} / {max_limit}", cls="text-xs font-mono font-bold"),
+            Span(label, cls="text-sm opacity-80 font-bold"),
+            Span(f"{current} / {max_limit}", cls="text-sm font-mono font-bold"),
             cls="flex justify-between items-center mb-1",
         ),
         Progress(
             value=str(current),
             max=str(max_limit),
-            cls=f"progress {bar_color} w-full h-2 bg-base-300",
+            cls=f"progress {bar_color} w-full h-2.5 bg-base-300",
         ),
         cls="bg-base-200/30 rounded-box p-3 shadow-inner flex flex-col justify-center",
     )
@@ -324,7 +324,7 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
                 y="68",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[12px] font-bold fill-base-content/80",
+                cls="text-[13px] font-black fill-base-content",
             ),
             SvgText(
                 f"{alert_pct}%",
@@ -332,7 +332,7 @@ def AlertsGauge(alert_pct: int, alert_count: int = 0):
                 y="85",
                 text_anchor="middle",
                 dominant_baseline="middle",
-                cls="text-[10px] font-semibold fill-base-content/50",
+                cls="text-[11px] font-bold fill-base-content/70",
             ),
             viewBox="0 0 100 100",
             cls="w-32 h-32",

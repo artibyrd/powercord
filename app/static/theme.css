@@ -449,3 +449,34 @@ midi-visualizer svg {
        It's not perfect but fits the aesthetic better than default. */
     filter: invert(0.9) hue-rotate(240deg) saturate(300%) contrast(150%);
 }
+
+/* --- SVG Gauge Stroke Styling --- */
+.stroke-base-300 {
+    stroke: var(--b2) !important;
+}
+
+.stroke-success {
+    stroke: var(--success) !important;
+}
+
+.stroke-warning {
+    stroke: var(--warning) !important;
+}
+
+.stroke-error {
+    stroke: var(--error) !important;
+}
+
+/* --- Collapse & Details Styling --- */
+details summary::-webkit-details-marker {
+    display: none !important;
+}
+
+details summary {
+    list-style: none !important;
+}
+
+details[open] summary .fa-chevron-down {
+    transform: rotate(180deg);
+}
+

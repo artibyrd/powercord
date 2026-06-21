@@ -158,3 +158,45 @@ def test_accordion():
     content_div = acc.children[1]
     assert content_div.tag == "div"
     assert "collapse-content" in content_div.attrs["class"]
+
+
+def test_format_details():
+    from app.extensions.utilities.widget import format_details
+
+    # Test empty input
+    assert format_details("") == ""
+    assert format_details(None) == ""
+
+    # Test 1: CategoryPermissionBaseline
+    details1 = (
+        "Target Role '@everyone' has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: none."
+    )
+    res1 = format_details(details1)
+    assert res1.tag == "div"
+    html_str = str(res1)
+    assert "Target Role" in html_str
+    assert "@everyone" in html_str
+    assert "has less restricted overwrites" in html_str
+    assert "View Channel" in html_str
+    assert "badge-error" in html_str  # leaked allows color
+    assert "None" in html_str  # leaked denies none
+
+    # Test 2: Other permissions markers
+    details2 = "Role 'Staff' (position 10) has sensitive permissions: 'View Channel', 'Send Messages'."
+    res2 = format_details(details2)
+    assert res2.tag == "div"
+    html_str = str(res2)
+    assert "Role" in html_str
+    assert "Staff" in html_str
+    assert "position 10" in html_str
+    assert "View Channel" in html_str
+    assert "Send Messages" in html_str
+    assert "badge-warning" in html_str
+
+    # Test 3: Highlight quotes
+    details3 = "Role 'Guest' below separator is mentionable."
+    res3 = format_details(details3)
+    assert res3.tag == "div"
+    html_str = str(res3)
+    assert "Guest" in html_str
+    assert "text-accent font-bold" in html_str

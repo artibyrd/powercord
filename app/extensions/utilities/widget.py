@@ -1,6 +1,7 @@
 # mypy: ignore-errors
 import json
 import logging
+import re
 from typing import Optional
 
 from cachetools import TTLCache
@@ -492,14 +493,14 @@ def guild_admin_security_overview_widget(guild_id: int):
         cls="grid grid-cols-2 gap-4 w-full flex-1",
     )
 
-    arc_ui = Div(HealthScoreArc(score, len(alerts)), cls="flex justify-center items-center mb-6 md:mb-0")
+    arc_ui = Div(HealthScoreArc(score, len(alerts)), cls="flex justify-center items-center w-full")
 
     return Card(
         "Security Overview",
         Div(
             arc_ui,
             stats_grid,
-            cls="flex flex-col md:flex-row gap-6 items-center w-full h-full",
+            cls="flex flex-col gap-6 items-center w-full h-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
         cls="min-h-[420px]",
@@ -1148,6 +1149,119 @@ class SecurityRuleEngine:
         return {"score": score, "alerts": alerts}
 
 
+def format_details(details: str) -> FT:
+    if not details:
+        return ""
+
+    # 1. Check if CategoryPermissionBaseline
+    if "Leaked allows:" in details:
+        parts = details.split("Leaked allows:")
+        prefix = parts[0].strip()
+        rest = parts[1].split("leaked denies:")
+        allows_str = rest[0].strip()
+        denies_str = rest[1].strip() if len(rest) > 1 else ""
+
+        if allows_str.endswith(","):
+            allows_str = allows_str[:-1]
+        if denies_str.endswith("."):
+            denies_str = denies_str[:-1]
+
+        allows = [p.strip("' ") for p in allows_str.split(",") if p.strip()]
+        denies = [p.strip("' ") for p in denies_str.split(",") if p.strip()]
+
+        allows_badges = []
+        for p in allows:
+            if p.lower() != "none":
+                allows_badges.append(Span(p, cls="badge badge-error badge-outline badge-xs mr-1 mb-1 font-semibold"))
+            else:
+                allows_badges.append(Span("None", cls="text-xs opacity-50 font-mono"))
+
+        denies_badges = []
+        for p in denies:
+            if p.lower() != "none":
+                denies_badges.append(Span(p, cls="badge badge-success badge-outline badge-xs mr-1 mb-1 font-semibold"))
+            else:
+                denies_badges.append(Span("None", cls="text-xs opacity-50 font-mono"))
+
+        return Div(
+            P(prefix, cls="text-sm font-semibold text-secondary/90 mb-2"),
+            Div(
+                Span("Leaked Allows: ", cls="text-xs font-bold opacity-75 mr-2"),
+                Div(*allows_badges, cls="inline-flex flex-wrap items-center"),
+                cls="mb-1.5 flex flex-wrap items-center",
+            ),
+            Div(
+                Span("Leaked Denies: ", cls="text-xs font-bold opacity-75 mr-2"),
+                Div(*denies_badges, cls="inline-flex flex-wrap items-center"),
+                cls="flex flex-wrap items-center",
+            ),
+            cls="p-3 bg-black/40 rounded-md border border-neutral-700/50 mt-2",
+        )
+
+    # 2. Check other rules that contain explicit list markers
+    perms_marker = None
+    if "Allowed permissions:" in details:
+        perms_marker = "Allowed permissions:"
+    elif "sensitive permissions:" in details:
+        perms_marker = "sensitive permissions:"
+    elif "effective permissions" in details:
+        perms_marker = "effective permissions"
+
+    if perms_marker:
+        parts = details.split(perms_marker)
+        prefix = parts[0].strip()
+        perms_str = parts[1].strip()
+        if perms_str.endswith("."):
+            perms_str = perms_str[:-1]
+        if perms_str.startswith(":"):
+            perms_str = perms_str[1:].strip()
+
+        perms = [p.strip("' ") for p in perms_str.split(",") if p.strip()]
+        perms_badges = []
+        for p in perms:
+            if p.lower() != "none":
+                perms_badges.append(Span(p, cls="badge badge-warning badge-outline badge-xs mr-1 mb-1 font-semibold"))
+            else:
+                perms_badges.append(Span("None", cls="text-xs opacity-50 font-mono"))
+
+        return Div(
+            P(prefix, cls="text-sm font-semibold text-secondary/90 mb-2"),
+            Div(
+                Span("Permissions: ", cls="text-xs font-bold opacity-75 mr-2"),
+                Div(*perms_badges, cls="inline-flex flex-wrap items-center"),
+                cls="flex flex-wrap items-center",
+            ),
+            cls="p-3 bg-black/40 rounded-md border border-neutral-700/50 mt-2",
+        )
+
+    # 3. Highlight single-quoted terms (e.g. role names, channel names) in default text
+    pattern = r"'([^']+)'"
+    matches = re.findall(pattern, details)
+    if matches:
+        formatted_parts = []
+        last_idx = 0
+        for match in re.finditer(pattern, details):
+            # Text before the match
+            if match.start() > last_idx:
+                formatted_parts.append(Span(details[last_idx : match.start()], cls="text-xs opacity-80"))
+            # The matched text styled
+            formatted_parts.append(
+                Span(
+                    match.group(1),
+                    cls="text-xs text-accent font-bold bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20 mx-0.5",
+                )
+            )
+            last_idx = match.end()
+        if last_idx < len(details):
+            formatted_parts.append(Span(details[last_idx:], cls="text-xs opacity-80"))
+        return Div(*formatted_parts, cls="p-3 bg-black/40 rounded-md border border-neutral-700/50 mt-2 leading-relaxed")
+
+    # 4. Fallback style
+    return Div(
+        Span(details, cls="text-xs opacity-80"), cls="p-3 bg-black/40 rounded-md border border-neutral-700/50 mt-2"
+    )
+
+
 def _render_alerts_list(alerts: list[dict]) -> FT:
     if not alerts:
         return Div("No security alerts found.", cls="text-sm opacity-70 p-4 text-center")
@@ -1179,9 +1293,18 @@ def _render_alerts_list(alerts: list[dict]) -> FT:
                 ),
                 P(alert.get("message", ""), cls="text-sm font-medium mb-1"),
                 Details(
-                    Summary("Details", cls="text-xs opacity-70 cursor-pointer hover:opacity-100 select-none"),
-                    P(alert.get("details", ""), cls="text-xs opacity-70 mt-1"),
-                    cls="mb-2",
+                    Summary(
+                        Div(
+                            Span("Details", cls="text-xs font-bold text-secondary uppercase tracking-wider"),
+                            I(
+                                cls="fa-solid fa-chevron-down text-[10px] text-secondary transition-transform group-open:rotate-180"
+                            ),
+                            cls="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-all",
+                        ),
+                        cls="list-none outline-none select-none group",
+                    ),
+                    format_details(alert.get("details", "")),
+                    cls="mb-2 group",
                 )
                 if alert.get("details")
                 else "",
