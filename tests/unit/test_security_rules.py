@@ -33,11 +33,10 @@ def clean_db(session: Session):
         session.execute(text("DELETE FROM guild_extension_settings;"))
         session.execute(text("DELETE FROM site_settings;"))
         session.execute(text("DELETE FROM user_settings;"))
-        if HoneypotChannel is not None:
-            try:
-                session.execute(text("DELETE FROM honeypot_channels;"))
-            except Exception:
-                pass
+        try:
+            session.execute(text("DELETE FROM honeypot_channels;"))
+        except Exception:
+            pass
         session.commit()
 
     do_clean()
