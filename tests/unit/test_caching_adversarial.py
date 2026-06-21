@@ -80,7 +80,10 @@ def test_invalidation_isolates_guilds(session: Session):
 
 
 def test_cache_reflects_db_changes_after_invalidation(session: Session):
-    """Verify that after invalidation, re-evaluation picks up DB changes."""
+    """Verify that database changes lead to cache miss and recalculation,
+
+    while identical database state leads to cache hit.
+    """
     guild_id = 91000
     SecurityRuleEngine._evaluation_cache.clear()
 
@@ -90,21 +93,22 @@ def test_cache_reflects_db_changes_after_invalidation(session: Session):
     session.add_all([config, sep_role])
     session.commit()
 
+    # 1. First evaluation
     res1 = SecurityRuleEngine.evaluate(guild_id, session)
     score_before = res1["score"]
 
-    # Add an admin role below the separator (should lower the score)
+    # 2. Re-evaluate with identical DB state -> should be a cache hit (same object)
+    res_hit = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res_hit is res1  # Cache hit (exact same dict returned)
+
+    # 3. Add an admin role below the separator (modifying database)
     low_role = DiscordRole(id=91002, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
     session.add(low_role)
     session.commit()
 
-    # Without invalidation, cache returns stale result
-    res_stale = SecurityRuleEngine.evaluate(guild_id, session)
-    assert res_stale["score"] == score_before  # Still cached
-
-    # After invalidation, re-evaluation picks up the change
-    SecurityRuleEngine.invalidate(guild_id)
+    # 4. Re-evaluate after DB change -> should be a cache miss (new object, different score)
     res_fresh = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res_fresh is not res1  # Cache miss (new dict returned)
     assert res_fresh["score"] < score_before  # Lower score due to the new role
 
 
@@ -127,6 +131,7 @@ def test_concurrent_evaluations(engine):
     def run_evaluate(gid):
         # We need a separate session/connection per thread
         with Session(engine) as thread_session:
+            thread_session.rollback()  # Reset transaction state to see the newly committed seed data
             return SecurityRuleEngine.evaluate(gid, thread_session)
 
     # Trigger concurrent requests

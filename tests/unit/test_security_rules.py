@@ -279,7 +279,9 @@ def test_public_announcement_no_alert_when_view_channel_denied(session: Session)
     """@everyone has Send Messages in base permissions but View Channel is denied on the channel -> no alert."""
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
-    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    everyone = DiscordRole(
+        id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0
+    )
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
     ann_channel = DiscordChannel(
         id=201,
@@ -300,7 +302,9 @@ def test_public_announcement_no_alert_when_category_denies_view(session: Session
     """Announcement channel has no overwrites, but parent category denies View Channel -> no alert."""
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
-    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    everyone = DiscordRole(
+        id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0
+    )
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
     category = DiscordChannel(
         id=100,
@@ -329,7 +333,9 @@ def test_public_announcement_alert_when_view_channel_allowed(session: Session):
     """Role can see the channel AND has Send Messages -> alert fires (regression guard)."""
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900, announcement_channel_ids="[201]")
-    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    everyone = DiscordRole(
+        id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0
+    )
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
     ann_channel = DiscordChannel(
         id=201,
@@ -475,7 +481,9 @@ def test_unauthorized_chat_pings_no_alert_when_view_channel_denied(session: Sess
     """Voice channel allows Send Messages but View Channel is denied -> no alert."""
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
-    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    everyone = DiscordRole(
+        id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0
+    )
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
     voice_chan = DiscordChannel(
         id=401,
@@ -496,7 +504,9 @@ def test_unauthorized_chat_pings_category_inheritance(session: Session):
     """Voice channel inherits View Channel deny from parent category -> no alert."""
     guild_id = 12345
     config = DiscordAuditorConfig(guild_id=guild_id, staff_separator_role_id=900)
-    everyone = DiscordRole(id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0)
+    everyone = DiscordRole(
+        id=guild_id, guild_id=guild_id, name="@everyone", permissions=(1 << 10) | (1 << 11), position=0
+    )
     sep_role = DiscordRole(id=900, guild_id=guild_id, name="--- Staff ---", permissions=0, position=5)
     category = DiscordChannel(
         id=100,
@@ -649,8 +659,8 @@ def test_security_rule_engine(session: Session):
     result = engine.run_all(guild_id, session)
 
     # Expected alerts: LowTierRolePrivileges (high), SuggestiveHoneypotIntegration (low)
-    # score = 100 - 15 (high) - 5 (low) = 80
-    assert result["score"] == 80
+    # score = 100 * 0.85 * 0.95 = 81
+    assert result["score"] == 81
 
 
 def test_security_rule_engine_evaluate_caching(session: Session):
@@ -768,3 +778,60 @@ def test_category_baseline_active_leak_not_annotated(session: Session):
     assert len(alerts) == 1
     assert alerts[0]["severity"] == "medium"  # Not downgraded
     assert "[INERT" not in alerts[0]["details"]
+
+
+def test_security_rule_engine_checksum_caching(session: Session):
+    """Verify that SecurityRuleEngine caching handles hits and misses correctly when DB is modified."""
+    guild_id = 99999
+    SecurityRuleEngine._evaluation_cache.clear()
+
+    # Seed initial DB
+    config = DiscordAuditorConfig(
+        guild_id=guild_id,
+        staff_separator_role_id=10,
+        staff_channel_ids="[101]",
+        announcement_channel_ids="[102]",
+    )
+    role = DiscordRole(
+        id=10,
+        guild_id=guild_id,
+        name="Staff Separator",
+        permissions=0,
+        position=5,
+    )
+    channel = DiscordChannel(
+        id=101,
+        guild_id=guild_id,
+        parent_id=None,
+        name="staff-chat",
+        type="text",
+        overwrites="{}",
+    )
+
+    session.add_all([config, role, channel])
+    session.commit()
+
+    # 1. First evaluation - must compute and cache
+    res1 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert len(SecurityRuleEngine._evaluation_cache) == 1
+
+    # 2. Second evaluation (identical state) - must be a cache hit
+    res2 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res2 is res1  # cache hit returns the same object reference
+
+    # 3. Modify channel overwrites (DB modification) - must result in cache miss
+    channel.overwrites = '{"999": {"allow": 1024, "deny": 0}}'
+    session.add(channel)
+    session.commit()
+
+    res3 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res3 is not res1  # cache miss returns a new object reference
+
+    # 4. Modify config values (DB modification) - must result in cache miss
+    config.staff_channel_ids = "[101, 103]"
+    session.add(config)
+    session.commit()
+
+    res4 = SecurityRuleEngine.evaluate(guild_id, session)
+    assert res4 is not res3  # cache miss returns a new object reference
+

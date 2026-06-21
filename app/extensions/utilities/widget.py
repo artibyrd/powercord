@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+import hashlib
 import json
 import logging
 import re
@@ -76,7 +77,11 @@ def _get_role_badges(permissions: int) -> list[FT]:
     # Administrator
     if permissions & (1 << 3):
         badges.append(
-            Span("Admin", cls="badge badge-neutral badge-sm px-2 rounded-md mr-1 mb-1 font-bold", title="Administrator")
+            Span(
+                "Admin",
+                cls="badge badge-error badge-sm px-2 py-0.5 rounded-md mr-1 mb-1 font-bold",
+                title="Administrator",
+            )
         )
 
     # Manager (Manage Server, Manage Roles, Manage Channels)
@@ -84,14 +89,16 @@ def _get_role_badges(permissions: int) -> list[FT]:
         badges.append(
             Span(
                 "Manager",
-                cls="badge badge-ghost badge-sm px-2 rounded-md mr-1 mb-1",
+                cls="badge badge-warning badge-sm px-2 py-0.5 rounded-md mr-1 mb-1",
                 title="Manage Server/Roles/Channels",
             )
         )
 
     # Moderator (Kick, Ban)
     if permissions & (1 << 1) or permissions & (1 << 2):
-        badges.append(Span("Mod", cls="badge badge-ghost badge-sm px-2 rounded-md mr-1 mb-1", title="Kick/Ban Members"))
+        badges.append(
+            Span("Mod", cls="badge badge-info badge-sm px-2 py-0.5 rounded-md mr-1 mb-1", title="Kick/Ban Members")
+        )
 
     return badges
 
@@ -262,11 +269,11 @@ def guild_admin_audit_channels_widget(guild_id: int):
 
                         color_cls = "badge-ghost"
                         if allow_count > 0 and deny_count == 0:
-                            color_cls = "badge-ghost bg-base-200 border-base-300 text-base-content"
-                        elif deny_count > 0:
-                            color_cls = "badge-neutral"
-                        elif allow_count > 0:
-                            color_cls = "badge-ghost"  # Mixed
+                            color_cls = "badge-success"
+                        elif deny_count > 0 and allow_count == 0:
+                            color_cls = "badge-error"
+                        elif allow_count > 0 and deny_count > 0:
+                            color_cls = "badge-warning"
 
                         # Build specific permissions UI for this target
                         target_detailed_perms = []
@@ -498,11 +505,54 @@ def guild_admin_security_overview_widget(guild_id: int):
         cls="flex flex-col gap-3 w-full flex-1",
     )
 
+    high_count = sum(1 for a in alerts if a.get("severity", "").lower() == "high")
+    med_count = sum(1 for a in alerts if a.get("severity", "").lower() == "medium")
+    low_count = sum(1 for a in alerts if a.get("severity", "").lower() == "low")
+
+    categories_count = {}
+    for a in alerts:
+        cat = a.get("category", "unknown").title()
+        categories_count[cat] = categories_count.get(cat, 0) + 1
+
+    category_items = []
+    for cat, count in sorted(categories_count.items()):
+        category_items.append(
+            Span(
+                f"{cat}: {count}",
+                cls="text-[10px] font-semibold opacity-80 bg-base-200/50 px-2 py-0.5 rounded border border-white/5",
+            )
+        )
+
+    breakdown_section = Div(
+        Div(
+            "Alerts Breakdown",
+            cls="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-2 border-t border-white/10 pt-2 w-full text-center",
+        ),
+        Div(
+            Div(
+                Span(f"High: {high_count}", cls="badge badge-error badge-xs px-2 py-0.5 font-bold text-error-content"),
+                Span(
+                    f"Med: {med_count}",
+                    cls="badge badge-warning badge-xs px-2 py-0.5 font-semibold text-warning-content",
+                ),
+                Span(f"Low: {low_count}", cls="badge badge-info badge-xs px-2 py-0.5 font-medium text-info-content"),
+                cls="flex justify-center gap-1.5 mb-2 w-full",
+            ),
+            Div(
+                *category_items if category_items else [Span("No alerts", cls="text-xs opacity-50 italic")],
+                cls="flex flex-wrap justify-center gap-1.5 w-full",
+            ),
+            cls="w-full",
+        ),
+        cls="mt-2 w-full flex flex-col items-center",
+    )
+
     return Card(
         "Security Overview",
         Div(
             gauges_row,
             stats_grid,
+            breakdown_section,
             cls="flex flex-col gap-4 items-center w-full h-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
@@ -534,9 +584,15 @@ def guild_admin_audit_permissions_widget(guild_id: int):
                 has_perm = bool(role.permissions & perm_value) or bool(role.permissions & (1 << 3))
 
                 if has_perm:
+                    if role.permissions & (1 << 3):
+                        badge_cls = "badge-error text-error-content"
+                    elif role.is_managed:
+                        badge_cls = "badge-warning text-warning-content"
+                    else:
+                        badge_cls = "badge-neutral text-neutral-content"
                     badge = Span(
                         role.name,
-                        cls="inline-flex items-center px-2 py-0.5 rounded-md mr-1 mb-1 text-xs font-medium border border-base-content/10 bg-base-200 text-base-content/80",
+                        cls=f"badge {badge_cls} inline-flex items-center px-2 py-0.5 rounded-md mr-1 mb-1 text-xs font-semibold",
                     )
                     roles_with_perm.append(badge)
 
@@ -1141,8 +1197,77 @@ SECURITY_RULES = [
 ]
 
 
+class EvaluationCache(TTLCache):
+    def pop(self, key, default=None):
+        try:
+            g_id = int(key)
+            prefix = f"{g_id}:"
+        except (ValueError, TypeError):
+            prefix = None
+
+        to_remove = []
+        for k in list(self.keys()):
+            if k == key:
+                to_remove.append(k)
+            elif prefix and isinstance(k, str) and k.startswith(prefix):
+                to_remove.append(k)
+
+        val = default
+        for k in to_remove:
+            val = super().pop(k, default)
+        return val
+
+    def __contains__(self, key):
+        try:
+            g_id = int(key)
+            prefix = f"{g_id}:"
+        except (ValueError, TypeError):
+            prefix = None
+
+        for k in list(self.keys()):
+            if k == key:
+                return True
+            if prefix and isinstance(k, str) and k.startswith(prefix):
+                return True
+        return False
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            try:
+                g_id = int(key)
+                prefix = f"{g_id}:"
+            except (ValueError, TypeError):
+                prefix = None
+
+            if prefix:
+                for k in list(self.keys()):
+                    if isinstance(k, str) and k.startswith(prefix):
+                        return super().__getitem__(k)
+            raise
+
+    def __delitem__(self, key):
+        try:
+            super().__delitem__(key)
+        except KeyError:
+            try:
+                g_id = int(key)
+                prefix = f"{g_id}:"
+            except (ValueError, TypeError):
+                prefix = None
+
+            if prefix:
+                to_remove = [k for k in list(self.keys()) if isinstance(k, str) and k.startswith(prefix)]
+                if to_remove:
+                    for k in to_remove:
+                        super().__delitem__(k)
+                    return
+            raise
+
+
 class SecurityRuleEngine:
-    _evaluation_cache: TTLCache = TTLCache(maxsize=256, ttl=120)
+    _evaluation_cache: EvaluationCache = EvaluationCache(maxsize=256, ttl=120)
 
     def __init__(self):
         self.rules = [rule_cls() for rule_cls in SECURITY_RULES]
@@ -1159,10 +1284,68 @@ class SecurityRuleEngine:
     @staticmethod
     def evaluate(guild_id: int, session: Session) -> dict:
         guild_id = int(guild_id)
-        if guild_id in SecurityRuleEngine._evaluation_cache:
-            return SecurityRuleEngine._evaluation_cache[guild_id]
+        
+        # Calculate checksum based on DB records
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
+        configs = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).all()
+        
+        roles_sorted = sorted(roles, key=lambda r: r.id or 0)
+        roles_serialized = [
+            {
+                "id": r.id,
+                "guild_id": r.guild_id,
+                "name": r.name,
+                "permissions": r.permissions,
+                "position": r.position,
+                "color": r.color,
+                "is_hoisted": r.is_hoisted,
+                "is_managed": r.is_managed,
+                "is_mentionable": r.is_mentionable,
+            }
+            for r in roles_sorted
+        ]
+        
+        channels_sorted = sorted(channels, key=lambda c: c.id or 0)
+        channels_serialized = [
+            {
+                "id": c.id,
+                "guild_id": c.guild_id,
+                "parent_id": c.parent_id,
+                "name": c.name,
+                "type": c.type,
+                "position": c.position,
+                "overwrites": c.overwrites,
+            }
+            for c in channels_sorted
+        ]
+        
+        configs_sorted = sorted(configs, key=lambda c: c.guild_id or 0)
+        configs_serialized = [
+            {
+                "guild_id": c.guild_id,
+                "staff_separator_role_id": c.staff_separator_role_id,
+                "staff_channel_ids": c.staff_channel_ids,
+                "announcement_channel_ids": c.announcement_channel_ids,
+            }
+            for c in configs_sorted
+        ]
+        
+        payload = {
+            "roles": roles_serialized,
+            "channels": channels_serialized,
+            "configs": configs_serialized,
+        }
+        
+        json_str = json.dumps(payload, sort_keys=True)
+        checksum = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+        
+        cache_key = f"{guild_id}:{checksum}"
+        if cache_key in SecurityRuleEngine._evaluation_cache:
+            return SecurityRuleEngine._evaluation_cache[cache_key]
+            
         res = SecurityRuleEngine().run_all(guild_id, session)
-        SecurityRuleEngine._evaluation_cache[guild_id] = res
+        SecurityRuleEngine._evaluation_cache[cache_key] = res
         return res
 
     def run_all(self, guild_id: int, session: Session) -> dict:
@@ -1174,17 +1357,23 @@ class SecurityRuleEngine:
             except Exception as e:
                 logging.exception(f"Error evaluating rule {rule.name}: {e}")
 
-        score = 100
+        num_high = 0
+        num_medium = 0
+        num_low = 0
         for alert in alerts:
+            details = str(alert.get("details", ""))
+            if "[INERT" in details:
+                continue
             sev = alert.get("severity", "").lower()
             if sev == "high":
-                score -= 15
+                num_high += 1
             elif sev == "medium":
-                score -= 10
+                num_medium += 1
             elif sev == "low":
-                score -= 5
+                num_low += 1
 
-        score = max(0, score)
+        score = int(round(100 * (0.85**num_high) * (0.90**num_medium) * (0.95**num_low)))
+        score = max(0, min(100, score))
         return {"score": score, "alerts": alerts}
 
 
@@ -1224,11 +1413,13 @@ def format_details(details: str) -> FT:
         if p_clean.lower() == "none":
             return Span("None", cls="text-xs opacity-50 font-mono")
         if p_clean in high_risk_perms:
-            return Span(p_clean, cls="badge badge-error badge-outline badge-xs mr-1 mb-1 font-bold shadow-sm")
+            return Span(
+                p_clean, cls="badge badge-error badge-outline badge-xs px-2 py-0.5 mr-1 mb-1 font-bold shadow-sm"
+            )
         elif p_clean in medium_risk_perms:
-            return Span(p_clean, cls="badge badge-warning badge-outline badge-xs mr-1 mb-1 font-semibold")
+            return Span(p_clean, cls="badge badge-warning badge-outline badge-xs px-2 py-0.5 mr-1 mb-1 font-semibold")
         else:
-            return Span(p_clean, cls="badge badge-info badge-outline badge-xs mr-1 mb-1 font-medium")
+            return Span(p_clean, cls="badge badge-info badge-outline badge-xs px-2 py-0.5 mr-1 mb-1 font-medium")
 
     def group_permissions(perms_list: list[str]) -> list[str]:
         high = []
@@ -1368,7 +1559,10 @@ def _render_alerts_list(alerts: list[dict]) -> FT:
         alert_elements.append(
             Div(
                 Div(
-                    Span(alert.get("rule", "Security Alert"), cls=f"badge {badge_cls} badge-sm mr-2 font-bold"),
+                    Span(
+                        alert.get("rule", "Security Alert"),
+                        cls=f"badge {badge_cls} badge-sm px-2.5 py-1 mr-2 font-bold",
+                    ),
                     Span(alert.get("category", "").upper(), cls="text-[10px] opacity-50 uppercase font-semibold"),
                     cls="flex items-center mb-1",
                 ),
@@ -1421,9 +1615,9 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     )
     color_legend = Div(
         Span("Risk Key: ", cls="text-xs font-bold opacity-70 mr-1"),
-        Span("High", cls="badge badge-error badge-xs mr-1.5 font-bold px-1.5 rounded-sm"),
-        Span("Med", cls="badge badge-warning badge-xs mr-1.5 font-semibold px-1.5 rounded-sm"),
-        Span("Low", cls="badge badge-info badge-xs font-medium px-1.5 rounded-sm"),
+        Span("High", cls="badge badge-error badge-xs mr-1.5 font-bold px-2 py-0.5 rounded-sm"),
+        Span("Med", cls="badge badge-warning badge-xs mr-1.5 font-semibold px-2 py-0.5 rounded-sm"),
+        Span("Low", cls="badge badge-info badge-xs font-medium px-2 py-0.5 rounded-sm"),
         cls="flex items-center justify-center pt-2 mt-2 border-t border-white/5",
     )
 
@@ -1446,6 +1640,10 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
         roles = sorted(roles, key=lambda x: x.position, reverse=True)
+        channels = session.exec(
+            select(DiscordChannel).where(DiscordChannel.guild_id == guild_id, DiscordChannel.type != "category")
+        ).all()
+        channels = sorted(channels, key=lambda x: x.name)
 
     selected_role_id = config.staff_separator_role_id if config else None
 
@@ -1461,12 +1659,17 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         except Exception:  # noqa: S110
             pass
 
-    staff_ids_str = ", ".join(str(x) for x in staff_ids_list)
-    ann_ids_str = ", ".join(str(x) for x in ann_ids_list)
-
     role_options = [Option("None / Select a role...", value="", selected=(selected_role_id is None))]
     for role in roles:
         role_options.append(Option(role.name, value=str(role.id), selected=(role.id == selected_role_id)))
+
+    staff_options = []
+    ann_options = []
+    for chan in channels:
+        staff_selected = chan.id in staff_ids_list
+        ann_selected = chan.id in ann_ids_list
+        staff_options.append(Option(f"#{chan.name}", value=str(chan.id), selected=staff_selected))
+        ann_options.append(Option(f"#{chan.name}", value=str(chan.id), selected=ann_selected))
 
     form_content = Form(
         Div(
@@ -1484,39 +1687,37 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         ),
         Div(
             Div(
-                Label("Staff Channel IDs", cls="label text-sm font-semibold"),
+                Label("Staff Channels", cls="label text-sm font-semibold"),
                 Div(
                     I(cls="fa-solid fa-circle-info text-info opacity-60 cursor-help"),
                     cls="tooltip tooltip-right",
-                    data_tip="Comma-separated Discord channel IDs that are considered staff-only. The auditor checks whether non-staff roles can view these channels.",
+                    data_tip="Select Discord channels that are considered staff-only. The auditor checks whether non-staff roles can view these channels.",
                 ),
                 cls="flex items-center gap-2",
             ),
-            Input(
-                type="text",
+            Select(
+                *staff_options,
                 name="staff_channel_ids",
-                value=staff_ids_str,
-                placeholder="e.g. 1234567890, 0987654321",
-                cls="input input-bordered w-full",
+                multiple=True,
+                cls="select select-bordered w-full h-32",
             ),
             cls="form-control mb-4",
         ),
         Div(
             Div(
-                Label("Announcement Channel IDs", cls="label text-sm font-semibold"),
+                Label("Announcement Channels", cls="label text-sm font-semibold"),
                 Div(
                     I(cls="fa-solid fa-circle-info text-info opacity-60 cursor-help"),
                     cls="tooltip tooltip-right",
-                    data_tip="Comma-separated Discord channel IDs designated for announcements. The auditor checks whether non-staff roles can send messages or mention everyone in these channels.",
+                    data_tip="Select Discord channels designated for announcements. The auditor checks whether non-staff roles can send messages or mention everyone in these channels.",
                 ),
                 cls="flex items-center gap-2",
             ),
-            Input(
-                type="text",
+            Select(
+                *ann_options,
                 name="announcement_channel_ids",
-                value=ann_ids_str,
-                placeholder="e.g. 1234567890, 0987654321",
-                cls="input input-bordered w-full",
+                multiple=True,
+                cls="select select-bordered w-full h-32",
             ),
             cls="form-control mb-4",
         ),
@@ -1672,6 +1873,9 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
                 Span(
                     "🔴 Disconnected",
                     id=f"bot-latency-display-{guild_id}",
+                    hx_get=f"/dashboard/{guild_id}/ping-bot",
+                    hx_trigger="load",
+                    hx_swap="outerHTML",
                     cls="badge badge-error badge-sm text-error-content",
                 ),
                 cls="mb-3 flex items-center",

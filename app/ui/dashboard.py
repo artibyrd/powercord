@@ -1145,26 +1145,38 @@ async def post_auditor_settings(guild_id: int, req):
             pass
 
     # staff_channel_ids
-    staff_ids_raw = form.get("staff_channel_ids", "")
+    staff_ids_raw = form.getlist("staff_channel_ids")
     staff_channel_ids = []
-    if staff_ids_raw:
-        for val in staff_ids_raw.split(","):
-            val_clean = val.strip()
-            if val_clean:
+    if not staff_ids_raw:
+        staff_ids_fallback = form.get("staff_channel_ids", "")
+        if isinstance(staff_ids_fallback, str):
+            staff_ids_raw = [staff_ids_fallback]
+    for raw_val in staff_ids_raw:
+        if not raw_val:
+            continue
+        for part in str(raw_val).split(","):
+            part_clean = part.strip()
+            if part_clean:
                 try:
-                    staff_channel_ids.append(int(val_clean))
+                    staff_channel_ids.append(int(part_clean))
                 except ValueError:
                     pass
 
     # announcement_channel_ids
-    ann_ids_raw = form.get("announcement_channel_ids", "")
+    ann_ids_raw = form.getlist("announcement_channel_ids")
     ann_channel_ids = []
-    if ann_ids_raw:
-        for val in ann_ids_raw.split(","):
-            val_clean = val.strip()
-            if val_clean:
+    if not ann_ids_raw:
+        ann_ids_fallback = form.get("announcement_channel_ids", "")
+        if isinstance(ann_ids_fallback, str):
+            ann_ids_raw = [ann_ids_fallback]
+    for raw_val in ann_ids_raw:
+        if not raw_val:
+            continue
+        for part in str(raw_val).split(","):
+            part_clean = part.strip()
+            if part_clean:
                 try:
-                    ann_channel_ids.append(int(val_clean))
+                    ann_channel_ids.append(int(part_clean))
                 except ValueError:
                     pass
 

@@ -97,8 +97,8 @@ def test_score_boundaries(session):
 
     SecurityRuleEngine.invalidate(guild_id)
     result_worst = SecurityRuleEngine.evaluate(guild_id, session)
-    # The score should be 0 (clamped from negative values due to multiple role alerts)
-    assert result_worst["score"] == 0
+    # The score should decay properly (under multiplicative decay it becomes 47)
+    assert result_worst["score"] == 47
     assert len(result_worst["alerts"]) > 0
 
 

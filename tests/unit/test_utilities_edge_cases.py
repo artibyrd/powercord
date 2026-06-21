@@ -83,8 +83,23 @@ def test_security_rule_engine_score_decrements():
         engine.rules[i].evaluate = MagicMock(return_value=[])
 
     result = engine.run_all(12345, MagicMock())
-    # 100 - 15 - 10 - 5 = 70
-    assert result["score"] == 70
+    # 100 * 0.85 * 0.90 * 0.95 = 72.675 -> 73
+    assert result["score"] == 73
+
+
+def test_security_rule_engine_score_excludes_inert_alerts():
+    """Verify that alerts containing '[INERT' in their details do not deduct points."""
+    engine = SecurityRuleEngine()
+
+    # 1 normal high alert and 1 inert high alert
+    engine.rules[0].evaluate = MagicMock(return_value=[{"severity": "high", "details": "Real alert"}])
+    engine.rules[1].evaluate = MagicMock(return_value=[{"severity": "high", "details": "[INERT] Inactive alert"}])
+    for i in range(2, len(engine.rules)):
+        engine.rules[i].evaluate = MagicMock(return_value=[])
+
+    result = engine.run_all(12345, MagicMock())
+    # Only 1 high alert is counted: 100 * 0.85 = 85
+    assert result["score"] == 85
 
 
 def test_security_rule_engine_invalid_overwrites_json(session):

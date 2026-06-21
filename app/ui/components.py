@@ -207,14 +207,14 @@ def _render_single_digit(digit_char: str, bg_color_class: str):
             return Div(cls=f"absolute rounded-sm bg-neutral/30 opacity-10 transition-all duration-200 {pos_cls}")
 
     return Div(
-        seg_cls("a", "top-0 left-[3px] right-[3px] h-[3px]"),
-        seg_cls("g", "top-[22px] left-[3px] right-[3px] h-[3px]"),
-        seg_cls("d", "bottom-0 left-[3px] right-[3px] h-[3px]"),
-        seg_cls("f", "top-[2px] left-0 w-[3px] h-[21px]"),
-        seg_cls("b", "top-[2px] right-0 w-[3px] h-[21px]"),
-        seg_cls("e", "bottom-[2px] left-0 w-[3px] h-[21px]"),
-        seg_cls("c", "bottom-[2px] right-0 w-[3px] h-[21px]"),
-        cls="w-8 h-12 relative flex-shrink-0",
+        seg_cls("a", "top-0 left-[2px] right-[2px] h-[2px]"),
+        seg_cls("g", "top-[15px] left-[2px] right-[2px] h-[2px]"),
+        seg_cls("d", "bottom-0 left-[2px] right-[2px] h-[2px]"),
+        seg_cls("f", "top-[2px] left-0 w-[2px] h-[13px]"),
+        seg_cls("b", "top-[2px] right-0 w-[2px] h-[13px]"),
+        seg_cls("e", "bottom-[2px] left-0 w-[2px] h-[13px]"),
+        seg_cls("c", "bottom-[2px] right-0 w-[2px] h-[13px]"),
+        cls="w-5 h-8 relative flex-shrink-0",
     )
 
 
@@ -230,10 +230,10 @@ def SegmentedDigit(value: int, label: str, color_cls: str):
     return Div(
         Div(
             *digits_ui,
-            cls="flex gap-1.5 p-2 bg-black/60 rounded-md border border-neutral-700 shadow-inner justify-center items-center",
+            cls="flex gap-1 p-1.5 bg-black/60 rounded-md border border-neutral-700 shadow-inner justify-center items-center",
         ),
         Span(label, cls=f"text-xs font-bold tracking-wider uppercase mt-2 {color_cls} opacity-90"),
-        cls="bg-black/20 rounded-md p-3 border border-white/5 flex flex-col items-center justify-center w-full",
+        cls="bg-black/20 rounded-md p-2 border border-white/5 flex flex-col items-center justify-center w-full",
     )
 
 

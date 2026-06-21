@@ -200,3 +200,14 @@ def test_format_details():
     html_str = str(res3)
     assert "Guest" in html_str
     assert "text-accent font-bold" in html_str
+
+
+def test_segmented_digit():
+    from app.ui.components import SegmentedDigit
+
+    digit_widget = SegmentedDigit(5, "Test Label", "text-error")
+    html_str = str(digit_widget)
+    # Check that dimensions are scaled down by ~30% (~20x32px which is w-5 h-8)
+    assert "w-5" in html_str
+    assert "h-8" in html_str
+    assert "Test Label" in html_str
