@@ -50,6 +50,8 @@ steps:
   # 2. Build the Docker image
   - name: "gcr.io/cloud-builders/docker"
     id: "Build Docker Image"
+    env:
+      - "DOCKER_BUILDKIT=1"
     args:
       [
         "build",
