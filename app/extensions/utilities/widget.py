@@ -88,6 +88,20 @@ def _get_role_badges(permissions: int) -> list[FT]:
     return badges
 
 
+def decode_permissions(perms_int: int) -> str:
+    """Decodes any permission bitmask into a comma-separated string of single-quoted,
+    human-readable permission names based on ALL_PERMISSIONS.
+    If no permissions are active, returns 'none'.
+    """
+    active = []
+    for name, value in ALL_PERMISSIONS.items():
+        if (perms_int & value) == value:
+            active.append(f"'{name}'")
+    if not active:
+        return "none"
+    return ", ".join(active)
+
+
 def guild_admin_audit_roles_widget(guild_id: int):
     """Displays Discord server roles for a specific guild.
 
@@ -597,6 +611,8 @@ class CategoryPermissionBaseline(SecurityRule):
     def evaluate(self, guild_id: int, session: Session) -> list[dict]:
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
         categories = {c.id: c for c in channels if c.type == "category"}
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        role_map = {str(r.id): r.name for r in roles}
         alerts = []
 
         for child in channels:
@@ -628,13 +644,35 @@ class CategoryPermissionBaseline(SecurityRule):
                 if leaked_allows or leaked_denies:
                     is_view_leak = bool((leaked_allows & (1 << 10)) or (leaked_denies & (1 << 10)))
                     alert_severity = "high" if is_view_leak else self.severity
+
+                    target_meta = child_ov.get(target_id, {})
+                    t_type = target_meta.get("type")
+                    t_name = target_meta.get("name")
+
+                    if target_id in role_map:
+                        display_name = f"Role '{role_map[target_id]}'"
+                    elif t_name:
+                        if t_type == "role":
+                            display_name = f"Role '{t_name}'"
+                        elif t_type == "member":
+                            display_name = f"Member '{t_name}'"
+                        else:
+                            display_name = f"ID '{t_name}'"
+                    else:
+                        if t_type == "role":
+                            display_name = f"Role ID {target_id}"
+                        elif t_type == "member":
+                            display_name = f"Member ID {target_id}"
+                        else:
+                            display_name = f"ID {target_id}"
+
                     alerts.append(
                         {
                             "rule": self.name,
                             "category": self.category,
                             "severity": alert_severity,
                             "message": f"Channel #{child.name} has permission exposure leak compared to parent category {parent.name}.",
-                            "details": f"Target ID {target_id} has less restricted overwrites. Leaked allows: {leaked_allows:#x}, leaked denies: {leaked_denies:#x}.",
+                            "details": f"Target {display_name} has less restricted overwrites. Leaked allows: {decode_permissions(leaked_allows)}, leaked denies: {decode_permissions(leaked_denies)}.",
                             "action_buttons": [],
                         }
                     )
@@ -726,7 +764,7 @@ class PublicAnnouncementProtection(SecurityRule):
                                 "category": self.category,
                                 "severity": self.severity,
                                 "message": f"Announcement channel #{c.name} allows role '{r.name}' to send messages or mention everyone.",
-                                "details": f"Role '{r.name}' (position {r.position}) has effective permissions {p:#x} in announcement channel.",
+                                "details": f"Role '{r.name}' (position {r.position}) has effective permissions {decode_permissions(p)} in announcement channel.",
                                 "action_buttons": [],
                             }
                         )
@@ -869,7 +907,7 @@ class UnauthorizedChatPings(SecurityRule):
                                 "category": self.category,
                                 "severity": self.severity,
                                 "message": f"Non-text location #{c.name} allows role '{r.name}' to send messages or mention everyone.",
-                                "details": f"Channel of type '{c.type}' allows role '{r.name}' below staff separator to Send Messages or Mention Everyone.",
+                                "details": f"Channel of type '{c.type}' allows role '{r.name}' below staff separator to Send Messages or Mention Everyone. Allowed permissions: {decode_permissions(p)}.",
                                 "action_buttons": [],
                             }
                         )
@@ -904,7 +942,7 @@ class LowTierRolePrivileges(SecurityRule):
                         "category": self.category,
                         "severity": self.severity,
                         "message": f"Low-tier role '{r.name}' has sensitive permissions.",
-                        "details": f"Role '{r.name}' (position {r.position}) has sensitive permissions: {r.permissions & mask:#x}.",
+                        "details": f"Role '{r.name}' (position {r.position}) has sensitive permissions: {decode_permissions(r.permissions & mask)}.",
                         "action_buttons": [],
                     }
                 )
@@ -1046,7 +1084,7 @@ class OverPrivilegedBotIntegrations(SecurityRule):
                         "category": self.category,
                         "severity": self.severity,
                         "message": f"Bot role '{r.name}' has excessive privileges.",
-                        "details": f"Managed integration role '{r.name}' has sensitive permissions: {r.permissions & mask:#x}.",
+                        "details": f"Managed integration role '{r.name}' has sensitive permissions: {decode_permissions(r.permissions & mask)}.",
                         "action_buttons": [],
                     }
                 )

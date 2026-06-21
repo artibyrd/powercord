@@ -96,6 +96,12 @@ def test_category_permission_baseline(session: Session):
     assert alerts[0]["severity"] == "high"  # view_channel is leaked
     assert "exposed-channel" in alerts[0]["message"]
 
+    # Assert details formatting & fallback ID
+    assert "Target ID 999 has less restricted overwrites" in alerts[0]["details"]
+    assert "Leaked allows: 'View Channel'" in alerts[0]["details"]
+    assert "leaked denies: 'View Channel'" in alerts[0]["details"]
+
+
 
 def test_category_permission_baseline_fully_synced(session: Session):
     guild_id = 12345
@@ -118,7 +124,100 @@ def test_category_permission_baseline_fully_synced(session: Session):
     assert len(alerts) == 0
 
 
+def test_category_permission_baseline_details_formatting(session: Session):
+    guild_id = 12345
+
+    # 1. Create a role in DB that matches the target ID
+    role_resolved = DiscordRole(id=111, guild_id=guild_id, name="MyResolvedRole", permissions=0, position=1)
+
+    # 2. Add channels with overwrites
+    parent = DiscordChannel(
+        id=100,
+        guild_id=guild_id,
+        parent_id=None,
+        name="Category",
+        type="category",
+        overwrites=json.dumps(
+            {
+                "111": {"allow": 0, "deny": 1 << 10},  # Role resolved from DB
+                "222": {"allow": 0, "deny": 1 << 10},  # Role resolved from metadata name & type
+                "333": {"allow": 0, "deny": 1 << 10},  # Member resolved from metadata name & type
+                "444": {"allow": 0, "deny": 1 << 10},  # Role fallback (no name but type = role)
+                "555": {"allow": 0, "deny": 1 << 10},  # Member fallback (no name but type = member)
+                "666": {"allow": 0, "deny": 1 << 10},  # Default fallback (no metadata)
+            }
+        ),
+    )
+
+    child = DiscordChannel(
+        id=101,
+        guild_id=guild_id,
+        parent_id=100,
+        name="exposed",
+        type="text",
+        overwrites=json.dumps(
+            {
+                "111": {"allow": 1 << 10, "deny": 0},
+                "222": {"allow": 1 << 10, "deny": 0, "type": "role", "name": "MetadataRole"},
+                "333": {"allow": 1 << 10, "deny": 0, "type": "member", "name": "MetadataMember"},
+                "444": {"allow": 1 << 10, "deny": 0, "type": "role"},
+                "555": {"allow": 1 << 10, "deny": 0, "type": "member"},
+                "666": {"allow": 1 << 10, "deny": 0},
+            }
+        ),
+    )
+
+    session.add_all([role_resolved, parent, child])
+    session.commit()
+
+    rule = CategoryPermissionBaseline()
+    alerts = rule.evaluate(guild_id, session)
+
+    # We expect 6 alerts, check the details string of each by matching the target ID or name
+    details_map = {}
+    for alert in alerts:
+        details = alert["details"]
+        if "MyResolvedRole" in details:
+            details_map["111"] = details
+        elif "MetadataRole" in details:
+            details_map["222"] = details
+        elif "MetadataMember" in details:
+            details_map["333"] = details
+        elif "444" in details:
+            details_map["444"] = details
+        elif "555" in details:
+            details_map["555"] = details
+        elif "666" in details:
+            details_map["666"] = details
+
+    assert (
+        "Target Role 'MyResolvedRole' has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: 'View Channel'."
+        in details_map["111"]
+    )
+    assert (
+        "Target Role 'MetadataRole' has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: 'View Channel'."
+        in details_map["222"]
+    )
+    assert (
+        "Target Member 'MetadataMember' has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: 'View Channel'."
+        in details_map["333"]
+    )
+    assert (
+        "Target Role ID 444 has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: 'View Channel'."
+        in details_map["444"]
+    )
+    assert (
+        "Target Member ID 555 has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: 'View Channel'."
+        in details_map["555"]
+    )
+    assert (
+        "Target ID 666 has less restricted overwrites. Leaked allows: 'View Channel', leaked denies: 'View Channel'."
+        in details_map["666"]
+    )
+
+
 def test_public_announcement_protection(session: Session):
+
     guild_id = 12345
 
     # Configure auditor
@@ -150,7 +249,10 @@ def test_public_announcement_protection(session: Session):
     alerts = rule.evaluate(guild_id, session)
 
     assert len(alerts) > 0
-    assert any(a["rule"] == "Public Announcement Protection" for a in alerts)
+    ann_alerts = [a for a in alerts if a["rule"] == "Public Announcement Protection"]
+    assert len(ann_alerts) == 1
+    assert "has effective permissions 'Send Messages' in announcement channel." in ann_alerts[0]["details"]
+
 
 
 def test_announcement_admin_bypass(session: Session):
@@ -269,6 +371,8 @@ def test_unauthorized_chat_pings(session: Session):
 
     assert len(alerts) == 1
     assert alerts[0]["rule"] == "Unauthorized Chat Pings in Non-Text Locations"
+    assert "Allowed permissions: 'Send Messages'." in alerts[0]["details"]
+
 
 
 def test_unauthorized_chat_pings_admin_bypass(session: Session):
@@ -311,6 +415,8 @@ def test_low_tier_role_privileges(session: Session):
 
     assert len(alerts) == 1
     assert "Low Admin" in alerts[0]["message"]
+    assert "has sensitive permissions: 'Administrator'." in alerts[0]["details"]
+
 
 
 def test_general_role_mentionability(session: Session):
@@ -401,6 +507,8 @@ def test_over_privileged_bot_integrations(session: Session):
 
     assert len(alerts) == 1
     assert "Overprivileged Bot" in alerts[0]["message"]
+    assert "has sensitive permissions: 'Administrator'." in alerts[0]["details"]
+
 
 
 def test_security_rule_engine(session: Session):
