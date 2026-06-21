@@ -70,14 +70,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-exclude = [
-    "debug_bypass.py",
-    "debug_caching.py",
-    "debug_test.py",
-    "find_culprit.py",
-    "run_full_suite_debug.py",
-    "run_seq.py",
-]
 
 [tool.ruff.lint]
 select = [
