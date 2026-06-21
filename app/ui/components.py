@@ -253,7 +253,7 @@ def ProgressBarStat(label: str, current: int, max_limit: int):
         ),
         Div(
             Div(
-                cls="bg-gradient-to-r from-primary to-secondary h-full rounded-full",
+                cls="bg-gradient-to-r from-[#e779c1] to-[#58c7f3] h-full rounded-full",
                 style=f"width: {percent}%",
             ),
             cls="w-full bg-black/40 h-2.5 rounded-full overflow-hidden border border-white/5",

@@ -13,7 +13,6 @@ from app.common.discord_constants import ALL_PERMISSIONS, OTHER_PERMISSIONS, SEN
 from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole, GuildExtensionSettings
 from app.ui.components import (
     Accordion,
-    AlertsGauge,
     Card,
     HealthScoreArc,
     ProgressBarStat,
@@ -482,20 +481,15 @@ def guild_admin_security_overview_widget(guild_id: int):
 
     DISCORD_MAX_ROLES = 250
     DISCORD_MAX_CHANNELS = 500
-    alert_pct = min(100, len(alerts) * 10)  # Each alert = 10%, capped at 100%
 
     gauges_row = Div(
         HealthScoreArc(score, len(alerts)),
-        AlertsGauge(alert_pct, len(alerts)),
-        cls="flex justify-around items-center w-full mb-1",
+        cls="flex justify-center items-center w-full mb-1",
     )
 
     stats_grid = Div(
-        Div(
-            ProgressBarStat("Total Roles", len(roles), DISCORD_MAX_ROLES),
-            ProgressBarStat("Total Channels", len(channels), DISCORD_MAX_CHANNELS),
-            cls="grid grid-cols-2 gap-3 w-full",
-        ),
+        ProgressBarStat("Total Roles", len(roles), DISCORD_MAX_ROLES),
+        ProgressBarStat("Total Channels", len(channels), DISCORD_MAX_CHANNELS),
         Div(
             SegmentedDigit(admin_roles_count, "Admin Roles", "text-error"),
             SegmentedDigit(private_channels_count, "Private Channels", "text-info"),
