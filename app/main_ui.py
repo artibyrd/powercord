@@ -81,7 +81,7 @@ hdrs = (
         rel="stylesheet",
         href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Share+Tech+Mono&display=swap",
     ),
-    Link(rel="stylesheet", href="/static/theme.css?v=synthwave_v3"),
+    Link(rel="stylesheet", href="/static/theme.css?v=synthwave_v4"),
     # Use marked.js for markdown rendering
     Script(src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"),
     # html-midi-player: web component for in-browser MIDI playback

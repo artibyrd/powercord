@@ -484,26 +484,35 @@ def guild_admin_security_overview_widget(guild_id: int):
     DISCORD_MAX_CHANNELS = 500
     alert_pct = min(100, len(alerts) * 10)  # Each alert = 10%, capped at 100%
 
-    stats_grid = Div(
+    gauges_row = Div(
+        HealthScoreArc(score, len(alerts)),
         AlertsGauge(alert_pct, len(alerts)),
-        ProgressBarStat("Total Roles", len(roles), DISCORD_MAX_ROLES),
-        ProgressBarStat("Total Channels", len(channels), DISCORD_MAX_CHANNELS),
-        SegmentedDigit(admin_roles_count, "Admin Roles", "text-error"),
-        SegmentedDigit(private_channels_count, "Private Channels", "text-info"),
-        cls="grid grid-cols-2 gap-4 w-full flex-1",
+        cls="flex justify-around items-center w-full mb-1",
     )
 
-    arc_ui = Div(HealthScoreArc(score, len(alerts)), cls="flex justify-center items-center w-full")
+    stats_grid = Div(
+        Div(
+            ProgressBarStat("Total Roles", len(roles), DISCORD_MAX_ROLES),
+            ProgressBarStat("Total Channels", len(channels), DISCORD_MAX_CHANNELS),
+            cls="grid grid-cols-2 gap-3 w-full",
+        ),
+        Div(
+            SegmentedDigit(admin_roles_count, "Admin Roles", "text-error"),
+            SegmentedDigit(private_channels_count, "Private Channels", "text-info"),
+            cls="grid grid-cols-2 gap-3 w-full",
+        ),
+        cls="flex flex-col gap-3 w-full flex-1",
+    )
 
     return Card(
         "Security Overview",
         Div(
-            arc_ui,
+            gauges_row,
             stats_grid,
-            cls="flex flex-col gap-6 items-center w-full h-full",
+            cls="flex flex-col gap-4 items-center w-full h-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
-        cls="min-h-[420px] h-full",
+        cls="min-h-[360px] h-full",
     )
 
 
@@ -1191,6 +1200,26 @@ def format_details(details: str) -> FT:
         else:
             return Span(p_clean, cls="badge badge-info badge-outline badge-xs mr-1 mb-1 font-medium")
 
+    def group_permissions(perms_list: list[str]) -> list[str]:
+        high = []
+        medium = []
+        low = []
+        has_none = False
+        for p in perms_list:
+            p_clean = p.strip("' ")
+            if p_clean.lower() == "none":
+                has_none = True
+            elif p_clean in high_risk_perms:
+                high.append(p)
+            elif p_clean in medium_risk_perms:
+                medium.append(p)
+            else:
+                low.append(p)
+        result = high + medium + low
+        if not result and has_none:
+            result = ["none"]
+        return result
+
     # 1. Check if CategoryPermissionBaseline
     if "Leaked allows:" in details:
         parts = details.split("Leaked allows:")
@@ -1204,8 +1233,8 @@ def format_details(details: str) -> FT:
         if denies_str.endswith("."):
             denies_str = denies_str[:-1]
 
-        allows = [p.strip("' ") for p in allows_str.split(",") if p.strip()]
-        denies = [p.strip("' ") for p in denies_str.split(",") if p.strip()]
+        allows = group_permissions([p.strip("' ") for p in allows_str.split(",") if p.strip()])
+        denies = group_permissions([p.strip("' ") for p in denies_str.split(",") if p.strip()])
 
         allows_badges = [make_perm_badge(p) for p in allows]
         denies_badges = [make_perm_badge(p) for p in denies]
@@ -1243,7 +1272,7 @@ def format_details(details: str) -> FT:
         if perms_str.startswith(":"):
             perms_str = perms_str[1:].strip()
 
-        perms = [p.strip("' ") for p in perms_str.split(",") if p.strip()]
+        perms = group_permissions([p.strip("' ") for p in perms_str.split(",") if p.strip()])
         perms_badges = [make_perm_badge(p) for p in perms]
 
         return Div(
@@ -1360,16 +1389,24 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         id=content_id,
         cls="mt-4 flex-1 min-h-0 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
     )
+    color_legend = Div(
+        Span("Risk Key: ", cls="text-xs font-bold opacity-70 mr-1"),
+        Span("High", cls="badge badge-error badge-xs mr-1.5 font-bold px-1.5 rounded-sm"),
+        Span("Med", cls="badge badge-warning badge-xs mr-1.5 font-semibold px-1.5 rounded-sm"),
+        Span("Low", cls="badge badge-info badge-xs font-medium px-1.5 rounded-sm"),
+        cls="flex items-center justify-center pt-2 mt-2 border-t border-white/5",
+    )
 
     return Card(
         "Security Alerts",
         Div(
             tabs_ui,
             alerts_list_ui,
+            color_legend,
             cls="flex flex-col h-full",
         ),
         id=f"guild-admin-alerts-{guild_id}",
-        cls="min-h-[420px] h-full",
+        cls="min-h-[360px] h-full",
     )
 
 
