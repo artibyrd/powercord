@@ -10,7 +10,15 @@ from sqlmodel import Session, select
 from app.common.alchemy import init_connection_engine
 from app.common.discord_constants import ALL_PERMISSIONS, OTHER_PERMISSIONS, SENSITIVE_PERMISSIONS
 from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole, GuildExtensionSettings
-from app.ui.components import Accordion, Card, HealthScoreArc, TabGroup
+from app.ui.components import (
+    Accordion,
+    AlertsGauge,
+    Card,
+    HealthScoreArc,
+    ProgressBarStat,
+    SegmentedDigit,
+    TabGroup,
+)
 
 engine = init_connection_engine()
 
@@ -471,27 +479,16 @@ def guild_admin_security_overview_widget(guild_id: int):
             except Exception:
                 logging.warning("Failed to parse overwrites for channel %s", c.id, exc_info=True)
 
+    DISCORD_MAX_ROLES = 250
+    DISCORD_MAX_CHANNELS = 500
+    alert_pct = min(100, len(alerts) * 10)  # Each alert = 10%, capped at 100%
+
     stats_grid = Div(
-        Div(
-            Div("Total Roles", cls="stat-title text-xs opacity-70"),
-            Div(str(len(roles)), cls="stat-value text-3xl"),
-            cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
-        ),
-        Div(
-            Div("Total Channels", cls="stat-title text-xs opacity-70"),
-            Div(str(len(channels)), cls="stat-value text-3xl"),
-            cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
-        ),
-        Div(
-            Div("Admin Roles", cls="stat-title text-xs text-error opacity-90"),
-            Div(str(admin_roles_count), cls="stat-value text-3xl text-error"),
-            cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
-        ),
-        Div(
-            Div("Private Channels", cls="stat-title text-xs text-info opacity-90"),
-            Div(str(private_channels_count), cls="stat-value text-3xl text-info"),
-            cls="stat bg-base-200/30 rounded-box p-3 shadow-inner",
-        ),
+        AlertsGauge(alert_pct, len(alerts)),
+        ProgressBarStat("Total Roles", len(roles), DISCORD_MAX_ROLES),
+        ProgressBarStat("Total Channels", len(channels), DISCORD_MAX_CHANNELS),
+        SegmentedDigit(admin_roles_count, "Admin Roles", "text-error"),
+        SegmentedDigit(private_channels_count, "Private Channels", "text-info"),
         cls="grid grid-cols-2 gap-4 w-full flex-1",
     )
 
@@ -502,9 +499,10 @@ def guild_admin_security_overview_widget(guild_id: int):
         Div(
             arc_ui,
             stats_grid,
-            cls="flex flex-col md:flex-row gap-6 items-center w-full",
+            cls="flex flex-col md:flex-row gap-6 items-center w-full h-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
+        cls="min-h-[420px]",
     )
 
 
@@ -1180,9 +1178,15 @@ def _render_alerts_list(alerts: list[dict]) -> FT:
                     cls="flex items-center mb-1",
                 ),
                 P(alert.get("message", ""), cls="text-sm font-medium mb-1"),
-                P(alert.get("details", ""), cls="text-xs opacity-70 mb-2"),
+                Details(
+                    Summary("Details", cls="text-xs opacity-70 cursor-pointer hover:opacity-100 select-none"),
+                    P(alert.get("details", ""), cls="text-xs opacity-70 mt-1"),
+                    cls="mb-2",
+                )
+                if alert.get("details")
+                else "",
                 Div(*buttons, cls="flex") if buttons else "",
-                cls=f"p-3 rounded-md border {border_cls} mb-3 last:mb-0",
+                cls=f"p-3 rounded-md border-l-4 border {border_cls} mb-3 last:mb-0",
             )
         )
     return Div(*alert_elements)
@@ -1209,7 +1213,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     alerts_list_ui = Div(
         _render_alerts_list(alerts),
         id=content_id,
-        cls="mt-4 max-h-[320px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
+        cls="mt-4 max-h-[400px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
     )
 
     return Card(
@@ -1219,6 +1223,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
             alerts_list_ui,
         ),
         id=f"guild-admin-alerts-{guild_id}",
+        cls="min-h-[420px]",
     )
 
 
@@ -1252,12 +1257,28 @@ def guild_admin_auditor_settings_widget(guild_id: int):
 
     form_content = Form(
         Div(
-            Label("Staff Separator Role", cls="label text-sm font-semibold"),
+            Div(
+                Label("Staff Separator Role", cls="label text-sm font-semibold"),
+                Div(
+                    I(cls="fa-solid fa-circle-info text-info opacity-60 cursor-help"),
+                    cls="tooltip tooltip-right",
+                    data_tip='The role that divides staff from community members in the role hierarchy. Roles below this position are treated as "non-staff" by the security auditor.',
+                ),
+                cls="flex items-center gap-2",
+            ),
             Select(*role_options, name="staff_separator_role_id", cls="select select-bordered w-full"),
             cls="form-control mb-4",
         ),
         Div(
-            Label("Staff Channel IDs (comma-separated)", cls="label text-sm font-semibold"),
+            Div(
+                Label("Staff Channel IDs", cls="label text-sm font-semibold"),
+                Div(
+                    I(cls="fa-solid fa-circle-info text-info opacity-60 cursor-help"),
+                    cls="tooltip tooltip-right",
+                    data_tip="Comma-separated Discord channel IDs that are considered staff-only. The auditor checks whether non-staff roles can view these channels.",
+                ),
+                cls="flex items-center gap-2",
+            ),
             Input(
                 type="text",
                 name="staff_channel_ids",
@@ -1268,7 +1289,15 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             cls="form-control mb-4",
         ),
         Div(
-            Label("Announcement Channel IDs (comma-separated)", cls="label text-sm font-semibold"),
+            Div(
+                Label("Announcement Channel IDs", cls="label text-sm font-semibold"),
+                Div(
+                    I(cls="fa-solid fa-circle-info text-info opacity-60 cursor-help"),
+                    cls="tooltip tooltip-right",
+                    data_tip="Comma-separated Discord channel IDs designated for announcements. The auditor checks whether non-staff roles can send messages or mention everyone in these channels.",
+                ),
+                cls="flex items-center gap-2",
+            ),
             Input(
                 type="text",
                 name="announcement_channel_ids",

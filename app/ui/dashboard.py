@@ -364,7 +364,6 @@ async def dashboard(guild_id: int, sess):
         access_roles_section,
         server_extensions,
         guild_widgets,
-        A("Back to Dashboard", href="/admin", role="button", cls="secondary mt-8 inline-block"),
         auth=auth,
         guild_id=guild_id,
         guild_name=guild["name"],
@@ -670,43 +669,47 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
             )
         )
 
-    card_content = []
+    table_content = Div(
+        Table(
+            Thead(
+                Tr(
+                    Th("Widget"),
+                    Th("Enabled"),
+                    Th("Widget Type"),
+                    Th("Widget Config"),
+                    Th("Order"),
+                )
+            ),
+            Tbody(*rows),
+            cls="table table-zebra w-full",
+        ),
+        cls="overflow-x-auto",
+    )
+
     if scope_id > 1:
         restore_form = Form(
             Hidden(name="scope_id", value=str(scope_id)),
             Button(
+                I(cls="fa-solid fa-rotate-left mr-1"),
                 "Restore Default Layout",
-                cls="btn btn-outline btn-warning btn-sm mb-4",
+                cls="btn btn-outline btn-warning btn-xs",
                 hx_confirm="Are you sure you want to restore the default layout? All custom positioning and sizing changes will be lost.",
             ),
             hx_post="/admin/layout/restore",
             hx_target="#layout-editor",
             hx_swap="innerHTML",
         )
-        card_content.append(restore_form)
-
-    card_content.append(
-        Div(
-            Table(
-                Thead(
-                    Tr(
-                        Th("Widget"),
-                        Th("Enabled"),
-                        Th("Widget Type"),
-                        Th("Widget Config"),
-                        Th("Order"),
-                    )
-                ),
-                Tbody(*rows),
-                cls="table table-zebra w-full",
-            ),
-            cls="overflow-x-auto",
+        card_title = Div(
+            H3("Widget Configuration", cls="card-title"),
+            restore_form,
+            cls="flex justify-between items-center w-full",
         )
-    )
+    else:
+        card_title = "Widget Configuration"
 
     table_card = Card(
-        "Widget Configuration",
-        Div(*card_content),
+        card_title,
+        table_content,
     )
 
     # Live preview: shows widgets in a 12-column CSS grid

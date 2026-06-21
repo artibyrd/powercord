@@ -26,7 +26,7 @@ from fasthtml.common import *
 import app.common.gsm_loader as gsecrets
 from app.common.extension_loader import GadgetInspector
 from app.ui.auth import auth_before, auth_router
-from app.ui.components import Card
+from app.ui.components import Accordion, Card
 from app.ui.dashboard import dashboard_router
 from app.ui.helpers import (
     SCOPE_ADMIN_DASHBOARD,
@@ -416,8 +416,8 @@ async def profile_page(sess):
 
     # Session Data Section
     session_data = Div(
-        H2("Session Data", cls="text-2xl font-bold mb-4"),
-        Div(
+        Accordion(
+            "Session Data",
             Div(
                 Div(id="json-tree", cls="font-mono text-sm"),
                 Script(f"""
@@ -455,7 +455,7 @@ async def profile_page(sess):
                 """),
                 cls="card-body",
             ),
-            cls="card bg-base-300 shadow-sm border border-base-content/20 mb-6",
+            open=False,
         ),
         cls="mb-8",
     )
@@ -495,6 +495,7 @@ async def admin_home(sess):
 
     stats_grid = Div(
         Card(
+            "System Stats",
             Div(
                 Div(
                     Div(I(cls="fa-solid fa-microchip mr-2"), "CPU", cls="stat-title"),
@@ -513,9 +514,9 @@ async def admin_home(sess):
                 ),
                 cls="stats stats-vertical lg:stats-horizontal w-full bg-transparent",
             ),
-            "System Stats",
         ),
         Card(
+            "Bot Stats",
             Div(
                 Div(
                     Div(I(cls="fa-solid fa-server mr-2"), "Guilds", cls="stat-title"),
@@ -531,7 +532,6 @@ async def admin_home(sess):
                 ),
                 cls="stats stats-vertical lg:stats-horizontal w-full bg-transparent",
             ),
-            "Bot Stats",
         ),
         cls="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8",
     )
