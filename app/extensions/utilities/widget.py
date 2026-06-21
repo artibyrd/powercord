@@ -1284,12 +1284,12 @@ class SecurityRuleEngine:
     @staticmethod
     def evaluate(guild_id: int, session: Session) -> dict:
         guild_id = int(guild_id)
-        
+
         # Calculate checksum based on DB records
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
         configs = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).all()
-        
+
         roles_sorted = sorted(roles, key=lambda r: r.id or 0)
         roles_serialized = [
             {
@@ -1305,7 +1305,7 @@ class SecurityRuleEngine:
             }
             for r in roles_sorted
         ]
-        
+
         channels_sorted = sorted(channels, key=lambda c: c.id or 0)
         channels_serialized = [
             {
@@ -1319,7 +1319,7 @@ class SecurityRuleEngine:
             }
             for c in channels_sorted
         ]
-        
+
         configs_sorted = sorted(configs, key=lambda c: c.guild_id or 0)
         configs_serialized = [
             {
@@ -1330,20 +1330,20 @@ class SecurityRuleEngine:
             }
             for c in configs_sorted
         ]
-        
+
         payload = {
             "roles": roles_serialized,
             "channels": channels_serialized,
             "configs": configs_serialized,
         }
-        
+
         json_str = json.dumps(payload, sort_keys=True)
         checksum = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
-        
+
         cache_key = f"{guild_id}:{checksum}"
         if cache_key in SecurityRuleEngine._evaluation_cache:
             return SecurityRuleEngine._evaluation_cache[cache_key]
-            
+
         res = SecurityRuleEngine().run_all(guild_id, session)
         SecurityRuleEngine._evaluation_cache[cache_key] = res
         return res

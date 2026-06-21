@@ -84,6 +84,7 @@ def test_cache_reflects_db_changes_after_invalidation(session: Session):
 
     while identical database state leads to cache hit.
     """
+    from unittest.mock import patch
     guild_id = 91000
     SecurityRuleEngine._evaluation_cache.clear()
 
@@ -93,23 +94,34 @@ def test_cache_reflects_db_changes_after_invalidation(session: Session):
     session.add_all([config, sep_role])
     session.commit()
 
-    # 1. First evaluation
-    res1 = SecurityRuleEngine.evaluate(guild_id, session)
-    score_before = res1["score"]
+    with patch("app.extensions.utilities.widget.hashlib.sha256") as mock_sha:
+        mock_sha.return_value.hexdigest.return_value = "constant_checksum_for_testing"
 
-    # 2. Re-evaluate with identical DB state -> should be a cache hit (same object)
-    res_hit = SecurityRuleEngine.evaluate(guild_id, session)
-    assert res_hit is res1  # Cache hit (exact same dict returned)
+        # 1. First evaluation
+        res1 = SecurityRuleEngine.evaluate(guild_id, session)
+        score_before = res1["score"]
 
-    # 3. Add an admin role below the separator (modifying database)
-    low_role = DiscordRole(id=91002, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
-    session.add(low_role)
-    session.commit()
+        # 2. Re-evaluate with identical DB state -> should be a cache hit (same object)
+        res_hit = SecurityRuleEngine.evaluate(guild_id, session)
+        assert res_hit is res1  # Cache hit (exact same dict returned)
 
-    # 4. Re-evaluate after DB change -> should be a cache miss (new object, different score)
-    res_fresh = SecurityRuleEngine.evaluate(guild_id, session)
-    assert res_fresh is not res1  # Cache miss (new dict returned)
-    assert res_fresh["score"] < score_before  # Lower score due to the new role
+        # 3. Add an admin role below the separator (modifying database)
+        low_role = DiscordRole(id=91002, guild_id=guild_id, name="Low Admin", permissions=1 << 3, position=2)
+        session.add(low_role)
+        session.commit()
+
+        # 4. Re-evaluate without invalidation -> should STILL be a cache hit (constant checksum bypasses change detection)
+        res_stale = SecurityRuleEngine.evaluate(guild_id, session)
+        assert res_stale is res1
+
+        # 5. Invalidate the guild
+        SecurityRuleEngine.invalidate(guild_id)
+
+        # 6. Re-evaluate after invalidation -> should be a cache miss (new object, different score)
+        res_fresh = SecurityRuleEngine.evaluate(guild_id, session)
+        assert res_fresh is not res1  # Cache miss (new dict returned)
+        assert res_fresh["score"] < score_before  # Lower score due to the new role
+
 
 
 def test_concurrent_evaluations(engine):

@@ -18,6 +18,7 @@ pytestmark = pytest.mark.unit
 @patch("sqlmodel.Session")
 @pytest.mark.asyncio
 async def test_post_auditor_settings(mock_session_cls, mock_init_engine):
+    from starlette.datastructures import FormData
     guild_id = 999
 
     mock_session = MagicMock()
@@ -26,14 +27,16 @@ async def test_post_auditor_settings(mock_session_cls, mock_init_engine):
 
     req = MagicMock()
     req.form = AsyncMock(
-        return_value={
-            "staff_separator_role_id": "12345",
-            "staff_channel_ids": "1001, 1002",
-            "announcement_channel_ids": "2001",
-        }
+        return_value=FormData([
+            ("staff_separator_role_id", "12345"),
+            ("staff_channel_ids", "1001"),
+            ("staff_channel_ids", "1002"),
+            ("announcement_channel_ids", "2001"),
+        ])
     )
 
     resp = await post_auditor_settings(guild_id, req)
+
 
     # Assertions
     assert resp.headers.get("HX-Refresh") == "true"

@@ -788,6 +788,9 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
             existing_settings = session.exec(select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)).all()
             assert len(existing_settings) == 0
 
+            # Commit/release any active transaction locks on the test session before calling the endpoint
+            session.commit()
+
             # Call dashboard router function (representing first load)
             sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
             await dashboard(guild_id, sess)
