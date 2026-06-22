@@ -303,7 +303,7 @@ async def test_auto_provisioning_sequential_requests(session, engine):
                     WidgetSettings.guild_id == guild_id, WidgetSettings.extension_name == extension_name
                 )
             ).all()
-            assert len(widgets_after_first) == 8
+            assert len(widgets_after_first) == 9
 
             # 2. Modify one widget setting (disable guild_admin_alerts)
             target_widget = "guild_admin_alerts_widget"
@@ -327,7 +327,7 @@ async def test_auto_provisioning_sequential_requests(session, engine):
                     WidgetSettings.guild_id == guild_id, WidgetSettings.extension_name == extension_name
                 )
             ).all()
-            assert len(widgets_after_second) == 8
+            assert len(widgets_after_second) == 9
 
             db_widget_after = session.exec(
                 select(WidgetSettings).where(
@@ -385,7 +385,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
                     WidgetSettings.guild_id == guild_id, WidgetSettings.extension_name == extension_name
                 )
             ).all()
-            assert len(widgets) == 8
+            assert len(widgets) == 9
 
             # Enable again (idempotency check)
             update_guild_extension_setting(guild_id, extension_name, "widget", True)
@@ -398,7 +398,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
                 )
             ).all()
             assert len(ext_settings) == 1
-            assert len(session.exec(select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)).all()) == 8
+            assert len(session.exec(select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)).all()) == 9
 
             # Disable the extension
             update_guild_extension_setting(guild_id, extension_name, "widget", False)
@@ -417,7 +417,7 @@ def test_auto_provisioning_sequential_extension_updates(session, engine):
             # Re-enable
             update_guild_extension_setting(guild_id, extension_name, "widget", True)
             session.expire_all()
-            assert len(session.exec(select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)).all()) == 8
+            assert len(session.exec(select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)).all()) == 9
 
     finally:
         # Proper cleanup of any database mutations in finally block

@@ -669,7 +669,7 @@ def test_dashboard_page_with_provisioned_widgets(session):
             )
         ).all()
 
-        assert len(widgets) == 8
+        assert len(widgets) == 9
 
         # Separate fixed and floating widgets based on their position_config
         fixed_widgets = []
@@ -820,7 +820,7 @@ async def test_dashboard_auto_provisioning_on_first_load(session):
             for ew in expected_widgets:
                 assert ew in widget_names
 
-            assert len(widgets) == 8
+            assert len(widgets) == 9
     finally:
         from sqlmodel import delete
 

@@ -1629,10 +1629,15 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
             buttons.append(Button(btn["text"], hx_post=btn["hx_post"], cls="btn btn-xs btn-outline btn-primary mr-2"))
 
         # Add Override button
+        alert_hash = alert.get("alert_hash")
+        if not alert_hash:
+            alert_hash = hashlib.sha256(
+                f"{alert.get('rule')}:{alert.get('category')}:{alert.get('message')}".encode("utf-8")
+            ).hexdigest()
         buttons.append(
             Button(
                 "Override",
-                hx_get=f"/dashboard/{guild_id}/alerts/override-confirm?alert_hash={alert['alert_hash']}",
+                hx_get=f"/dashboard/{guild_id}/alerts/override-confirm?alert_hash={alert_hash}",
                 hx_target="#modal-container",
                 hx_swap="innerHTML",
                 cls="btn btn-xs btn-outline btn-warning mr-2",
