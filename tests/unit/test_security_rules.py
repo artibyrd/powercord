@@ -833,4 +833,3 @@ def test_security_rule_engine_checksum_caching(session: Session):
 
     res4 = SecurityRuleEngine.evaluate(guild_id, session)
     assert res4 is not res3  # cache miss returns a new object reference
-

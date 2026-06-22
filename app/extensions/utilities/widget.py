@@ -24,13 +24,42 @@ from app.ui.components import (
 engine = init_connection_engine()
 
 
+high_risk_perms = {
+    "Administrator",
+    "Manage Server",
+    "Manage Roles",
+    "Manage Channels",
+    "Kick Members",
+    "Ban Members",
+    "Manage Messages",
+    "Mention Everyone",
+    "Moderate Members",
+    "Manage Webhooks",
+}
+
+medium_risk_perms = {
+    "View Audit Log",
+    "Mute Members",
+    "Deafen Members",
+    "Move Members",
+    "Manage Emojis & Stickers",
+    "Manage Events",
+    "View Channel",
+    "Send Messages",
+    "Send Messages in Threads",
+    "Create Public Threads",
+    "Create Private Threads",
+    "Manage Nicknames",
+}
+
+
 def _get_common_legend(for_roles=False):
     items = []
     if for_roles:
         items.append(
             Li(
-                Span("✅/❌: ", cls="font-bold"),
-                "Indicates if a role is Hoisted (displayed separately) or Managed (by an integration).",
+                Span("✅: ", cls="font-bold"),
+                "Indicates if a role is Sidebar (displayed separately) or Bot/Int (managed by an integration).",
             )
         )
         items.append(
@@ -144,10 +173,17 @@ def guild_admin_audit_roles_widget(guild_id: int):
         detailed_perms = []
         for perm_name, perm_value in ALL_PERMISSIONS.items():
             if bool(role.permissions & perm_value) or bool(role.permissions & (1 << 3)):
+                if perm_name in high_risk_perms:
+                    badge_color = "bg-error/20 text-error border-error/30"
+                elif perm_name in medium_risk_perms:
+                    badge_color = "bg-warning/20 text-warning border-warning/30"
+                else:
+                    badge_color = "bg-info/20 text-info border-info/30"
+
                 detailed_perms.append(
                     Span(
                         perm_name,
-                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-base-content/10 bg-base-200 text-base-content/70 w-full",
+                        cls=f"inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border {badge_color} w-full",
                     )
                 )
 
@@ -186,8 +222,8 @@ def guild_admin_audit_roles_widget(guild_id: int):
             Div("ID", cls="col-span-3 font-bold"),
             Div("Pos", cls="col-span-1 font-bold"),
             Div("Key Perms", cls="col-span-2 font-bold"),
-            Div("Hoist", cls="col-span-1 font-bold text-center"),
-            Div("Bot", cls="col-span-1 font-bold text-center"),
+            Div("Sidebar", cls="col-span-1 font-bold text-center"),
+            Div("Bot/Int", cls="col-span-1 font-bold text-center"),
             cls="grid grid-cols-12 gap-2 px-4 py-2 text-xs uppercase opacity-70 border-b border-white/10 bg-base-300/30",
         ),
         Div(*role_rows, cls="text-sm"),
@@ -282,14 +318,14 @@ def guild_admin_audit_channels_widget(guild_id: int):
                                 target_detailed_perms.append(
                                     Span(
                                         perm_name,
-                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-base-200 text-base-content/80 border border-base-content/10 w-full",
+                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-success/20 text-success border border-success/30 w-full",
                                     )
                                 )
                             elif deny_val & perm_value:
                                 target_detailed_perms.append(
                                     Span(
                                         perm_name,
-                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-neutral/20 text-neutral-content/80 border border-neutral/30 w-full",
+                                        cls="inline-flex justify-center items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-error/20 text-error border border-error/30 w-full",
                                     )
                                 )
 
@@ -505,58 +541,64 @@ def guild_admin_security_overview_widget(guild_id: int):
         cls="flex flex-col gap-3 w-full flex-1",
     )
 
-    high_count = sum(1 for a in alerts if a.get("severity", "").lower() == "high")
-    med_count = sum(1 for a in alerts if a.get("severity", "").lower() == "medium")
-    low_count = sum(1 for a in alerts if a.get("severity", "").lower() == "low")
-
-    categories_count = {}
+    categories_list = ["Exposure", "Pings", "Roles", "Integrations"]
+    severities_list = ["High", "Medium", "Low"]
+    matrix = {cat.lower(): {sev.lower(): 0 for sev in severities_list} for cat in categories_list}
     for a in alerts:
-        cat = a.get("category", "unknown").title()
-        categories_count[cat] = categories_count.get(cat, 0) + 1
+        a_cat = a.get("category", "").lower()
+        a_sev = a.get("severity", "").lower()
+        if a_cat in matrix and a_sev in matrix[a_cat]:
+            matrix[a_cat][a_sev] += 1
 
-    category_items = []
-    for cat, count in sorted(categories_count.items()):
-        category_items.append(
-            Span(
-                f"{cat}: {count}",
-                cls="text-[10px] font-semibold opacity-80 bg-base-200/50 px-2 py-0.5 rounded border border-white/5",
+    def format_count(count):
+        if count == 0:
+            return Span("0", cls="opacity-30 text-base-content/40 font-normal")
+        return Span(str(count), cls="font-semibold")
+
+    table_rows = []
+    for cat in categories_list:
+        cat_lower = cat.lower()
+        table_rows.append(
+            Tr(
+                Td(cat, cls="text-left font-medium opacity-80"),
+                Td(format_count(matrix[cat_lower]["high"])),
+                Td(format_count(matrix[cat_lower]["medium"])),
+                Td(format_count(matrix[cat_lower]["low"])),
             )
         )
+
+    breakdown_table = Table(
+        Thead(
+            Tr(
+                Th("Category", cls="text-left"),
+                Th("High", cls="text-error font-bold"),
+                Th("Medium", cls="text-warning font-semibold"),
+                Th("Low", cls="text-info font-medium"),
+            )
+        ),
+        Tbody(*table_rows),
+        cls="table table-xs w-full border border-base-300 bg-base-200/30 rounded-md",
+    )
 
     breakdown_section = Div(
         Div(
             "Alerts Breakdown",
             cls="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-2 border-t border-white/10 pt-2 w-full text-center",
         ),
-        Div(
-            Div(
-                Span(f"High: {high_count}", cls="badge badge-error badge-xs px-2 py-0.5 font-bold text-error-content"),
-                Span(
-                    f"Med: {med_count}",
-                    cls="badge badge-warning badge-xs px-2 py-0.5 font-semibold text-warning-content",
-                ),
-                Span(f"Low: {low_count}", cls="badge badge-info badge-xs px-2 py-0.5 font-medium text-info-content"),
-                cls="flex justify-center gap-1.5 mb-2 w-full",
-            ),
-            Div(
-                *category_items if category_items else [Span("No alerts", cls="text-xs opacity-50 italic")],
-                cls="flex flex-wrap justify-center gap-1.5 w-full",
-            ),
-            cls="w-full",
-        ),
-        cls="mt-2 w-full flex flex-col items-center",
+        breakdown_table,
+        cls="w-full flex flex-col items-center",
     )
 
     return Card(
         "Security Overview",
         Div(
             gauges_row,
-            stats_grid,
             breakdown_section,
+            stats_grid,
             cls="flex flex-col gap-4 items-center w-full h-full",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
-        cls="min-h-[360px] h-full",
+        cls="min-h-[480px] h-full",
     )
 
 
@@ -637,6 +679,23 @@ def guild_admin_audit_permissions_widget(guild_id: int):
         ),
     )
 
+    legend_block = Div(
+        Span("Badge Colors: ", cls="text-xs font-bold opacity-70 mr-1"),
+        Span(
+            "Red (Administrator)",
+            cls="badge badge-error text-error-content badge-xs mr-2 font-semibold px-2 py-0.5 rounded-md",
+        ),
+        Span(
+            "Yellow (Bot-owned)",
+            cls="badge badge-warning text-warning-content badge-xs mr-2 font-semibold px-2 py-0.5 rounded-md",
+        ),
+        Span(
+            "Gray (Standard)",
+            cls="badge badge-neutral text-neutral-content badge-xs font-semibold px-2 py-0.5 rounded-md",
+        ),
+        cls="flex items-center flex-wrap mb-4 bg-base-200/50 p-2.5 rounded-md border border-base-300",
+    )
+
     return Accordion(
         "Permissions Matrix",
         Div(
@@ -644,6 +703,7 @@ def guild_admin_audit_permissions_widget(guild_id: int):
                 "Overview indicating which roles currently possess sensitive administrative or moderation permissions.",
                 cls="text-xs opacity-70 mb-2",
             ),
+            legend_block,
             primary_table,
             secondary_table,
         ),
@@ -1381,45 +1441,23 @@ def format_details(details: str) -> FT:
     if not details:
         return ""
 
-    high_risk_perms = {
-        "Administrator",
-        "Manage Server",
-        "Manage Roles",
-        "Manage Channels",
-        "Kick Members",
-        "Ban Members",
-        "Manage Messages",
-        "Mention Everyone",
-        "Moderate Members",
-        "Manage Webhooks",
-    }
-    medium_risk_perms = {
-        "View Audit Log",
-        "Mute Members",
-        "Deafen Members",
-        "Move Members",
-        "Manage Emojis & Stickers",
-        "Manage Events",
-        "View Channel",
-        "Send Messages",
-        "Send Messages in Threads",
-        "Create Public Threads",
-        "Create Private Threads",
-        "Manage Nicknames",
-    }
-
     def make_perm_badge(p_name: str) -> FT:
         p_clean = p_name.strip("' ")
         if p_clean.lower() == "none":
             return Span("None", cls="text-xs opacity-50 font-mono")
         if p_clean in high_risk_perms:
             return Span(
-                p_clean, cls="badge badge-error badge-outline badge-xs px-2 py-0.5 mr-1 mb-1 font-bold shadow-sm"
+                p_clean,
+                cls="badge badge-error badge-outline badge-sm h-auto py-1 px-2.5 mr-1 mb-1 font-semibold shadow-sm",
             )
         elif p_clean in medium_risk_perms:
-            return Span(p_clean, cls="badge badge-warning badge-outline badge-xs px-2 py-0.5 mr-1 mb-1 font-semibold")
+            return Span(
+                p_clean, cls="badge badge-warning badge-outline badge-sm h-auto py-1 px-2.5 mr-1 mb-1 font-semibold"
+            )
         else:
-            return Span(p_clean, cls="badge badge-info badge-outline badge-xs px-2 py-0.5 mr-1 mb-1 font-medium")
+            return Span(
+                p_clean, cls="badge badge-info badge-outline badge-sm h-auto py-1 px-2.5 mr-1 mb-1 font-semibold"
+            )
 
     def group_permissions(perms_list: list[str]) -> list[str]:
         high = []
@@ -1630,7 +1668,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
             cls="flex flex-col h-full",
         ),
         id=f"guild-admin-alerts-{guild_id}",
-        cls="min-h-[360px] h-full",
+        cls="min-h-[480px] h-full",
     )
 
 
@@ -1663,13 +1701,39 @@ def guild_admin_auditor_settings_widget(guild_id: int):
     for role in roles:
         role_options.append(Option(role.name, value=str(role.id), selected=(role.id == selected_role_id)))
 
-    staff_options = []
-    ann_options = []
+    staff_checkboxes = []
+    ann_checkboxes = []
     for chan in channels:
         staff_selected = chan.id in staff_ids_list
         ann_selected = chan.id in ann_ids_list
-        staff_options.append(Option(f"#{chan.name}", value=str(chan.id), selected=staff_selected))
-        ann_options.append(Option(f"#{chan.name}", value=str(chan.id), selected=ann_selected))
+        staff_checkboxes.append(
+            Label(
+                Input(
+                    type="checkbox",
+                    name="staff_channel_ids",
+                    value=str(chan.id),
+                    checked=staff_selected,
+                    cls="checkbox checkbox-primary checkbox-xs",
+                ),
+                Span(f" #{chan.name}", cls="label-text ml-2 font-medium"),
+                cls="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-xs channel-item",
+                data_name=chan.name.lower(),
+            )
+        )
+        ann_checkboxes.append(
+            Label(
+                Input(
+                    type="checkbox",
+                    name="announcement_channel_ids",
+                    value=str(chan.id),
+                    checked=ann_selected,
+                    cls="checkbox checkbox-primary checkbox-xs",
+                ),
+                Span(f" #{chan.name}", cls="label-text ml-2 font-medium"),
+                cls="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-xs channel-item",
+                data_name=chan.name.lower(),
+            )
+        )
 
     form_content = Form(
         Div(
@@ -1695,11 +1759,16 @@ def guild_admin_auditor_settings_widget(guild_id: int):
                 ),
                 cls="flex items-center gap-2",
             ),
-            Select(
-                *staff_options,
-                name="staff_channel_ids",
-                multiple=True,
-                cls="select select-bordered w-full h-32",
+            Input(
+                type="text",
+                placeholder="Search staff channels...",
+                cls="input input-bordered input-xs w-full mb-2",
+                oninput="const q = this.value.toLowerCase(); document.getElementById('staff-channels-list').querySelectorAll('.channel-item').forEach(el => { el.style.display = el.getAttribute('data-name').includes(q) ? 'flex' : 'none'; })",
+            ),
+            Div(
+                *staff_checkboxes,
+                id="staff-channels-list",
+                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50",
             ),
             cls="form-control mb-4",
         ),
@@ -1713,11 +1782,16 @@ def guild_admin_auditor_settings_widget(guild_id: int):
                 ),
                 cls="flex items-center gap-2",
             ),
-            Select(
-                *ann_options,
-                name="announcement_channel_ids",
-                multiple=True,
-                cls="select select-bordered w-full h-32",
+            Input(
+                type="text",
+                placeholder="Search announcement channels...",
+                cls="input input-bordered input-xs w-full mb-2",
+                oninput="const q = this.value.toLowerCase(); document.getElementById('ann-channels-list').querySelectorAll('.channel-item').forEach(el => { el.style.display = el.getAttribute('data-name').includes(q) ? 'flex' : 'none'; })",
+            ),
+            Div(
+                *ann_checkboxes,
+                id="ann-channels-list",
+                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50",
             ),
             cls="form-control mb-4",
         ),

@@ -85,6 +85,7 @@ def test_cache_reflects_db_changes_after_invalidation(session: Session):
     while identical database state leads to cache hit.
     """
     from unittest.mock import patch
+
     guild_id = 91000
     SecurityRuleEngine._evaluation_cache.clear()
 
@@ -121,7 +122,6 @@ def test_cache_reflects_db_changes_after_invalidation(session: Session):
         res_fresh = SecurityRuleEngine.evaluate(guild_id, session)
         assert res_fresh is not res1  # Cache miss (new dict returned)
         assert res_fresh["score"] < score_before  # Lower score due to the new role
-
 
 
 def test_concurrent_evaluations(engine):
