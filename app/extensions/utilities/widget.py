@@ -1643,7 +1643,7 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
                 hx_get=f"/dashboard/{guild_id}/alerts/override-confirm?alert_hash={alert_hash}",
                 hx_target="#modal-container",
                 hx_swap="innerHTML",
-                cls="btn btn-xs btn-outline btn-warning mr-2",
+                cls="btn btn-xs btn-outline btn-warning ml-auto",
             )
         )
 
@@ -1674,7 +1674,7 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
                 )
                 if alert.get("details")
                 else "",
-                Div(*buttons, cls="flex") if buttons else "",
+                Div(*buttons, cls="flex w-full items-center") if buttons else "",
                 cls=f"p-3 rounded-md border-l-4 border {border_cls} mb-3 last:mb-0",
             )
         )
@@ -2202,8 +2202,9 @@ def get_override_confirm_modal_html(guild_id: int, alert_hash: str) -> FT:
         )
         return Dialog(
             modal_content,
+            Form(method="dialog", cls="modal-backdrop", children=[Button("close")]),
             id="modal-override-confirm",
-            cls="modal modal-open",
+            cls="modal modal-bottom sm:modal-middle",
             open=True,
         )
 
@@ -2257,8 +2258,9 @@ def get_override_confirm_modal_html(guild_id: int, alert_hash: str) -> FT:
 
     return Dialog(
         modal_content,
+        Form(method="dialog", cls="modal-backdrop", children=[Button("close")]),
         id="modal-override-confirm",
-        cls="modal modal-open",
+        cls="modal modal-bottom sm:modal-middle",
         open=True,
     )
 
