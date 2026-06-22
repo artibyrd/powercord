@@ -11,7 +11,13 @@ from sqlmodel import Session, select
 
 from app.common.alchemy import init_connection_engine
 from app.common.discord_constants import ALL_PERMISSIONS, OTHER_PERMISSIONS, SENSITIVE_PERMISSIONS
-from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole, GuildExtensionSettings
+from app.db.models import (
+    DiscordAuditorConfig,
+    DiscordChannel,
+    DiscordRole,
+    GuildExtensionSettings,
+    SecurityAlertOverride,
+)
 from app.ui.components import (
     Accordion,
     Card,
@@ -1342,13 +1348,14 @@ class SecurityRuleEngine:
         cls._evaluation_cache.pop(guild_id, None)
 
     @staticmethod
-    def evaluate(guild_id: int, session: Session) -> dict:
+    def evaluate(guild_id: int, session: Session, include_overridden: bool = False) -> dict:
         guild_id = int(guild_id)
 
         # Calculate checksum based on DB records
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
         configs = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).all()
+        overrides = session.exec(select(SecurityAlertOverride).where(SecurityAlertOverride.guild_id == guild_id)).all()
 
         roles_sorted = sorted(roles, key=lambda r: r.id or 0)
         roles_serialized = [
@@ -1391,24 +1398,34 @@ class SecurityRuleEngine:
             for c in configs_sorted
         ]
 
+        overrides_sorted = sorted(overrides, key=lambda o: o.id or 0)
+        overrides_serialized = [
+            {
+                "alert_hash": o.alert_hash,
+                "comment": o.comment,
+            }
+            for o in overrides_sorted
+        ]
+
         payload = {
             "roles": roles_serialized,
             "channels": channels_serialized,
             "configs": configs_serialized,
+            "overrides": overrides_serialized,
         }
 
         json_str = json.dumps(payload, sort_keys=True)
         checksum = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
-        cache_key = f"{guild_id}:{checksum}"
+        cache_key = f"{guild_id}:{checksum}:{include_overridden}"
         if cache_key in SecurityRuleEngine._evaluation_cache:
             return SecurityRuleEngine._evaluation_cache[cache_key]
 
-        res = SecurityRuleEngine().run_all(guild_id, session)
+        res = SecurityRuleEngine().run_all(guild_id, session, include_overridden=include_overridden)
         SecurityRuleEngine._evaluation_cache[cache_key] = res
         return res
 
-    def run_all(self, guild_id: int, session: Session) -> dict:
+    def run_all(self, guild_id: int, session: Session, include_overridden: bool = False) -> dict:
         alerts = []
         for rule in self.rules:
             try:
@@ -1417,27 +1434,41 @@ class SecurityRuleEngine:
             except Exception as e:
                 logging.exception(f"Error evaluating rule {rule.name}: {e}")
 
+        # Compute hash for every alert and filter if not include_overridden
+        overrides = session.exec(select(SecurityAlertOverride).where(SecurityAlertOverride.guild_id == guild_id)).all()
+        override_hashes = {o.alert_hash for o in overrides}
+
+        filtered_alerts = []
+        for alert in alerts:
+            ahash = hashlib.sha256(
+                f"{alert.get('rule')}:{alert.get('category')}:{alert.get('message')}".encode("utf-8")
+            ).hexdigest()
+            alert["alert_hash"] = ahash
+            if include_overridden or ahash not in override_hashes:
+                filtered_alerts.append(alert)
+
+        # Now compute score only on non-overridden alerts!
         num_high = 0
         num_medium = 0
         num_low = 0
-        for alert in alerts:
-            details = str(alert.get("details", ""))
-            if "[INERT" in details:
-                continue
-            sev = alert.get("severity", "").lower()
-            if sev == "high":
-                num_high += 1
-            elif sev == "medium":
-                num_medium += 1
-            elif sev == "low":
-                num_low += 1
+        for alert in filtered_alerts:
+            if alert["alert_hash"] not in override_hashes:
+                details = str(alert.get("details", ""))
+                if "[INERT" in details:
+                    continue
+                sev = alert.get("severity", "").lower()
+                if sev == "high":
+                    num_high += 1
+                elif sev == "medium":
+                    num_medium += 1
+                elif sev == "low":
+                    num_low += 1
 
         score = int(round(100 * (0.85**num_high) * (0.90**num_medium) * (0.95**num_low)))
         score = max(0, min(100, score))
         severity_order = {"high": 0, "medium": 1, "low": 2}
-        alerts.sort(key=lambda a: severity_order.get(a.get("severity", "").lower(), 3))
-        return {"score": score, "alerts": alerts}
-
+        filtered_alerts.sort(key=lambda a: severity_order.get(a.get("severity", "").lower(), 3))
+        return {"score": score, "alerts": filtered_alerts}
 
 
 def format_details(details: str) -> FT:
@@ -1575,7 +1606,7 @@ def format_details(details: str) -> FT:
     )
 
 
-def _render_alerts_list(alerts: list[dict]) -> FT:
+def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
     if not alerts:
         return Div("No security alerts found.", cls="text-sm opacity-70 p-4 text-center")
 
@@ -1596,6 +1627,17 @@ def _render_alerts_list(alerts: list[dict]) -> FT:
         buttons = []
         for btn in alert.get("action_buttons", []):
             buttons.append(Button(btn["text"], hx_post=btn["hx_post"], cls="btn btn-xs btn-outline btn-primary mr-2"))
+
+        # Add Override button
+        buttons.append(
+            Button(
+                "Override",
+                hx_get=f"/dashboard/{guild_id}/alerts/override-confirm?alert_hash={alert['alert_hash']}",
+                hx_target="#modal-container",
+                hx_swap="innerHTML",
+                cls="btn btn-xs btn-outline btn-warning mr-2",
+            )
+        )
 
         alert_elements.append(
             Div(
@@ -1689,7 +1731,7 @@ def get_security_rules_modal(guild_id: int) -> FT:
             "severity": "Medium",
             "desc": "Checks if a managed bot role has Administrator, Manage Server, Manage Roles, or Manage Channels permissions.",
             "remediation": "Reduce bot role permissions to the minimum required scope.",
-        }
+        },
     ]
 
     modal_id = f"modal-security-rules-info-{guild_id}"
@@ -1723,7 +1765,10 @@ def get_security_rules_modal(guild_id: int) -> FT:
                 H4(r["name"], cls="text-md font-bold text-base-content mb-1.5"),
                 Div(
                     Span(r["severity"], cls=f"badge {sev_cls} badge-md px-4 py-2 font-bold shadow-sm h-auto text-xs"),
-                    Span(r["category"], cls=f"badge {cat_cls} badge-outline badge-md px-4 py-2 font-semibold shadow-sm h-auto text-xs"),
+                    Span(
+                        r["category"],
+                        cls=f"badge {cat_cls} badge-outline badge-md px-4 py-2 font-semibold shadow-sm h-auto text-xs",
+                    ),
                     cls="flex items-center gap-2 mb-3",
                 ),
                 P(r["desc"], cls="text-xs text-base-content/85 mb-3 leading-relaxed"),
@@ -1775,7 +1820,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     tabs_ui = TabGroup(tabs, f"alerts-list-content-{guild_id}")
     content_id = f"alerts-list-content-{guild_id}"
     alerts_list_ui = Div(
-        _render_alerts_list(alerts),
+        _render_alerts_list(alerts, guild_id),
         id=content_id,
         cls="mt-4 flex-1 min-h-0 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
     )
@@ -2002,6 +2047,13 @@ def _render_utilities_sidebar_inner(guild_id: int, session: Session) -> FT:
                     Li(A("Security Alerts", href=f"#guild-admin-alerts-{guild_id}", cls="link link-hover text-xs")),
                     Li(
                         A(
+                            "Alert Overrides",
+                            href=f"#guild-admin-security-overrides-{guild_id}",
+                            cls="link link-hover text-xs",
+                        )
+                    ),
+                    Li(
+                        A(
                             "Auditor Settings",
                             href=f"#guild-admin-auditor-settings-{guild_id}",
                             cls="link link-hover text-xs",
@@ -2122,3 +2174,133 @@ def guild_admin_utilities_help_bubble(guild_id: int, session: Optional[Session] 
 
 
 guild_admin_utilities_help_bubble.position_config = "bottom-right"
+
+
+def get_override_confirm_modal_html(guild_id: int, alert_hash: str) -> FT:
+    with Session(engine) as session:
+        evaluation = SecurityRuleEngine.evaluate(guild_id, session, include_overridden=True)
+        alerts = evaluation["alerts"]
+        alert = next((a for a in alerts if a.get("alert_hash") == alert_hash), None)
+
+    if not alert:
+        modal_content = Div(
+            Form(
+                Button(I(cls="fa-solid fa-xmark"), cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"),
+                method="dialog",
+            ),
+            H3("Alert Not Found", cls="font-bold text-lg text-error mb-4"),
+            P("The selected alert could not be found or has already been overridden.", cls="text-sm opacity-80"),
+            cls="modal-box bg-base-100 border border-error/20 shadow-2xl",
+        )
+        return Dialog(
+            modal_content,
+            id="modal-override-confirm",
+            cls="modal modal-open",
+            open=True,
+        )
+
+    modal_content = Div(
+        Form(
+            Button(I(cls="fa-solid fa-xmark"), cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"),
+            method="dialog",
+        ),
+        H3("Confirm Alert Override", cls="font-bold text-xl text-warning mb-4"),
+        P("You are overriding the following security alert:", cls="text-sm opacity-70 mb-2"),
+        Div(
+            Div(
+                Span(alert["rule"], cls="badge badge-warning badge-sm font-bold mr-2"),
+                Span(alert["category"].upper(), cls="text-[10px] opacity-50 uppercase font-semibold"),
+                cls="flex items-center mb-1",
+            ),
+            P(alert["message"], cls="text-sm font-medium mb-1"),
+            P(alert.get("details", ""), cls="text-xs opacity-60 mb-2") if alert.get("details") else "",
+            cls="p-3 bg-base-200/50 rounded-md border border-white/5 mb-4",
+        ),
+        Form(
+            Input(type="hidden", name="alert_hash", value=alert_hash),
+            Input(type="hidden", name="rule", value=alert["rule"]),
+            Input(type="hidden", name="category", value=alert["category"]),
+            Input(type="hidden", name="message", value=alert["message"]),
+            Input(type="hidden", name="details", value=alert.get("details", "")),
+            Div(
+                Label("Optional Comment / Reason for Override", cls="label text-sm font-semibold mb-1"),
+                Textarea(
+                    name="comment",
+                    placeholder="e.g. Approved exception for dev channel...",
+                    cls="textarea textarea-bordered w-full h-24 text-sm bg-base-200/50",
+                ),
+                cls="form-control mb-4",
+            ),
+            Div(
+                Button(
+                    "Cancel",
+                    type="button",
+                    cls="btn btn-ghost mr-2",
+                    onclick="document.getElementById('modal-override-confirm').close()",
+                ),
+                Button("Override Alert", type="submit", cls="btn btn-warning"),
+                cls="flex justify-end w-full",
+            ),
+            hx_post=f"/dashboard/{guild_id}/alerts/override",
+            hx_target="#modal-container",
+        ),
+        cls="modal-box bg-base-100 border border-warning/20 shadow-2xl w-11/12 max-w-lg",
+    )
+
+    return Dialog(
+        modal_content,
+        id="modal-override-confirm",
+        cls="modal modal-open",
+        open=True,
+    )
+
+
+def guild_admin_security_overrides_widget(guild_id: int):
+    """Displays overridden security alerts with option to remove override."""
+    with Session(engine) as session:
+        overrides = session.exec(select(SecurityAlertOverride).where(SecurityAlertOverride.guild_id == guild_id)).all()
+
+    if not overrides:
+        return Card(
+            "Security Alert Overrides",
+            Div("No overrides currently configured.", cls="opacity-70 text-sm mt-2"),
+            id=f"guild-admin-security-overrides-{guild_id}",
+        )
+
+    override_rows = []
+    for o in overrides:
+        override_rows.append(
+            Div(
+                Div(
+                    Div(
+                        Span(o.rule, cls="font-bold text-sm text-secondary"),
+                        Span(o.category.upper(), cls="text-[10px] opacity-50 uppercase font-semibold ml-2"),
+                        cls="flex items-center mb-1",
+                    ),
+                    P(o.message, cls="text-sm font-medium mb-1"),
+                    Div(
+                        Span("Comment: ", cls="text-xs font-bold text-accent mr-1"),
+                        Span(o.comment or "No comment provided", cls="text-xs text-base-content/75 italic"),
+                        cls="p-2 bg-black/20 rounded border border-white/5 mt-1",
+                    )
+                    if o.comment
+                    else "",
+                    cls="flex-1",
+                ),
+                Div(
+                    Button(
+                        "Remove Override",
+                        hx_post=f"/dashboard/{guild_id}/alerts/override/remove?alert_hash={o.alert_hash}",
+                        cls="btn btn-xs btn-outline btn-error whitespace-nowrap",
+                    ),
+                    cls="flex items-center ml-4",
+                ),
+                cls="p-3 bg-base-200/50 rounded-md border border-white/10 flex justify-between items-start mb-3 last:mb-0",
+            )
+        )
+
+    return Card(
+        "Security Alert Overrides",
+        Div(*override_rows),
+        id=f"guild-admin-security-overrides-{guild_id}",
+    )

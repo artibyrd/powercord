@@ -185,3 +185,16 @@ class UserSetting(SQLModel, table=True):
 
     user_id: int = Field(sa_column=Column(BigInteger, primary_key=True, autoincrement=False))
     show_topbar: bool = Field(default=True)
+
+
+class SecurityAlertOverride(SQLModel, table=True):
+    __tablename__ = "security_alert_overrides"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    guild_id: int = Field(sa_column=Column(BigInteger, index=True))
+    alert_hash: str = Field(index=True)
+    rule: str
+    category: str
+    message: str
+    details: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    comment: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))

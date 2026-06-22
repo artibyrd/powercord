@@ -1220,7 +1220,7 @@ async def get_alerts_list(guild_id: int, req, category: str = "all"):
     if category != "all":
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
 
-    return _render_alerts_list(alerts)
+    return _render_alerts_list(alerts, guild_id)
 
 
 @dashboard_router("/dashboard/{guild_id:int}/rules-info", methods=["GET"])
@@ -1230,6 +1230,93 @@ async def get_rules_info(guild_id: int):
 
     return get_security_rules_modal(guild_id)
 
+
+@dashboard_router("/dashboard/{guild_id:int}/alerts/override-confirm", methods=["GET"])
+async def get_override_confirm_modal(guild_id: int, req):
+    """Returns confirmation modal for overriding a specific alert."""
+    from app.extensions.utilities.widget import get_override_confirm_modal_html
+
+    alert_hash = req.query_params.get("alert_hash", "")
+    return get_override_confirm_modal_html(guild_id, alert_hash)
+
+
+@dashboard_router("/dashboard/{guild_id:int}/alerts/override", methods=["POST"])
+async def post_alert_override(guild_id: int, req):
+    """Saves a security alert override to the database and refreshes the page."""
+    from sqlmodel import Session
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import SecurityAlertOverride
+    from app.extensions.utilities.widget import SecurityRuleEngine
+
+    form = await req.form()
+    alert_hash = form.get("alert_hash")
+    rule = form.get("rule")
+    category = form.get("category")
+    message = form.get("message")
+    details = form.get("details", "")
+    comment = form.get("comment", "")
+
+    if not alert_hash:
+        return Response(content="Missing alert hash", status_code=400)
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        # Check if already exists
+        existing = session.exec(
+            select(SecurityAlertOverride).where(
+                SecurityAlertOverride.guild_id == guild_id, SecurityAlertOverride.alert_hash == alert_hash
+            )
+        ).first()
+        if not existing:
+            override = SecurityAlertOverride(
+                guild_id=guild_id,
+                alert_hash=alert_hash,
+                rule=rule,
+                category=category,
+                message=message,
+                details=details,
+                comment=comment,
+            )
+            session.add(override)
+            session.commit()
+
+    SecurityRuleEngine.invalidate(guild_id)
+
+    return Response(
+        headers={"HX-Refresh": "true"},
+    )
+
+
+@dashboard_router("/dashboard/{guild_id:int}/alerts/override/remove", methods=["POST"])
+async def post_alert_override_remove(guild_id: int, req):
+    """Deletes a security alert override and refreshes the page."""
+    from sqlmodel import Session
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import SecurityAlertOverride
+    from app.extensions.utilities.widget import SecurityRuleEngine
+
+    alert_hash = req.query_params.get("alert_hash")
+    if not alert_hash:
+        return Response(content="Missing alert hash", status_code=400)
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        override = session.exec(
+            select(SecurityAlertOverride).where(
+                SecurityAlertOverride.guild_id == guild_id, SecurityAlertOverride.alert_hash == alert_hash
+            )
+        ).first()
+        if override:
+            session.delete(override)
+            session.commit()
+
+    SecurityRuleEngine.invalidate(guild_id)
+
+    return Response(
+        headers={"HX-Refresh": "true"},
+    )
 
 
 @dashboard_router("/dashboard/{guild_id:int}/scan", methods=["POST"])

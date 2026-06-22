@@ -43,8 +43,14 @@ def test_widget_provisioning_enable(session):
             )
         ).all()
 
-        # The utilities extension has 8 default widgets declared in extension.json
-        assert len(widgets) == 8
+        # The utilities extension has 9 default widgets declared in extension.json
+        assert len(widgets) == 9
+
+        # Verify overrides widget
+        overrides_widget = next(w for w in widgets if w.widget_name == "guild_admin_security_overrides_widget")
+        assert overrides_widget.display_order == 7
+        assert overrides_widget.column_span == 12
+        assert overrides_widget.is_enabled is True
 
         # Verify a specific widget's details
         overview_widget = next(w for w in widgets if w.widget_name == "guild_admin_security_overview_widget")
@@ -137,8 +143,8 @@ def test_widget_provisioning_no_overwrite(session):
             )
         ).all()
 
-        # Total should still be 8 (1 existing + 7 newly provisioned)
-        assert len(widgets) == 8
+        # Total should still be 9 (1 existing + 8 newly provisioned)
+        assert len(widgets) == 9
 
         overview_widget = next(w for w in widgets if w.widget_name == "guild_admin_security_overview_widget")
         assert overview_widget.display_order == 10

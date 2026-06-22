@@ -915,6 +915,7 @@ async def test_get_rules_info():
     from fasthtml.common import to_xml
 
     from app.ui.dashboard import get_rules_info
+
     resp = await get_rules_info(guild_id=12345)
     html = to_xml(resp)
     assert "Security Rules Reference" in html
@@ -926,4 +927,3 @@ async def test_get_rules_info():
     assert "General Role Mentionability" in html
     assert "Suggestive Honeypot Integration" in html
     assert "Over-privileged Bot Integrations" in html
-
