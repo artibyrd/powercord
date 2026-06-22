@@ -178,3 +178,24 @@ def clear_global_caches():
         BackupService.stop_scheduler()
     except ImportError:
         pass
+
+
+@pytest.fixture
+def enable_honeypot(session):
+    """Fixture to enable the honeypot extension in GuildExtensionSettings for tests.
+
+    This prevents the Suggestive Honeypot Integration security rule (Rule 7)
+    from triggering a default configuration alert.
+    """
+    from app.db.models import GuildExtensionSettings
+
+    honeypot_setting = GuildExtensionSettings(
+        guild_id=999123,
+        extension_name="honeypot",
+        gadget_type="cog",
+        is_enabled=True,
+    )
+    session.add(honeypot_setting)
+    session.commit()
+    return honeypot_setting
+

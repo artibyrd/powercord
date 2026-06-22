@@ -41,17 +41,28 @@ def ensure_test_database() -> None:
         port=int(host_parts[1]),
         database="postgres",
     )
-    maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
-    with maint_engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
-            {"db_name": TEST_DB_NAME},
-        ).fetchone()
-        if not exists:
-            # CREATE DATABASE cannot be parameterized — the name is a
-            # compile-time constant (TEST_DB_NAME) so this is safe.
-            conn.execute(text(f"CREATE DATABASE {TEST_DB_NAME}"))  # noqa: S608
-    maint_engine.dispose()
+    try:
+        maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+        with maint_engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+                {"db_name": TEST_DB_NAME},
+            ).fetchone()
+            if not exists:
+                # CREATE DATABASE cannot be parameterized — the name is a
+                # compile-time constant (TEST_DB_NAME) so this is safe.
+                conn.execute(text(f"CREATE DATABASE {TEST_DB_NAME}"))  # noqa: S608
+        maint_engine.dispose()
+    except Exception as e:
+        err_msg = str(e)
+        if "28P01" in err_msg or "authentication failed" in err_msg:
+            print("\n" + "=" * 80)
+            print("[DIAGNOSTIC WARNING] Database password authentication failed.")
+            print("It seems you ran pytest directly instead of using 'just test'.")
+            print("The running dev container was started with the password from .env, but pytest default password is 'test_pass'.")
+            print("To fix this, run your tests using 'just test --type unit' or export your .env variables.")
+            print("=" * 80 + "\n")
+        raise e
 
     # 2. Connect to the test database and enable pg_trgm.
     test_url = sqlalchemy.engine.URL.create(

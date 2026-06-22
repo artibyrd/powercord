@@ -1,7 +1,7 @@
 import pytest
 from sqlmodel import Session
 
-from app.db.models import DiscordAuditorConfig, DiscordRole, GuildExtensionSettings, SecurityAlertOverride
+from app.db.models import DiscordAuditorConfig, DiscordRole, SecurityAlertOverride
 from app.extensions.utilities.widget import SecurityRuleEngine
 
 pytestmark = pytest.mark.unit
@@ -23,17 +23,8 @@ def clean_db(session: Session):
     do_clean()
 
 
-def test_security_alert_override_workflow(session: Session):
+def test_security_alert_override_workflow(session: Session, enable_honeypot):
     guild_id = 999123
-
-    # Enable honeypot to prevent suggestive honeypot rule alert
-    honeypot_setting = GuildExtensionSettings(
-        guild_id=guild_id,
-        extension_name="honeypot",
-        gadget_type="cog",
-        is_enabled=True,
-    )
-    session.add(honeypot_setting)
 
     # Setup separator role
     sep_role = DiscordRole(
