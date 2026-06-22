@@ -158,15 +158,16 @@ def TabGroup(tabs: list[tuple[str, str, bool]], target_id: str):
     tab_elements = []
     click_script = (
         "const tabs = Array.from(this.parentElement.children); "
-        "tabs.forEach(t => t.classList.remove('tab-active', '!bg-primary', '!text-primary-content', 'font-bold', 'shadow-md')); "
-        "this.classList.add('tab-active', '!bg-primary', '!text-primary-content', 'font-bold', 'shadow-md');"
+        "tabs.forEach(t => t.classList.remove('tab-active', '!bg-primary', '!text-primary-content', 'font-bold', 'shadow-lg', 'scale-[1.03]', 'border', 'border-primary/20')); "
+        "this.classList.add('tab-active', '!bg-primary', '!text-primary-content', 'font-bold', 'shadow-lg', 'scale-[1.03]', 'border', 'border-primary/20');"
     )
     for label, url, is_active in tabs:
-        cls = "tab"
+        cls = "tab transition-all duration-200"
         if is_active:
-            cls += " tab-active !bg-primary !text-primary-content font-bold shadow-md"
+            cls += " tab-active !bg-primary !text-primary-content font-bold shadow-lg scale-[1.03] border border-primary/20"
         tab_elements.append(A(label, cls=cls, hx_get=url, hx_target=target, hx_swap="innerHTML", onclick=click_script))
     return Div(*tab_elements, cls="tabs tabs-boxed")
+
 
 
 def Accordion(title: str, *children, open: bool = False, **kwargs):

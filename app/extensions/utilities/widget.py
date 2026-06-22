@@ -1720,22 +1720,19 @@ def get_security_rules_modal(guild_id: int) -> FT:
 
         rule_elements.append(
             Div(
+                H4(r["name"], cls="text-md font-bold text-base-content mb-1.5"),
                 Div(
-                    H4(r["name"], cls="text-md font-bold text-base-content"),
-                    Div(
-                        Span(r["severity"], cls=f"badge {sev_cls} badge-xs px-2 py-1 font-bold"),
-                        Span(r["category"], cls=f"badge {cat_cls} badge-outline badge-xs px-2 py-1 font-semibold"),
-                        cls="flex items-center gap-1.5",
-                    ),
-                    cls="flex flex-wrap items-center justify-between gap-2 mb-1.5",
+                    Span(r["severity"], cls=f"badge {sev_cls} badge-sm px-3 py-1.5 font-bold shadow-sm h-auto"),
+                    Span(r["category"], cls=f"badge {cat_cls} badge-outline badge-sm px-3 py-1.5 font-semibold shadow-sm h-auto"),
+                    cls="flex items-center gap-2 mb-3",
                 ),
-                P(r["desc"], cls="text-xs text-base-content/85 mb-2 leading-relaxed"),
+                P(r["desc"], cls="text-xs text-base-content/85 mb-3 leading-relaxed"),
                 Div(
                     Span("Remediation: ", cls="text-xs font-bold text-accent mr-1"),
                     Span(r["remediation"], cls="text-xs text-base-content/75"),
-                    cls="p-2 bg-black/20 rounded border border-white/5",
+                    cls="p-2.5 bg-black/20 rounded border border-white/5",
                 ),
-                cls="p-4 bg-base-200/50 rounded-lg border border-base-content/10 mb-3 last:mb-0 shadow-sm",
+                cls="p-4 bg-base-200/50 rounded-lg border border-base-content/10 mb-4 last:mb-0 shadow-sm",
             )
         )
 
@@ -1746,7 +1743,7 @@ def get_security_rules_modal(guild_id: int) -> FT:
             *rule_elements,
             cls="max-h-[65vh] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
         ),
-        cls="modal-box w-11/12 max-w-2xl bg-base-100 shadow-2xl border border-secondary/20",
+        cls="modal-box w-11/12 max-w-2xl bg-base-100 shadow-[0_0_50px_0_rgba(0,0,0,0.85)] border border-secondary/20",
     )
 
     return Dialog(
@@ -1793,8 +1790,8 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     title_comp = Div(
         H3("Security Alerts", cls="card-title"),
         Button(
-            I(cls="fa-solid fa-circle-info text-info"),
-            cls="btn btn-ghost btn-circle btn-xs hover:opacity-80 transition-opacity",
+            I(cls="fa-solid fa-circle-info text-info fa-lg"),
+            cls="btn btn-ghost btn-circle btn-sm hover:opacity-100 hover:bg-white/10 transition-all",
             hx_get=f"/dashboard/{guild_id}/rules-info",
             hx_target="#modal-container",
             hx_swap="innerHTML",
