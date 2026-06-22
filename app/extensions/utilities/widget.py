@@ -1722,8 +1722,8 @@ def get_security_rules_modal(guild_id: int) -> FT:
             Div(
                 H4(r["name"], cls="text-md font-bold text-base-content mb-1.5"),
                 Div(
-                    Span(r["severity"], cls=f"badge {sev_cls} badge-sm px-3 py-1.5 font-bold shadow-sm h-auto"),
-                    Span(r["category"], cls=f"badge {cat_cls} badge-outline badge-sm px-3 py-1.5 font-semibold shadow-sm h-auto"),
+                    Span(r["severity"], cls=f"badge {sev_cls} badge-md px-4 py-2 font-bold shadow-sm h-auto text-xs"),
+                    Span(r["category"], cls=f"badge {cat_cls} badge-outline badge-md px-4 py-2 font-semibold shadow-sm h-auto text-xs"),
                     cls="flex items-center gap-2 mb-3",
                 ),
                 P(r["desc"], cls="text-xs text-base-content/85 mb-3 leading-relaxed"),
@@ -1748,7 +1748,7 @@ def get_security_rules_modal(guild_id: int) -> FT:
 
     return Dialog(
         modal_content,
-        Form(method="dialog", cls="modal-backdrop", children=[Button("close")]),
+        Form(method="dialog", cls="modal-backdrop bg-black/60 backdrop-blur-sm", children=[Button("close")]),
         id=modal_id,
         cls="modal modal-bottom sm:modal-middle",
         open=True,
@@ -1790,8 +1790,8 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     title_comp = Div(
         H3("Security Alerts", cls="card-title"),
         Button(
-            I(cls="fa-solid fa-circle-info text-info fa-lg"),
-            cls="btn btn-ghost btn-circle btn-sm hover:opacity-100 hover:bg-white/10 transition-all",
+            I(cls="fa-solid fa-circle-info text-info fa-xl"),
+            cls="btn btn-ghost btn-circle btn-md hover:opacity-100 hover:bg-white/10 transition-all",
             hx_get=f"/dashboard/{guild_id}/rules-info",
             hx_target="#modal-container",
             hx_swap="innerHTML",
