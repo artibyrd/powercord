@@ -81,4 +81,13 @@ just qa fix    # Same, but auto-fix lint and formatting issues
 | **[Legacy V2 Migration](docs/LEGACY_V2_MIGRATION.md)** | Migrating from Powercord V2 to V3 |
 
 ## LLMS Files
-Included are LLMS files for [Discord](docs/llms/discord-llms.txt), [FastHTML](docs/llms/fasthtml-llms.txt), and [Pydantic](docs/llms/pydantic-llms-full.txt), to give large language models better introspection for more useful code assist.
+
+To give large language models (LLMs) and AI coding assistants better context, we include curated documentation maps under the shared `.agent/llms/` directory (centralized in the `powercord-agent` repository):
+
+- **[Discord API Guide](.agent/llms/discord-llms.txt)**: Core Discord Developer platform guides and interactions.
+- **[FastHTML](.agent/llms/fasthtml-llms.txt)**: Dynamic Python-based HTML layout and routing guidelines.
+- **[Pydantic](.agent/llms/pydantic-llms-full.txt)**: Data validation and model settings reference.
+- **[FastAPI](.agent/llms/fastapi-llms.txt)**: Dependency injection, APIRouter structures, and REST patterns.
+- **[SQLModel & SQLAlchemy](.agent/llms/sqlmodel-llms.txt)**: Database schemas, models, relationships, and queries.
+- **[Flet UI](.agent/llms/flet-llms.txt)**: Desktop client UI layouts, controls, page states, and event handling.
+- **[Playwright](.agent/llms/playwright-llms.txt)**: Browser testing and E2E automation actions and assertions.
