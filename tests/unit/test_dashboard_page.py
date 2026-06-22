@@ -907,3 +907,21 @@ async def test_layout_restore_route(mock_restore, mock_get_ordered, mock_render)
     mock_get_ordered.assert_called_once_with(999124)
     mock_render.assert_called_once()
     assert str(resp) == "<div>Mocked Layout Editor</div>"
+
+
+@pytest.mark.asyncio
+async def test_get_rules_info():
+    """Verify that get_rules_info returns the modal with the 8 security rules."""
+    from app.ui.dashboard import get_rules_info
+    resp = await get_rules_info(guild_id=12345)
+    html = str(resp)
+    assert "Security Rules Reference" in html
+    assert "Category Permission Baseline" in html
+    assert "Public Announcement Protection" in html
+    assert "Exposed Staff Channels" in html
+    assert "Unauthorized Chat Pings in Non-Text Locations" in html
+    assert "Low-Tier Role Privileges" in html
+    assert "General Role Mentionability" in html
+    assert "Suggestive Honeypot Integration" in html
+    assert "Over-privileged Bot Integrations" in html
+

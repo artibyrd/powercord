@@ -1434,7 +1434,10 @@ class SecurityRuleEngine:
 
         score = int(round(100 * (0.85**num_high) * (0.90**num_medium) * (0.95**num_low)))
         score = max(0, min(100, score))
+        severity_order = {"high": 0, "medium": 1, "low": 2}
+        alerts.sort(key=lambda a: severity_order.get(a.get("severity", "").lower(), 3))
         return {"score": score, "alerts": alerts}
+
 
 
 def format_details(details: str) -> FT:
@@ -1628,6 +1631,133 @@ def _render_alerts_list(alerts: list[dict]) -> FT:
     return Div(*alert_elements)
 
 
+def get_security_rules_modal(guild_id: int) -> FT:
+    """Generates a modal detailing the security rules evaluated by the auditor."""
+    rules_details = [
+        {
+            "name": "1. Category Permission Baseline",
+            "category": "Exposure",
+            "severity": "Medium",
+            "desc": "Checks if a channel category grants permissions to non-staff roles beyond the server default.",
+            "remediation": "Remove unnecessary category-level overwrites; prefer per-channel grants.",
+        },
+        {
+            "name": "2. Public Announcement Protection",
+            "category": "Pings",
+            "severity": "High",
+            "desc": "Verifies that non-staff roles cannot Send Messages, Mention Everyone, or @everyone in announcement channels.",
+            "remediation": "Deny Send Messages and Mention Everyone for all non-staff roles in announcement channels.",
+        },
+        {
+            "name": "3. Exposed Staff Channels",
+            "category": "Exposure",
+            "severity": "High",
+            "desc": "Checks if a non-staff role has View Channel allowed in a channel listed in the staff channels configuration.",
+            "remediation": "Explicitly deny View Channel for every non-staff role on staff channels.",
+        },
+        {
+            "name": "4. Unauthorized Chat Pings in Non-Text Locations",
+            "category": "Pings",
+            "severity": "Medium",
+            "desc": "Ensures non-staff roles cannot Send Messages in voice, stage, thread, or forum channels.",
+            "remediation": "Deny Send Messages for non-staff roles on non-text channel types.",
+        },
+        {
+            "name": "5. Low-Tier Role Privileges",
+            "category": "Roles",
+            "severity": "High",
+            "desc": "Checks if a role below the staff separator has dangerous permissions like Administrator, Manage Server, Manage Roles, Manage Channels, Kick Members, Ban Members, or Mention Everyone.",
+            "remediation": "Remove dangerous permissions from roles below the separator or move the role above it.",
+        },
+        {
+            "name": "6. General Role Mentionability",
+            "category": "Pings",
+            "severity": "Low",
+            "desc": "Ensures non-staff, unmanaged roles do not have mentionable set to true.",
+            "remediation": "Disable mentionability or restrict via channel overwrites.",
+        },
+        {
+            "name": "7. Suggestive Honeypot Integration",
+            "category": "Integrations",
+            "severity": "Medium",
+            "desc": "Flags if public discovery channels exist but the Honeypot extension is not enabled.",
+            "remediation": "Enable the Honeypot extension or remove public discovery channels.",
+        },
+        {
+            "name": "8. Over-privileged Bot Integrations",
+            "category": "Integrations",
+            "severity": "Medium",
+            "desc": "Checks if a managed bot role has Administrator, Manage Server, Manage Roles, or Manage Channels permissions.",
+            "remediation": "Reduce bot role permissions to the minimum required scope.",
+        }
+    ]
+
+    modal_id = f"modal-security-rules-info-{guild_id}"
+    close_button = Form(
+        Button(I(cls="fa-solid fa-xmark"), cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"),
+        method="dialog",
+    )
+
+    rule_elements = []
+    for r in rules_details:
+        sev = r["severity"].lower()
+        if sev == "high":
+            sev_cls = "badge-error"
+        elif sev == "medium":
+            sev_cls = "badge-warning"
+        else:
+            sev_cls = "badge-info"
+
+        cat = r["category"].lower()
+        if cat == "exposure":
+            cat_cls = "badge-accent"
+        elif cat == "pings":
+            cat_cls = "badge-secondary"
+        elif cat == "roles":
+            cat_cls = "badge-primary"
+        else:
+            cat_cls = "badge-neutral"
+
+        rule_elements.append(
+            Div(
+                Div(
+                    H4(r["name"], cls="text-md font-bold text-base-content"),
+                    Div(
+                        Span(r["severity"], cls=f"badge {sev_cls} badge-xs px-2 py-1 font-bold"),
+                        Span(r["category"], cls=f"badge {cat_cls} badge-outline badge-xs px-2 py-1 font-semibold"),
+                        cls="flex items-center gap-1.5",
+                    ),
+                    cls="flex flex-wrap items-center justify-between gap-2 mb-1.5",
+                ),
+                P(r["desc"], cls="text-xs text-base-content/85 mb-2 leading-relaxed"),
+                Div(
+                    Span("Remediation: ", cls="text-xs font-bold text-accent mr-1"),
+                    Span(r["remediation"], cls="text-xs text-base-content/75"),
+                    cls="p-2 bg-black/20 rounded border border-white/5",
+                ),
+                cls="p-4 bg-base-200/50 rounded-lg border border-base-content/10 mb-3 last:mb-0 shadow-sm",
+            )
+        )
+
+    modal_content = Div(
+        close_button,
+        H3("Security Rules Reference", cls="font-bold text-2xl mb-4 pr-8 text-primary"),
+        Div(
+            *rule_elements,
+            cls="max-h-[65vh] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
+        ),
+        cls="modal-box w-11/12 max-w-2xl bg-base-100 shadow-2xl border border-secondary/20",
+    )
+
+    return Dialog(
+        modal_content,
+        Form(method="dialog", cls="modal-backdrop", children=[Button("close")]),
+        id=modal_id,
+        cls="modal modal-bottom sm:modal-middle",
+        open=True,
+    )
+
+
 def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     """Renders the list of security alerts filterable by a TabGroup tab bar."""
     tabs = [
@@ -1635,6 +1765,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         ("Exposure", f"/dashboard/{guild_id}/alerts-list?category=exposure", category == "exposure"),
         ("Pings", f"/dashboard/{guild_id}/alerts-list?category=pings", category == "pings"),
         ("Roles", f"/dashboard/{guild_id}/alerts-list?category=roles", category == "roles"),
+        ("Integrations", f"/dashboard/{guild_id}/alerts-list?category=integrations", category == "integrations"),
     ]
 
     with Session(engine) as session:
@@ -1659,8 +1790,21 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         cls="flex items-center justify-center pt-2 mt-2 border-t border-white/5",
     )
 
+    title_comp = Div(
+        H3("Security Alerts", cls="card-title"),
+        Button(
+            I(cls="fa-solid fa-circle-info text-info"),
+            cls="btn btn-ghost btn-circle btn-xs hover:opacity-80 transition-opacity",
+            hx_get=f"/dashboard/{guild_id}/rules-info",
+            hx_target="#modal-container",
+            hx_swap="innerHTML",
+            title="Rules Info",
+        ),
+        cls="flex justify-between items-center w-full",
+    )
+
     return Card(
-        "Security Alerts",
+        title_comp,
         Div(
             tabs_ui,
             alerts_list_ui,

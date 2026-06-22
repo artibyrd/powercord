@@ -1223,6 +1223,15 @@ async def get_alerts_list(guild_id: int, req, category: str = "all"):
     return _render_alerts_list(alerts)
 
 
+@dashboard_router("/dashboard/{guild_id:int}/rules-info", methods=["GET"])
+async def get_rules_info(guild_id: int):
+    """Returns a modal explaining all security rules in detail."""
+    from app.extensions.utilities.widget import get_security_rules_modal
+
+    return get_security_rules_modal(guild_id)
+
+
+
 @dashboard_router("/dashboard/{guild_id:int}/scan", methods=["POST"])
 async def dashboard_scan_guild(guild_id: int):
     import os
