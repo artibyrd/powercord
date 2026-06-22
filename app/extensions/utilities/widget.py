@@ -1177,11 +1177,14 @@ class SuggestiveHoneypotIntegration(SecurityRule):
         protected_ids = set()
         if HoneypotChannel is not None:
             try:
-                protected_ids = set(
-                    session.exec(select(HoneypotChannel.channel_id).where(HoneypotChannel.guild_id == guild_id)).all()
-                )
+                from sqlalchemy import inspect
+                bind = session.get_bind()
+                if inspect(bind).has_table("honeypot_channels"):
+                    protected_ids = set(
+                        session.exec(select(HoneypotChannel.channel_id).where(HoneypotChannel.guild_id == guild_id)).all()
+                    )
             except Exception:  # noqa: S110
-                pass
+                session.rollback()
 
         channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
         alerts = []
