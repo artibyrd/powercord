@@ -913,8 +913,9 @@ async def test_layout_restore_route(mock_restore, mock_get_ordered, mock_render)
 async def test_get_rules_info():
     """Verify that get_rules_info returns the modal with the 8 security rules."""
     from app.ui.dashboard import get_rules_info
+    from fasthtml.common import to_xml
     resp = await get_rules_info(guild_id=12345)
-    html = str(resp)
+    html = to_xml(resp)
     assert "Security Rules Reference" in html
     assert "Category Permission Baseline" in html
     assert "Public Announcement Protection" in html
