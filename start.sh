@@ -97,7 +97,13 @@ if [ "$FRESH_INIT" = true ] && [ -f /db/init.sql ]; then
 fi
 
 echo "Running Alembic migrations..."
-alembic upgrade heads || echo "Warning: Migrations failed. Continuing..."
+if ! alembic upgrade heads; then
+    echo "FATAL: Alembic migrations failed. Aborting container startup."
+    exit 1
+fi
+
+echo "Verifying migration state..."
+alembic current
 echo "Database initialized."
 
 # Stop the temporary PostgreSQL server

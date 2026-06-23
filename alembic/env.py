@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # are currently installed under app/extensions/ will be picked up.
 # We also automatically register any extension's isolated alembic/versions
 # folder into version_locations so Alembic discovers their migration scripts.
-import os
+
 
 from app.common.alchemy import get_database_url
 from app.db import models  # noqa: F401
@@ -38,7 +38,7 @@ for _ext_path in sorted(_extensions_dir.iterdir()):
 config = context.config
 
 # Inject dynamic version locations for proper extension migration discovery
-config.set_main_option("version_locations", os.pathsep.join(_version_locations))
+config.set_main_option("version_locations", " ".join(_version_locations))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
