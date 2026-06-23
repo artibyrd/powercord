@@ -97,6 +97,11 @@ if [ "$FRESH_INIT" = true ] && [ -f /db/init.sql ]; then
 fi
 
 echo "Running Alembic migrations..."
+if [ -f "/app/app/common/extension_manager.py" ]; then
+    echo "Updating alembic.ini with extension migration paths..."
+    PYTHONPATH=/app python -c "from app.common.extension_manager import _update_alembic_ini; _update_alembic_ini()"
+fi
+
 if ! alembic upgrade heads; then
     echo "FATAL: Alembic migrations failed. Aborting container startup."
     exit 1

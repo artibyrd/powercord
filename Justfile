@@ -216,11 +216,13 @@ verify-dashboard: _ensure-db lint
 # Upgrade the database to the latest version (see also: _wait-for-compose-db)
 [group: "db"]
 db-upgrade: _ensure-db
+    poetry run python -c "from app.common.extension_manager import _update_alembic_ini; _update_alembic_ini()"
     poetry run alembic upgrade heads
 
 # Create a new migration revision
 [group: "db"]
 db-revision message: _ensure-db
+    poetry run python -c "from app.common.extension_manager import _update_alembic_ini; _update_alembic_ini()"
     poetry run alembic revision --autogenerate -m "{{message}}"
 
 # Test connectivity to PostgreSQL
