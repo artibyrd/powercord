@@ -5,9 +5,16 @@
 !.env.prod
 
 # EXPLICITLY INCLUDE extensions installed locally so they are deployed to Cloud Build
-# We use /* instead of /** to only negate the extension directories themselves,
-# allowing standard .gitignore rules to still apply to their contents (like .venv)
 !app/extensions/*/
+!app/extensions/*/**
+
+# But exclude development-only folders inside the extensions
+app/extensions/*/.venv/
+app/extensions/*/.git/
+app/extensions/*/.agent/
+app/extensions/*/.ruff_cache/
+app/extensions/*/.pytest_cache/
+app/extensions/*/__pycache__/
 
 # Additional Cloud Build specific ignores
 .git/
