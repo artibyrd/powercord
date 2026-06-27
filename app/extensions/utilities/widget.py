@@ -1481,6 +1481,7 @@ class SecurityRuleEngine:
                     and role_name in admin_roles
                 ):
                     a["parent_hash"] = parent["alert_hash"]
+                    a["parent_rule"] = parent["rule"]
                     parent["child_count"] += 1
                     break
 
@@ -1491,6 +1492,7 @@ class SecurityRuleEngine:
                     and role_name in mention_everyone_roles
                 ):
                     a["parent_hash"] = parent["alert_hash"]
+                    a["parent_rule"] = parent["rule"]
                     parent["child_count"] += 1
                     break
 
@@ -1771,11 +1773,13 @@ def format_message(text: str) -> FT:
     return Span(*formatted_parts)
 
 
-def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
+def _render_alerts_list(alerts: list[dict], guild_id: int, active_hashes: Optional[set[str]] = None) -> FT:
     if not alerts:
         return Div("No security alerts found.", cls="text-sm opacity-70 p-4 text-center")
 
-    visible_hashes = {a["alert_hash"] for a in alerts}
+    if active_hashes is None:
+        active_hashes = {a["alert_hash"] for a in alerts}
+
     alert_elements = []
     for alert in alerts:
         sev = alert.get("severity", "").lower()
@@ -1822,14 +1826,30 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
         child_indicator = ""
         is_child = False
         phash = alert.get("parent_hash")
-        if phash and phash in visible_hashes:
-            is_child = True
-            parent_rule = next((a["rule"] for a in alerts if a["alert_hash"] == phash), "Upstream Rule")
-            child_indicator = Div(
-                I(cls="fa-solid fa-level-up-alt fa-rotate-90 text-[10px] opacity-50 mr-1.5"),
-                Span(f"Cascaded from: {parent_rule}", cls="text-[10px] font-bold opacity-50 uppercase tracking-wider"),
-                cls="flex items-center mb-1.5",
-            )
+        if phash and phash in active_hashes:
+            parent_rule = alert.get("parent_rule", "Upstream Rule")
+            parent_visible_in_tab = any(a["alert_hash"] == phash for a in alerts)
+
+            if parent_visible_in_tab:
+                # Parent is in this tab, style as indented child
+                is_child = True
+                child_indicator = Div(
+                    I(cls="fa-solid fa-level-up-alt fa-rotate-90 text-[10px] opacity-50 mr-1.5"),
+                    Span(
+                        f"Cascaded from: {parent_rule}", cls="text-[10px] font-bold opacity-50 uppercase tracking-wider"
+                    ),
+                    cls="flex items-center mb-1.5",
+                )
+            else:
+                # Parent is NOT in this tab, show indicator but do not indent
+                child_indicator = Div(
+                    I(cls="fa-solid fa-triangle-exclamation text-[10px] text-warning mr-1.5"),
+                    Span(
+                        f"Associated with upstream alert: {parent_rule}",
+                        cls="text-[10px] font-bold text-warning/80 uppercase tracking-wider",
+                    ),
+                    cls="flex items-center mb-1.5",
+                )
 
         container_cls = f"p-3 rounded-md border-l-4 border {border_cls} mb-3 last:mb-0"
         if is_child:
@@ -2017,6 +2037,8 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
         admin_role_configured = config and config.staff_separator_role_id is not None
 
+    active_hashes = {a["alert_hash"] for a in alerts}
+
     if category != "all":
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
 
@@ -2042,7 +2064,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     tabs_ui = TabGroup(tabs, f"alerts-list-content-{guild_id}")
     content_id = f"alerts-list-content-{guild_id}"
     alerts_list_ui = Div(
-        _render_alerts_list(alerts, guild_id),
+        _render_alerts_list(alerts, guild_id, active_hashes=active_hashes),
         id=content_id,
         cls="mt-4 flex-1 min-h-0 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-md hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.1)_transparent]",
     )

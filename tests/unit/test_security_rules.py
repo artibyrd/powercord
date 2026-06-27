@@ -1046,3 +1046,47 @@ def test_parent_child_alert_linking_mention_everyone(session: Session):
     # Score penalty = 15 (r5 is High).
     # Expected score = 100 - 15 = 85.
     assert res["score"] == 85
+
+
+def test_parent_child_alerts_rendering():
+    from fasthtml.common import to_xml
+
+    from app.extensions.utilities.widget import _render_alerts_list
+
+    parent_hash = "parent123"
+    alerts = [
+        {
+            "rule": "Low-Tier Role Privileges",
+            "category": "roles",
+            "severity": "high",
+            "message": "Low-tier role has sensitive permissions.",
+            "alert_hash": parent_hash,
+            "child_count": 1,
+            "parent_hash": None,
+        },
+        {
+            "rule": "Exposed Staff Channels",
+            "category": "exposure",
+            "severity": "high",
+            "message": "Staff channel is visible.",
+            "alert_hash": "child456",
+            "child_count": 0,
+            "parent_hash": parent_hash,
+            "parent_rule": "Low-Tier Role Privileges",
+        },
+    ]
+
+    active_hashes = {a["alert_hash"] for a in alerts}
+
+    # Case 1: Both visible (e.g. All tab)
+    html_all = to_xml(_render_alerts_list(alerts, guild_id=123, active_hashes=active_hashes))
+    # Child should be indented (ml-8) and show "Cascaded from"
+    assert "ml-8" in html_all
+    assert "Cascaded from: Low-Tier Role Privileges" in html_all
+
+    # Case 2: Parent filtered out (e.g. Exposure tab)
+    filtered_alerts = [alerts[1]]
+    html_filtered = to_xml(_render_alerts_list(filtered_alerts, guild_id=123, active_hashes=active_hashes))
+    # Child should NOT be indented (no ml-8) and show "Associated with upstream alert"
+    assert "ml-8" not in html_filtered
+    assert "Associated with upstream alert: Low-Tier Role Privileges" in html_filtered

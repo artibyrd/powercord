@@ -1217,10 +1217,12 @@ async def get_alerts_list(guild_id: int, req, category: str = "all"):
         evaluation = SecurityRuleEngine.evaluate(guild_id, session)
         alerts = evaluation["alerts"]
 
+    active_hashes = {a["alert_hash"] for a in alerts}
+
     if category != "all":
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
 
-    return _render_alerts_list(alerts, guild_id)
+    return _render_alerts_list(alerts, guild_id, active_hashes=active_hashes)
 
 
 @dashboard_router("/dashboard/{guild_id:int}/rules-info", methods=["GET"])
