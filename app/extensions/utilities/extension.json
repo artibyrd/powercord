@@ -22,7 +22,7 @@
         },
         {
             "widget_name": "guild_admin_auditor_settings_widget",
-            "display_order": 3,
+            "display_order": 7,
             "column_span": 12
         },
         {
@@ -42,7 +42,7 @@
         },
         {
             "widget_name": "guild_admin_security_overrides_widget",
-            "display_order": 7,
+            "display_order": 3,
             "column_span": 12
         },
         {

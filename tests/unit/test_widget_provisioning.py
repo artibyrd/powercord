@@ -48,7 +48,7 @@ def test_widget_provisioning_enable(session):
 
         # Verify overrides widget
         overrides_widget = next(w for w in widgets if w.widget_name == "guild_admin_security_overrides_widget")
-        assert overrides_widget.display_order == 7
+        assert overrides_widget.display_order == 3
         assert overrides_widget.column_span == 12
         assert overrides_widget.is_enabled is True
 
@@ -66,7 +66,7 @@ def test_widget_provisioning_enable(session):
 
         # Auditor settings widget
         auditor_settings_widget = next(w for w in widgets if w.widget_name == "guild_admin_auditor_settings_widget")
-        assert auditor_settings_widget.display_order == 3
+        assert auditor_settings_widget.display_order == 7
         assert auditor_settings_widget.column_span == 12
         assert auditor_settings_widget.is_enabled is True
 
