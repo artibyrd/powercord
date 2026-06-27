@@ -83,8 +83,8 @@ def test_security_rule_engine_score_decrements():
         engine.rules[i].evaluate = MagicMock(return_value=[])
 
     result = engine.run_all(12345, MagicMock())
-    # 100 * 0.85 * 0.90 * 0.95 = 72.675 -> 73
-    assert result["score"] == 73
+    # 100 - 15 - 10 - 5 = 70
+    assert result["score"] == 70
 
 
 def test_security_rule_engine_score_excludes_inert_alerts():
