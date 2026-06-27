@@ -1893,22 +1893,49 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
         roles = sorted(roles, key=lambda x: x.position, reverse=True)
-        channels = session.exec(
-            select(DiscordChannel).where(DiscordChannel.guild_id == guild_id, DiscordChannel.type != "category")
+        all_channels = session.exec(
+            select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)
         ).all()
-        channels = sorted(channels, key=lambda x: x.name)
+
+    # Reconstruct Discord-like channel hierarchy & order:
+    categories = sorted([c for c in all_channels if c.type == "category"], key=lambda x: x.position)
+    cat_ids = {cat.id for cat in categories}
+
+    category_children = {}
+    for c in all_channels:
+        if c.type == "category":
+            continue
+        if c.parent_id is not None and c.parent_id in cat_ids:
+            category_children.setdefault(c.parent_id, []).append(c)
+
+    for cat_id in category_children:
+        category_children[cat_id] = sorted(category_children[cat_id], key=lambda x: x.position)
+
+    categoryless_channels = sorted(
+        [c for c in all_channels if c.type != "category" and (c.parent_id is None or c.parent_id not in cat_ids)],
+        key=lambda x: x.position
+    )
+
+    ordered_channels = []
+    for chan in categoryless_channels:
+        ordered_channels.append((chan, False))
+
+    for cat in categories:
+        ordered_channels.append((cat, True))
+        for child in category_children.get(cat.id, []):
+            ordered_channels.append((child, False))
 
     selected_role_id = config.staff_separator_role_id if config else None
 
-    staff_ids_list = []
-    ann_ids_list = []
+    staff_ids_set = set()
+    ann_ids_set = set()
     if config:
         try:
-            staff_ids_list = json.loads(config.staff_channel_ids or "[]")
+            staff_ids_set = {int(x) for x in json.loads(config.staff_channel_ids or "[]") if x is not None}
         except Exception:  # noqa: S110
             pass
         try:
-            ann_ids_list = json.loads(config.announcement_channel_ids or "[]")
+            ann_ids_set = {int(x) for x in json.loads(config.announcement_channel_ids or "[]") if x is not None}
         except Exception:  # noqa: S110
             pass
 
@@ -1916,39 +1943,97 @@ def guild_admin_auditor_settings_widget(guild_id: int):
     for role in roles:
         role_options.append(Option(role.name, value=str(role.id), selected=(role.id == selected_role_id)))
 
+    # Pre-calculate category children IDs to check if all children are checked
+    cat_children_ids = {}
+    for cat in categories:
+        cat_children_ids[cat.id] = [child.id for child in category_children.get(cat.id, [])]
+
     staff_checkboxes = []
     ann_checkboxes = []
-    for chan in channels:
-        staff_selected = chan.id in staff_ids_list
-        ann_selected = chan.id in ann_ids_list
-        staff_checkboxes.append(
-            Label(
-                Input(
-                    type="checkbox",
-                    name="staff_channel_ids",
-                    value=str(chan.id),
-                    checked=staff_selected,
-                    cls="checkbox checkbox-primary checkbox-xs",
-                ),
-                Span(f" #{chan.name}", cls="label-text ml-2 font-medium"),
-                cls="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-xs channel-item",
-                data_name=chan.name.lower(),
+    for chan, is_cat in ordered_channels:
+        if is_cat:
+            # Pre-select category if its ID is explicitly in the saved list,
+            # or if it has children and all children are checked.
+            children_ids = cat_children_ids.get(chan.id, [])
+            staff_selected = (chan.id in staff_ids_set) or (
+                len(children_ids) > 0 and all(cid in staff_ids_set for cid in children_ids)
             )
-        )
-        ann_checkboxes.append(
-            Label(
-                Input(
-                    type="checkbox",
-                    name="announcement_channel_ids",
-                    value=str(chan.id),
-                    checked=ann_selected,
-                    cls="checkbox checkbox-primary checkbox-xs",
-                ),
-                Span(f" #{chan.name}", cls="label-text ml-2 font-medium"),
-                cls="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-xs channel-item",
-                data_name=chan.name.lower(),
+            ann_selected = (chan.id in ann_ids_set) or (
+                len(children_ids) > 0 and all(cid in ann_ids_set for cid in children_ids)
             )
-        )
+
+            staff_checkboxes.append(
+                Label(
+                    Input(
+                        type="checkbox",
+                        name="staff_channel_ids",
+                        value=str(chan.id),
+                        checked=staff_selected,
+                        cls="checkbox checkbox-primary checkbox-xs category-checkbox",
+                        data_category_id=str(chan.id),
+                    ),
+                    Span(f" 📁 {chan.name.upper()}", cls="label-text ml-2 font-bold"),
+                    cls="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-xs channel-item font-semibold opacity-90",
+                    data_name=chan.name.lower(),
+                )
+            )
+
+            ann_checkboxes.append(
+                Label(
+                    Input(
+                        type="checkbox",
+                        name="announcement_channel_ids",
+                        value=str(chan.id),
+                        checked=ann_selected,
+                        cls="checkbox checkbox-primary checkbox-xs category-checkbox",
+                        data_category_id=str(chan.id),
+                    ),
+                    Span(f" 📁 {chan.name.upper()}", cls="label-text ml-2 font-bold"),
+                    cls="flex items-center p-1 rounded hover:bg-base-300 cursor-pointer text-xs channel-item font-semibold opacity-90",
+                    data_name=chan.name.lower(),
+                )
+            )
+        else:
+            staff_selected = chan.id in staff_ids_set
+            ann_selected = chan.id in ann_ids_set
+
+            parent_attrs = {}
+            indent_cls = ""
+            if chan.parent_id is not None and chan.parent_id in cat_ids:
+                parent_attrs["data_parent_id"] = str(chan.parent_id)
+                indent_cls = " pl-6"
+
+            staff_checkboxes.append(
+                Label(
+                    Input(
+                        type="checkbox",
+                        name="staff_channel_ids",
+                        value=str(chan.id),
+                        checked=staff_selected,
+                        cls="checkbox checkbox-primary checkbox-xs",
+                        **parent_attrs,
+                    ),
+                    Span(f" #{chan.name}", cls="label-text ml-2 font-medium"),
+                    cls=f"flex items-center p-1{indent_cls} rounded hover:bg-base-300 cursor-pointer text-xs channel-item",
+                    data_name=chan.name.lower(),
+                )
+            )
+
+            ann_checkboxes.append(
+                Label(
+                    Input(
+                        type="checkbox",
+                        name="announcement_channel_ids",
+                        value=str(chan.id),
+                        checked=ann_selected,
+                        cls="checkbox checkbox-primary checkbox-xs",
+                        **parent_attrs,
+                    ),
+                    Span(f" #{chan.name}", cls="label-text ml-2 font-medium"),
+                    cls=f"flex items-center p-1{indent_cls} rounded hover:bg-base-300 cursor-pointer text-xs channel-item",
+                    data_name=chan.name.lower(),
+                )
+            )
 
     form_content = Form(
         Div(
@@ -1983,7 +2068,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Div(
                 *staff_checkboxes,
                 id="staff-channels-list",
-                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50",
+                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
             ),
             cls="form-control mb-4",
         ),
@@ -2006,11 +2091,40 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Div(
                 *ann_checkboxes,
                 id="ann-channels-list",
-                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50",
+                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
             ),
             cls="form-control mb-4",
         ),
         Button("Save Settings", type="submit", cls="btn btn-primary w-full"),
+        Script("""
+if (!window.auditorSettingsInitialized) {
+    window.auditorSettingsInitialized = true;
+    document.addEventListener('change', function(e) {
+        if (!e.target) return;
+        if (e.target.classList.contains('category-checkbox')) {
+            const catId = e.target.getAttribute('data-category-id');
+            const checked = e.target.checked;
+            const container = e.target.closest('.channels-list');
+            if (container) {
+                container.querySelectorAll('input[data-parent-id="' + catId + '"]').forEach(el => {
+                    el.checked = checked;
+                });
+            }
+        } else if (e.target.hasAttribute('data-parent-id')) {
+            const parentId = e.target.getAttribute('data-parent-id');
+            const container = e.target.closest('.channels-list');
+            if (container) {
+                const catCheckbox = container.querySelector('input[data-category-id="' + parentId + '"]');
+                if (catCheckbox) {
+                    const siblings = container.querySelectorAll('input[data-parent-id="' + parentId + '"]');
+                    const allChecked = Array.from(siblings).every(el => el.checked);
+                    catCheckbox.checked = allChecked;
+                }
+            }
+        }
+    });
+}
+        """),
         hx_post=f"/dashboard/{guild_id}/auditor-settings",
         hx_target=f"#guild-admin-auditor-settings-{guild_id}",
     )
