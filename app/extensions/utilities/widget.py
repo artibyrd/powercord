@@ -1835,8 +1835,8 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         warning_banner = Div(
             I(cls="fa-solid fa-triangle-exclamation text-warning mr-2 text-lg"),
             Span(
-                "Lowest Admin Role is not configured. ",
-                "Alerts for ",
+                A("Lowest Admin Role", href=f"#guild-admin-auditor-settings-{guild_id}", cls="link link-hover text-warning font-semibold"),
+                " is not configured. Alerts for ",
                 Span("Roles", cls="font-semibold"),
                 " and ",
                 Span("Pings", cls="font-semibold"),
