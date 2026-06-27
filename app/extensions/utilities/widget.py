@@ -892,7 +892,7 @@ class PublicAnnouncementProtection(SecurityRule):
         for c in channels:
             if c.type == "category":
                 continue
-            is_ann = (c.id in ann_channel_ids) or ("announcement" in c.name.lower()) or ("rules" in c.name.lower())
+            is_ann = (c.id in ann_channel_ids) or c.type == "news"
             if not is_ann:
                 continue
 
@@ -976,7 +976,7 @@ class ExposedStaffChannels(SecurityRule):
         for c in channels:
             if c.type == "category":
                 continue
-            is_staff = (c.id in staff_channel_ids) or any(k in c.name.lower() for k in ["staff", "admin", "moderator"])
+            is_staff = c.id in staff_channel_ids
             if not is_staff:
                 continue
 
