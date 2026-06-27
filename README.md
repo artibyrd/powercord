@@ -49,7 +49,7 @@ just install
 just db-upgrade
 
 # 4. Add yourself as admin
-just add-admin <YOUR_DISCORD_ID> "Initial Admin"
+just add-admin <YOUR_DISCORD_ID> --comment "Initial Admin"
 
 # 5. Run the stack
 just dev
@@ -79,15 +79,3 @@ just qa fix    # Same, but auto-fix lint and formatting issues
 | **[Core Utilities](docs/utilities.md)** | Reusable API, Bot, and UI components |
 | **[Swagger Styling](docs/swagger_styling.md)** | Customizing the Swagger API docs with dark themes |
 | **[Legacy V2 Migration](docs/LEGACY_V2_MIGRATION.md)** | Migrating from Powercord V2 to V3 |
-
-## LLMS Files
-
-To give large language models (LLMs) and AI coding assistants better context, we include curated documentation maps under the shared `.agent/llms/` directory (centralized in the `powercord-agent` repository):
-
-- **[Discord API Guide](.agent/llms/discord-llms.txt)**: Core Discord Developer platform guides and interactions.
-- **[FastHTML](.agent/llms/fasthtml-llms.txt)**: Dynamic Python-based HTML layout and routing guidelines.
-- **[Pydantic](.agent/llms/pydantic-llms-full.txt)**: Data validation and model settings reference.
-- **[FastAPI](.agent/llms/fastapi-llms.txt)**: Dependency injection, APIRouter structures, and REST patterns.
-- **[SQLModel & SQLAlchemy](.agent/llms/sqlmodel-llms.txt)**: Database schemas, models, relationships, and queries.
-- **[Flet UI](.agent/llms/flet-llms.txt)**: Desktop client UI layouts, controls, page states, and event handling.
-- **[Playwright](.agent/llms/playwright-llms.txt)**: Browser testing and E2E automation actions and assertions.

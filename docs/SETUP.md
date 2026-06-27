@@ -95,7 +95,7 @@ This runs `poetry install` to set up all Python dependencies.
 just db-upgrade
 
 # Add yourself as an admin (required for dashboard access)
-just add-admin <YOUR_DISCORD_USER_ID> "Initial Admin"
+just add-admin <YOUR_DISCORD_USER_ID> --comment "Initial Admin"
 ```
 
 ---
