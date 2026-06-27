@@ -601,10 +601,10 @@ def guild_admin_security_overview_widget(guild_id: int):
             gauges_row,
             breakdown_section,
             stats_grid,
-            cls="flex flex-col gap-4 items-center w-full h-full",
+            cls="flex flex-col gap-4 items-center w-full h-full min-h-0",
         ),
         id=f"guild-admin-security-overview-{guild_id}",
-        cls="min-h-[480px] h-full",
+        cls="min-h-[480px] max-h-[640px] h-full",
     )
 
 
