@@ -790,11 +790,14 @@ class CategoryPermissionBaseline(SecurityRule):
                     t_type = target_meta.get("type")
                     t_name = target_meta.get("name")
 
+                    role_name = None
                     if target_id in role_map:
                         display_name = f"Role '{role_map[target_id]}'"
+                        role_name = role_map[target_id]
                     elif t_name:
                         if t_type == "role":
                             display_name = f"Role '{t_name}'"
+                            role_name = t_name
                         elif t_type == "member":
                             display_name = f"Member '{t_name}'"
                         else:
@@ -815,6 +818,7 @@ class CategoryPermissionBaseline(SecurityRule):
                             "message": f"Channel #{child.name} has permission exposure leak compared to parent category {parent.name}.",
                             "details": f"Target {display_name} has less restricted overwrites. Leaked allows: {decode_permissions(leaked_allows)}, leaked denies: {decode_permissions(leaked_denies)}.{inert_label}",
                             "action_buttons": [],
+                            "role_name": role_name,
                         }
                     )
         return alerts
@@ -928,6 +932,7 @@ class PublicAnnouncementProtection(SecurityRule):
                                 "message": f"Announcement channel #{c.name} allows role '{r.name}' to send messages or mention everyone.",
                                 "details": f"Role '{r.name}' (position {r.position}) has effective permissions {decode_permissions(p)} in announcement channel.",
                                 "action_buttons": [],
+                                "role_name": r.name,
                             }
                         )
         return alerts
@@ -1007,6 +1012,7 @@ class ExposedStaffChannels(SecurityRule):
                             "message": f"Staff channel #{c.name} is visible to {r.name}.",
                             "details": f"Role '{r.name}' (position {r.position}) has View Channel (1 << 10) permission in staff channel.",
                             "action_buttons": [],
+                            "role_name": r.name,
                         }
                     )
         return alerts
@@ -1069,6 +1075,7 @@ class UnauthorizedChatPings(SecurityRule):
                                 "message": f"Non-text location #{c.name} allows role '{r.name}' to send messages or mention everyone.",
                                 "details": f"Channel of type '{c.type}' allows non-admin role '{r.name}' to Send Messages or Mention Everyone. Allowed permissions: {decode_permissions(p)}.",
                                 "action_buttons": [],
+                                "role_name": r.name,
                             }
                         )
         return alerts
@@ -1104,6 +1111,7 @@ class LowTierRolePrivileges(SecurityRule):
                         "message": f"Low-tier role '{r.name}' has sensitive permissions.",
                         "details": f"Role '{r.name}' (position {r.position}) has sensitive permissions: {decode_permissions(r.permissions & mask)}.",
                         "action_buttons": [],
+                        "role_name": r.name,
                     }
                 )
         return alerts
@@ -1138,6 +1146,7 @@ class GeneralRoleMentionability(SecurityRule):
                         "message": f"Low-tier role '{r.name}' is mentionable.",
                         "details": f"Role '{r.name}' is a non-admin role set to mentionable, posing a mass ping raid vulnerability.",
                         "action_buttons": [],
+                        "role_name": r.name,
                     }
                 )
         return alerts
@@ -1252,6 +1261,7 @@ class OverPrivilegedBotIntegrations(SecurityRule):
                         "message": f"Bot role '{r.name}' has excessive privileges.",
                         "details": f"Managed integration role '{r.name}' has sensitive permissions: {decode_permissions(r.permissions & mask)}.",
                         "action_buttons": [],
+                        "role_name": r.name,
                     }
                 )
         return alerts
@@ -1431,6 +1441,79 @@ class SecurityRuleEngine:
         SecurityRuleEngine._evaluation_cache[cache_key] = res
         return res
 
+    def _link_parent_alerts(self, alerts: list[dict], session: Session, guild_id: int) -> list[dict]:
+        # Query roles to check permissions
+        roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
+        admin_roles = {r.name for r in roles if r.permissions & (1 << 3)}
+        mention_everyone_roles = {r.name for r in roles if r.permissions & (1 << 17)}
+
+        # Initialize child_count and parent_hash
+        for a in alerts:
+            a["child_count"] = 0
+            a["parent_hash"] = None
+
+        # Identify parents
+        parent_map = {}  # role_name -> list of parent alerts
+        for a in alerts:
+            rule = a.get("rule")
+            role_name = a.get("role_name")
+            if rule in ("Low-Tier Role Privileges", "Over-privileged Bot Integrations") and role_name:
+                parent_map.setdefault(role_name, []).append(a)
+
+        # Link children
+        for a in alerts:
+            rule = a.get("rule")
+            role_name = a.get("role_name")
+            if not role_name:
+                continue
+
+            potential_parents = parent_map.get(role_name, [])
+            for parent in potential_parents:
+                # Check Admin link condition
+                if (
+                    rule
+                    in (
+                        "Category Permission Baseline",
+                        "Public Announcement Protection",
+                        "Exposed Staff Channels",
+                        "Unauthorized Chat Pings in Non-Text Locations",
+                    )
+                    and role_name in admin_roles
+                ):
+                    a["parent_hash"] = parent["alert_hash"]
+                    parent["child_count"] += 1
+                    break
+
+                # Check Mention Everyone link condition
+                if (
+                    rule == "General Role Mentionability"
+                    and parent["rule"] == "Low-Tier Role Privileges"
+                    and role_name in mention_everyone_roles
+                ):
+                    a["parent_hash"] = parent["alert_hash"]
+                    parent["child_count"] += 1
+                    break
+
+        # Reorder so children are grouped under parents
+        parent_hashes = {p["alert_hash"] for plist in parent_map.values() for p in plist}
+        parent_alerts = [a for a in alerts if a["alert_hash"] in parent_hashes]
+        child_alerts_by_parent = {}
+        for a in alerts:
+            phash = a.get("parent_hash")
+            if phash:
+                child_alerts_by_parent.setdefault(phash, []).append(a)
+
+        other_alerts = [a for a in alerts if a["alert_hash"] not in parent_hashes and not a.get("parent_hash")]
+
+        ordered_alerts = []
+        for parent in parent_alerts:
+            ordered_alerts.append(parent)
+            children_list = child_alerts_by_parent.get(parent["alert_hash"], [])
+            ordered_alerts.extend(children_list)
+
+        ordered_alerts.extend(other_alerts)
+        return ordered_alerts
+
     def run_all(self, guild_id: int, session: Session, include_overridden: bool = False) -> dict:
         alerts = []
         for rule in self.rules:
@@ -1440,17 +1523,23 @@ class SecurityRuleEngine:
             except Exception as e:
                 logging.exception(f"Error evaluating rule {rule.name}: {e}")
 
-        # Compute hash for every alert and filter if not include_overridden
-        overrides = session.exec(select(SecurityAlertOverride).where(SecurityAlertOverride.guild_id == guild_id)).all()
-        override_hashes = {o.alert_hash for o in overrides}
-
-        filtered_alerts = []
+        # Compute hash for every alert first
         for alert in alerts:
             ahash = hashlib.sha256(
                 f"{alert.get('rule')}:{alert.get('category')}:{alert.get('message')}".encode("utf-8")
             ).hexdigest()
             alert["alert_hash"] = ahash
-            if include_overridden or ahash not in override_hashes:
+
+        # Link parent/child alerts
+        alerts = self._link_parent_alerts(alerts, session, guild_id)
+
+        # Filter if not include_overridden
+        overrides = session.exec(select(SecurityAlertOverride).where(SecurityAlertOverride.guild_id == guild_id)).all()
+        override_hashes = {o.alert_hash for o in overrides}
+
+        filtered_alerts = []
+        for alert in alerts:
+            if include_overridden or alert["alert_hash"] not in override_hashes:
                 filtered_alerts.append(alert)
 
         # Now compute score only on non-overridden alerts!
@@ -1459,6 +1548,11 @@ class SecurityRuleEngine:
         num_low = 0
         for alert in filtered_alerts:
             if alert["alert_hash"] not in override_hashes:
+                # Exclude child alerts from score if their parent is active (not overridden)
+                parent_hash = alert.get("parent_hash")
+                if parent_hash and parent_hash not in override_hashes:
+                    continue
+
                 details = str(alert.get("details", ""))
                 if "[INERT" in details:
                     continue
@@ -1472,8 +1566,24 @@ class SecurityRuleEngine:
 
         score = 100 - (15 * num_high + 10 * num_medium + 5 * num_low)
         score = max(0, min(100, score))
+
+        # Sort keeping parent-child grouping intact
         severity_order = {"high": 0, "medium": 1, "low": 2}
-        filtered_alerts.sort(key=lambda a: severity_order.get(a.get("severity", "").lower(), 3))
+        alert_severities = {al["alert_hash"]: al.get("severity", "").lower() for al in filtered_alerts}
+
+        def sort_key(a):
+            phash = a.get("parent_hash")
+            if phash and phash in alert_severities:
+                group_sev = alert_severities[phash]
+                is_child = 1
+                parent_key = phash
+            else:
+                group_sev = a.get("severity", "").lower()
+                is_child = 0
+                parent_key = a["alert_hash"]
+            return (severity_order.get(group_sev, 3), parent_key, is_child)
+
+        filtered_alerts.sort(key=sort_key)
         return {"score": score, "alerts": filtered_alerts}
 
 
@@ -1648,13 +1758,11 @@ def format_message(text: str) -> FT:
     # Rebuild the FT components
     formatted_parts = []
     last_idx = 0
-    for start, end, val, kind in non_overlapping:
+    for start, end, val, _kind in non_overlapping:
         if start > last_idx:
             formatted_parts.append(Span(text[last_idx:start]))
 
-        formatted_parts.append(
-            Span(val, cls="font-bold text-accent")
-        )
+        formatted_parts.append(Span(val, cls="font-bold text-accent"))
         last_idx = end
 
     if last_idx < len(text):
@@ -1667,6 +1775,7 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
     if not alerts:
         return Div("No security alerts found.", cls="text-sm opacity-70 p-4 text-center")
 
+    visible_hashes = {a["alert_hash"] for a in alerts}
     alert_elements = []
     for alert in alerts:
         sev = alert.get("severity", "").lower()
@@ -1701,14 +1810,44 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
             )
         )
 
+        # Parent/child rendering configurations
+        parent_badge = ""
+        if alert.get("child_count", 0) > 0:
+            parent_badge = Span(
+                f"→ {alert['child_count']} downstream",
+                cls="badge badge-outline badge-accent badge-sm ml-2 tooltip tooltip-right cursor-help font-semibold",
+                data_tip="Resolving this upstream alert could automatically resolve these downstream alerts",
+            )
+
+        child_indicator = ""
+        is_child = False
+        phash = alert.get("parent_hash")
+        if phash and phash in visible_hashes:
+            is_child = True
+            parent_rule = next((a["rule"] for a in alerts if a["alert_hash"] == phash), "Upstream Rule")
+            child_indicator = Div(
+                I(cls="fa-solid fa-level-up-alt fa-rotate-90 text-[10px] opacity-50 mr-1.5"),
+                Span(f"Cascaded from: {parent_rule}", cls="text-[10px] font-bold opacity-50 uppercase tracking-wider"),
+                cls="flex items-center mb-1.5",
+            )
+
+        container_cls = f"p-3 rounded-md border-l-4 border {border_cls} mb-3 last:mb-0"
+        if is_child:
+            container_cls += " ml-8 border-dashed opacity-90"
+
         alert_elements.append(
             Div(
+                child_indicator,
                 Div(
                     Span(
                         alert.get("rule", "Security Alert"),
                         cls=f"badge {badge_cls} badge-sm px-2.5 py-1 mr-2 font-bold",
                     ),
-                    Span(alert.get("category", "").upper(), cls="text-[10px] uppercase font-bold text-secondary tracking-wider"),
+                    Span(
+                        alert.get("category", "").upper(),
+                        cls="text-[10px] uppercase font-bold text-secondary tracking-wider",
+                    ),
+                    parent_badge,
                     cls="flex items-center mb-1",
                 ),
                 P(format_message(alert.get("message", "")), cls="text-sm font-medium mb-1"),
@@ -1729,7 +1868,7 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
                 if alert.get("details")
                 else "",
                 Div(*buttons, cls="flex w-full items-center") if buttons else "",
-                cls=f"p-3 rounded-md border-l-4 border {border_cls} mb-3 last:mb-0",
+                cls=container_cls,
             )
         )
     return Div(*alert_elements)
@@ -1886,7 +2025,11 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         warning_banner = Div(
             I(cls="fa-solid fa-triangle-exclamation text-warning mr-2 text-lg"),
             Span(
-                A("Lowest Admin Role", href=f"#guild-admin-auditor-settings-{guild_id}", cls="link link-hover text-warning font-semibold"),
+                A(
+                    "Lowest Admin Role",
+                    href=f"#guild-admin-auditor-settings-{guild_id}",
+                    cls="link link-hover text-warning font-semibold",
+                ),
                 " is not configured. Alerts for ",
                 Span("Roles", cls="font-semibold"),
                 " and ",
@@ -1944,9 +2087,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
         roles = session.exec(select(DiscordRole).where(DiscordRole.guild_id == guild_id)).all()
         roles = sorted(roles, key=lambda x: x.position, reverse=True)
-        all_channels = session.exec(
-            select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)
-        ).all()
+        all_channels = session.exec(select(DiscordChannel).where(DiscordChannel.guild_id == guild_id)).all()
 
     # Reconstruct Discord-like channel hierarchy & order:
     categories = sorted([c for c in all_channels if c.type == "category"], key=lambda x: x.position)
@@ -1964,7 +2105,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
 
     categoryless_channels = sorted(
         [c for c in all_channels if c.type != "category" and (c.parent_id is None or c.parent_id not in cat_ids)],
-        key=lambda x: x.position
+        key=lambda x: x.position,
     )
 
     ordered_channels = []
@@ -2087,10 +2228,28 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             )
 
     tabs_nav = Div(
-        Button("Admin Role", type="button", id="tab-btn-role", cls="tab tab-active transition-all duration-200 !bg-primary !text-primary-content font-extrabold shadow-md border border-primary/30", onclick="switchAuditorTab('role')"),
-        Button("Staff Channels", type="button", id="tab-btn-staff", cls="tab transition-all duration-200 text-base-content/70", onclick="switchAuditorTab('staff')"),
-        Button("Announcement Channels", type="button", id="tab-btn-ann", cls="tab transition-all duration-200 text-base-content/70", onclick="switchAuditorTab('ann')"),
-        cls="tabs tabs-boxed mb-4 grid grid-cols-3"
+        Button(
+            "Admin Role",
+            type="button",
+            id="tab-btn-role",
+            cls="tab tab-active transition-all duration-200 !bg-primary !text-primary-content font-extrabold shadow-md border border-primary/30",
+            onclick="switchAuditorTab('role')",
+        ),
+        Button(
+            "Staff Channels",
+            type="button",
+            id="tab-btn-staff",
+            cls="tab transition-all duration-200 text-base-content/70",
+            onclick="switchAuditorTab('staff')",
+        ),
+        Button(
+            "Announcement Channels",
+            type="button",
+            id="tab-btn-ann",
+            cls="tab transition-all duration-200 text-base-content/70",
+            onclick="switchAuditorTab('ann')",
+        ),
+        cls="tabs tabs-boxed mb-4 grid grid-cols-3",
     )
 
     panel_role = Div(
@@ -2108,7 +2267,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             cls="form-control mb-4",
         ),
         id="panel-role",
-        cls="tab-panel mb-4"
+        cls="tab-panel mb-4",
     )
 
     panel_staff = Div(
@@ -2136,7 +2295,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             cls="form-control mb-4 h-full min-h-0 flex flex-col",
         ),
         id="panel-staff",
-        cls="tab-panel hidden mb-4 h-full min-h-0 flex flex-col"
+        cls="tab-panel hidden mb-4 h-full min-h-0 flex flex-col",
     )
 
     panel_ann = Div(
@@ -2164,7 +2323,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             cls="form-control mb-4 h-full min-h-0 flex flex-col",
         ),
         id="panel-ann",
-        cls="tab-panel hidden mb-4 h-full min-h-0 flex flex-col"
+        cls="tab-panel hidden mb-4 h-full min-h-0 flex flex-col",
     )
 
     form_content = Form(
@@ -2238,7 +2397,12 @@ if (!window.auditorSettingsInitialized) {
         cls="flex flex-col h-full min-h-0",
     )
 
-    return Card("Auditor Settings", form_content, id=f"guild-admin-auditor-settings-{guild_id}", cls="min-h-[480px] max-h-[800px] h-full")
+    return Card(
+        "Auditor Settings",
+        form_content,
+        id=f"guild-admin-auditor-settings-{guild_id}",
+        cls="min-h-[480px] max-h-[800px] h-full",
+    )
 
 
 def _render_utilities_sidebar(guild_id: int, session: Optional[Session] = None) -> FT:

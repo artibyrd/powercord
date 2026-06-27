@@ -34,9 +34,13 @@ def clean_db(session: Session):
         session.execute(text("DELETE FROM site_settings;"))
         session.execute(text("DELETE FROM user_settings;"))
         try:
-            session.execute(text("DELETE FROM honeypot_channels;"))
+            from sqlalchemy import inspect
+
+            bind = session.get_bind()
+            if inspect(bind).has_table("honeypot_channels"):
+                session.execute(text("DELETE FROM honeypot_channels;"))
         except Exception:
-            pass
+            session.rollback()
         session.commit()
 
     do_clean()
@@ -833,3 +837,212 @@ def test_security_rule_engine_checksum_caching(session: Session):
 
     res4 = SecurityRuleEngine.evaluate(guild_id, session)
     assert res4 is not res3  # cache miss returns a new object reference
+
+
+def test_parent_child_alert_linking(session: Session):
+    from app.db.models import SecurityAlertOverride
+
+    guild_id = 55555
+
+    # 1. Setup base configuration
+    config = DiscordAuditorConfig(
+        guild_id=guild_id,
+        staff_separator_role_id=10,  # Below position 10 is low-tier
+        staff_channel_ids="[101]",
+        announcement_channel_ids="[102]",
+    )
+
+    # 2. Setup roles
+    # Low-tier role with Administrator (triggers Rule 5 parent)
+    low_tier_admin = DiscordRole(
+        id=2,
+        guild_id=guild_id,
+        name="LowTierAdmin",
+        permissions=8,  # Administrator (1 << 3)
+        position=5,  # Below separator role (5 < 10)
+    )
+
+    # Separator role
+    sep_role = DiscordRole(
+        id=10,
+        guild_id=guild_id,
+        name="Separator",
+        permissions=0,
+        position=10,
+    )
+
+    # Everyone role
+    everyone_role = DiscordRole(
+        id=guild_id,
+        guild_id=guild_id,
+        name="@everyone",
+        permissions=0,
+        position=0,
+    )
+
+    # Enable honeypot extension to prevent Rule 7 alert noise
+    honeypot_ext = GuildExtensionSettings(
+        guild_id=guild_id,
+        extension_name="honeypot",
+        gadget_type="cog",
+        is_enabled=True,
+    )
+
+    # 3. Setup channels
+    staff_chat = DiscordChannel(
+        id=101,
+        guild_id=guild_id,
+        name="staff-chat",
+        type="text",
+        overwrites="{}",
+    )
+
+    announcement_chat = DiscordChannel(
+        id=102,
+        guild_id=guild_id,
+        name="announcements",
+        type="news",
+        overwrites="{}",
+    )
+
+    session.add_all([config, low_tier_admin, sep_role, everyone_role, honeypot_ext, staff_chat, announcement_chat])
+    session.commit()
+
+    # Clear cache before evaluating
+    SecurityRuleEngine._evaluation_cache.clear()
+
+    # Run evaluation
+    res = SecurityRuleEngine.evaluate(guild_id, session, include_overridden=True)
+    alerts = res["alerts"]
+
+    # We expect:
+    # 1. Rule 5 (Low-Tier Role Privileges) for "LowTierAdmin"
+    # 2. Rule 3 (Exposed Staff Channels) for "LowTierAdmin"
+    # 3. Rule 2 (Public Announcement Protection) for "LowTierAdmin"
+
+    r5_alert = next((a for a in alerts if a["rule"] == "Low-Tier Role Privileges"), None)
+    r3_alert = next((a for a in alerts if a["rule"] == "Exposed Staff Channels"), None)
+    r2_alert = next((a for a in alerts if a["rule"] == "Public Announcement Protection"), None)
+
+    assert r5_alert is not None
+    assert r3_alert is not None
+    assert r2_alert is not None
+
+    # Check linkage
+    assert r5_alert["child_count"] == 2
+    assert r3_alert["parent_hash"] == r5_alert["alert_hash"]
+    assert r2_alert["parent_hash"] == r5_alert["alert_hash"]
+
+    # Score checks:
+    # Since r3 and r2 are child alerts of r5, and r5 is active (not overridden),
+    # r3 and r2 must be excluded from the score computation.
+    # Score calculation: 100 - (15 * NumHigh).
+    # Since r5 is High severity and the only counted alert:
+    # Expected score = 100 - 15 = 85.
+    assert res["score"] == 85
+
+    # 4. Test Overridden Parent Behavior
+    # Override the parent (Rule 5)
+    parent_override = SecurityAlertOverride(
+        guild_id=guild_id,
+        alert_hash=r5_alert["alert_hash"],
+        rule=r5_alert["rule"],
+        category=r5_alert["category"],
+        message=r5_alert["message"],
+        comment="Parent override test",
+    )
+    session.add(parent_override)
+    session.commit()
+
+    # Clear cache and evaluate with overrides applied (include_overridden=False)
+    SecurityRuleEngine._evaluation_cache.clear()
+    res_override = SecurityRuleEngine.evaluate(guild_id, session, include_overridden=False)
+    active_alerts = res_override["alerts"]
+
+    # Parent (r5) should be filtered out
+    assert not any(a["alert_hash"] == r5_alert["alert_hash"] for a in active_alerts)
+
+    # Children (r3 and r2) should still be active
+    r3_active = next((a for a in active_alerts if a["alert_hash"] == r3_alert["alert_hash"]), None)
+    r2_active = next((a for a in active_alerts if a["alert_hash"] == r2_alert["alert_hash"]), None)
+
+    assert r3_active is not None
+    assert r2_active is not None
+
+    # Since parent is overridden (filtered out), the children should lose their active parent status
+    # in score computation, meaning they revert to being counted individually.
+    # Both are High severity. Penalty = 15 + 15 = 30.
+    # Expected score = 100 - 30 = 70.
+    assert res_override["score"] == 70
+
+
+def test_parent_child_alert_linking_mention_everyone(session: Session):
+    guild_id = 66666
+
+    config = DiscordAuditorConfig(
+        guild_id=guild_id,
+        staff_separator_role_id=10,
+        staff_channel_ids="[]",
+        announcement_channel_ids="[]",
+    )
+
+    # Low-tier role with Mention Everyone (triggers Rule 5) and is mentionable (triggers Rule 6)
+    low_tier_role = DiscordRole(
+        id=3,
+        guild_id=guild_id,
+        name="LowTierPingable",
+        permissions=131072,  # Mention Everyone (1 << 17)
+        position=5,
+        is_managed=False,
+        is_mentionable=True,  # Mentionable (triggers Rule 6)
+    )
+
+    sep_role = DiscordRole(
+        id=10,
+        guild_id=guild_id,
+        name="Separator",
+        permissions=0,
+        position=10,
+    )
+
+    everyone_role = DiscordRole(
+        id=guild_id,
+        guild_id=guild_id,
+        name="@everyone",
+        permissions=0,
+        position=0,
+    )
+
+    honeypot_ext = GuildExtensionSettings(
+        guild_id=guild_id,
+        extension_name="honeypot",
+        gadget_type="cog",
+        is_enabled=True,
+    )
+
+    session.add_all([config, low_tier_role, sep_role, everyone_role, honeypot_ext])
+    session.commit()
+
+    SecurityRuleEngine._evaluation_cache.clear()
+    res = SecurityRuleEngine.evaluate(guild_id, session, include_overridden=True)
+    alerts = res["alerts"]
+
+    # We expect:
+    # 1. Rule 5 (Low-Tier Role Privileges) for "LowTierPingable" (High severity)
+    # 2. Rule 6 (General Role Mentionability) for "LowTierPingable" (Low severity)
+
+    r5_alert = next((a for a in alerts if a["rule"] == "Low-Tier Role Privileges"), None)
+    r6_alert = next((a for a in alerts if a["rule"] == "General Role Mentionability"), None)
+
+    assert r5_alert is not None
+    assert r6_alert is not None
+
+    # Check linkage
+    assert r5_alert["child_count"] == 1
+    assert r6_alert["parent_hash"] == r5_alert["alert_hash"]
+
+    # Score checks:
+    # r6 (Low severity) is excluded since r5 is active.
+    # Score penalty = 15 (r5 is High).
+    # Expected score = 100 - 15 = 85.
+    assert res["score"] == 85
