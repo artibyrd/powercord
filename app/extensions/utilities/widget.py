@@ -2035,7 +2035,14 @@ def guild_admin_auditor_settings_widget(guild_id: int):
                 )
             )
 
-    form_content = Form(
+    tabs_nav = Div(
+        Button("Admin Role", type="button", id="tab-btn-role", cls="tab tab-active transition-all duration-200 !bg-primary !text-primary-content font-extrabold shadow-md border border-primary/30", onclick="switchAuditorTab('role')"),
+        Button("Staff Channels", type="button", id="tab-btn-staff", cls="tab transition-all duration-200 text-base-content/70", onclick="switchAuditorTab('staff')"),
+        Button("Announcement Channels", type="button", id="tab-btn-ann", cls="tab transition-all duration-200 text-base-content/70", onclick="switchAuditorTab('ann')"),
+        cls="tabs tabs-boxed mb-4 grid grid-cols-3"
+    )
+
+    panel_role = Div(
         Div(
             Div(
                 Label("Lowest Admin Role", cls="label text-sm font-semibold"),
@@ -2049,6 +2056,11 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Select(*role_options, name="staff_separator_role_id", cls="select select-bordered w-full"),
             cls="form-control mb-4",
         ),
+        id="panel-role",
+        cls="tab-panel mb-4"
+    )
+
+    panel_staff = Div(
         Div(
             Div(
                 Label("Staff Channels", cls="label text-sm font-semibold"),
@@ -2068,10 +2080,15 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Div(
                 *staff_checkboxes,
                 id="staff-channels-list",
-                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
+                cls="h-48 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
             ),
             cls="form-control mb-4",
         ),
+        id="panel-staff",
+        cls="tab-panel hidden mb-4"
+    )
+
+    panel_ann = Div(
         Div(
             Div(
                 Label("Announcement Channels", cls="label text-sm font-semibold"),
@@ -2091,14 +2108,49 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Div(
                 *ann_checkboxes,
                 id="ann-channels-list",
-                cls="h-32 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
+                cls="h-48 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
             ),
             cls="form-control mb-4",
         ),
+        id="panel-ann",
+        cls="tab-panel hidden mb-4"
+    )
+
+    form_content = Form(
+        tabs_nav,
+        panel_role,
+        panel_staff,
+        panel_ann,
         Button("Save Settings", type="submit", cls="btn btn-primary w-full"),
         Script("""
 if (!window.auditorSettingsInitialized) {
     window.auditorSettingsInitialized = true;
+
+    window.switchAuditorTab = function(tabName) {
+        const panels = ['role', 'staff', 'ann'];
+        panels.forEach(name => {
+            const panel = document.getElementById('panel-' + name);
+            if (panel) panel.classList.add('hidden');
+
+            const btn = document.getElementById('tab-btn-' + name);
+            if (btn) {
+                btn.classList.remove('tab-active', '!bg-primary', '!text-primary-content', 'font-extrabold', 'shadow-md', 'border', 'border-primary/30');
+                btn.classList.add('text-base-content/70');
+            }
+        });
+
+        const activePanel = document.getElementById('panel-' + tabName);
+        if (activePanel) activePanel.classList.remove('hidden');
+
+        const activeBtn = document.getElementById('tab-btn-' + tabName);
+        if (activeBtn) {
+            activeBtn.classList.remove('text-base-content/70');
+            activeBtn.classList.add('tab-active', '!bg-primary', '!text-primary-content', 'font-extrabold', 'shadow-md', 'border', 'border-primary/30');
+        }
+
+        localStorage.setItem('activeAuditorTab', tabName);
+    };
+
     document.addEventListener('change', function(e) {
         if (!e.target) return;
         if (e.target.classList.contains('category-checkbox')) {
@@ -2124,6 +2176,11 @@ if (!window.auditorSettingsInitialized) {
         }
     });
 }
+
+(function() {
+    const savedTab = localStorage.getItem('activeAuditorTab') || 'role';
+    window.switchAuditorTab(savedTab);
+})();
         """),
         hx_post=f"/dashboard/{guild_id}/auditor-settings",
         hx_target=f"#guild-admin-auditor-settings-{guild_id}",

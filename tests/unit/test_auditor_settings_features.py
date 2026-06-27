@@ -1,6 +1,6 @@
-import json
 import pytest
 from sqlmodel import Session
+
 from app.db.models import DiscordAuditorConfig, DiscordChannel, DiscordRole
 from app.extensions.utilities.widget import guild_admin_auditor_settings_widget
 
