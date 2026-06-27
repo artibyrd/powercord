@@ -1541,12 +1541,12 @@ def format_details(details: str) -> FT:
         return Div(
             P(prefix, cls="text-sm font-semibold text-secondary/90 mb-2"),
             Div(
-                Span("Leaked Allows: ", cls="text-xs font-bold opacity-75 mr-2"),
+                Span("Leaked Allows: ", cls="text-xs font-bold text-secondary mr-2"),
                 Div(*allows_badges, cls="inline-flex flex-wrap items-center"),
                 cls="mb-1.5 flex flex-wrap items-center",
             ),
             Div(
-                Span("Leaked Denies: ", cls="text-xs font-bold opacity-75 mr-2"),
+                Span("Leaked Denies: ", cls="text-xs font-bold text-secondary mr-2"),
                 Div(*denies_badges, cls="inline-flex flex-wrap items-center"),
                 cls="flex flex-wrap items-center",
             ),
@@ -1577,7 +1577,7 @@ def format_details(details: str) -> FT:
         return Div(
             P(prefix, cls="text-sm font-semibold text-secondary/90 mb-2"),
             Div(
-                Span("Permissions: ", cls="text-xs font-bold opacity-75 mr-2"),
+                Span("Permissions: ", cls="text-xs font-bold text-secondary mr-2"),
                 Div(*perms_badges, cls="inline-flex flex-wrap items-center"),
                 cls="flex flex-wrap items-center",
             ),
@@ -1610,6 +1610,57 @@ def format_details(details: str) -> FT:
     return Div(
         Span(details, cls="text-xs opacity-80"), cls="p-3 bg-black/40 rounded-md border border-neutral-700/50 mt-2"
     )
+
+
+def format_message(text: str) -> FT:
+    if not text:
+        return ""
+
+    highlights = []
+
+    # 1. Channel names starting with #
+    for m in re.finditer(r"#([a-zA-Z0-9_-]+)", text):
+        highlights.append((m.start(), m.end(), m.group(0), "channel"))
+
+    # 2. Quoted names like 'Role'
+    for m in re.finditer(r"'([^']+)'", text):
+        highlights.append((m.start(), m.end(), m.group(1), "quote"))
+
+    # 3. Role name after "is visible to "
+    for m in re.finditer(r"is visible to ([^.]+)", text):
+        highlights.append((m.start(1), m.end(1), m.group(1), "role"))
+
+    # 4. Category name after "compared to parent category "
+    for m in re.finditer(r"compared to parent category ([^.]+)", text):
+        highlights.append((m.start(1), m.end(1), m.group(1), "category"))
+
+    # Sort highlights by starting index
+    highlights = sorted(highlights, key=lambda x: x[0])
+
+    # Resolve overlaps (keep the first one)
+    non_overlapping = []
+    last_end = 0
+    for start, end, val, kind in highlights:
+        if start >= last_end:
+            non_overlapping.append((start, end, val, kind))
+            last_end = end
+
+    # Rebuild the FT components
+    formatted_parts = []
+    last_idx = 0
+    for start, end, val, kind in non_overlapping:
+        if start > last_idx:
+            formatted_parts.append(Span(text[last_idx:start]))
+
+        formatted_parts.append(
+            Span(val, cls="font-bold text-accent")
+        )
+        last_idx = end
+
+    if last_idx < len(text):
+        formatted_parts.append(Span(text[last_idx:]))
+
+    return Span(*formatted_parts)
 
 
 def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
@@ -1657,10 +1708,10 @@ def _render_alerts_list(alerts: list[dict], guild_id: int) -> FT:
                         alert.get("rule", "Security Alert"),
                         cls=f"badge {badge_cls} badge-sm px-2.5 py-1 mr-2 font-bold",
                     ),
-                    Span(alert.get("category", "").upper(), cls="text-[10px] opacity-50 uppercase font-semibold"),
+                    Span(alert.get("category", "").upper(), cls="text-[10px] uppercase font-bold text-secondary tracking-wider"),
                     cls="flex items-center mb-1",
                 ),
-                P(alert.get("message", ""), cls="text-sm font-medium mb-1"),
+                P(format_message(alert.get("message", "")), cls="text-sm font-medium mb-1"),
                 Details(
                     Summary(
                         Div(
@@ -2080,12 +2131,12 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Div(
                 *staff_checkboxes,
                 id="staff-channels-list",
-                cls="h-48 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
+                cls="flex-1 min-h-0 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
             ),
-            cls="form-control mb-4",
+            cls="form-control mb-4 h-full min-h-0 flex flex-col",
         ),
         id="panel-staff",
-        cls="tab-panel hidden mb-4"
+        cls="tab-panel hidden mb-4 h-full min-h-0 flex flex-col"
     )
 
     panel_ann = Div(
@@ -2108,12 +2159,12 @@ def guild_admin_auditor_settings_widget(guild_id: int):
             Div(
                 *ann_checkboxes,
                 id="ann-channels-list",
-                cls="h-48 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
+                cls="flex-1 min-h-0 overflow-y-auto border border-base-300 rounded-md p-2 space-y-1 bg-base-200/50 channels-list",
             ),
-            cls="form-control mb-4",
+            cls="form-control mb-4 h-full min-h-0 flex flex-col",
         ),
         id="panel-ann",
-        cls="tab-panel hidden mb-4"
+        cls="tab-panel hidden mb-4 h-full min-h-0 flex flex-col"
     )
 
     form_content = Form(
@@ -2121,7 +2172,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         panel_role,
         panel_staff,
         panel_ann,
-        Button("Save Settings", type="submit", cls="btn btn-primary w-full"),
+        Button("Save Settings", type="submit", cls="btn btn-primary w-full mt-auto"),
         Script("""
 if (!window.auditorSettingsInitialized) {
     window.auditorSettingsInitialized = true;
@@ -2184,9 +2235,10 @@ if (!window.auditorSettingsInitialized) {
         """),
         hx_post=f"/dashboard/{guild_id}/auditor-settings",
         hx_target=f"#guild-admin-auditor-settings-{guild_id}",
+        cls="flex flex-col h-full min-h-0",
     )
 
-    return Card("Auditor Settings", form_content, id=f"guild-admin-auditor-settings-{guild_id}")
+    return Card("Auditor Settings", form_content, id=f"guild-admin-auditor-settings-{guild_id}", cls="min-h-[480px] max-h-[800px] h-full")
 
 
 def _render_utilities_sidebar(guild_id: int, session: Optional[Session] = None) -> FT:
