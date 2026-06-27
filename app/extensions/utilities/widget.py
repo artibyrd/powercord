@@ -1178,10 +1178,13 @@ class SuggestiveHoneypotIntegration(SecurityRule):
         if HoneypotChannel is not None:
             try:
                 from sqlalchemy import inspect
+
                 bind = session.get_bind()
                 if inspect(bind).has_table("honeypot_channels"):
                     protected_ids = set(
-                        session.exec(select(HoneypotChannel.channel_id).where(HoneypotChannel.guild_id == guild_id)).all()
+                        session.exec(
+                            select(HoneypotChannel.channel_id).where(HoneypotChannel.guild_id == guild_id)
+                        ).all()
                     )
             except Exception:  # noqa: S110
                 session.rollback()
@@ -1877,10 +1880,10 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
             tabs_ui,
             alerts_list_ui,
             color_legend,
-            cls="flex flex-col h-full",
+            cls="flex flex-col h-full min-h-0",
         ),
         id=f"guild-admin-alerts-{guild_id}",
-        cls="min-h-[480px] h-full",
+        cls="min-h-[480px] max-h-[640px] h-full",
     )
 
 

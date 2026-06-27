@@ -81,7 +81,7 @@ def Card(title, content, **kwargs):
     cls = kwargs.pop("cls", "")
 
     return Div(
-        Div(header, content, cls="card-body"),
+        Div(header, content, cls="card-body min-h-0"),
         cls=f"card bg-base-100 shadow-xl {cls}",
         **kwargs,
     )
