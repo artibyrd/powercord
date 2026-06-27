@@ -2304,13 +2304,6 @@ def _render_utilities_sidebar_inner(guild_id: int, session: Session) -> FT:
                             cls="link link-hover text-xs",
                         )
                     ),
-                    Li(
-                        A(
-                            "Auditor Settings",
-                            href=f"#guild-admin-auditor-settings-{guild_id}",
-                            cls="link link-hover text-xs",
-                        )
-                    ),
                     Li(A("Guild Roles", href=f"#guild-admin-audit-roles-{guild_id}", cls="link link-hover text-xs")),
                     Li(
                         A(
@@ -2323,6 +2316,13 @@ def _render_utilities_sidebar_inner(guild_id: int, session: Session) -> FT:
                         A(
                             "Permissions Matrix",
                             href=f"#guild-admin-audit-permissions-{guild_id}",
+                            cls="link link-hover text-xs",
+                        )
+                    ),
+                    Li(
+                        A(
+                            "Auditor Settings",
+                            href=f"#guild-admin-auditor-settings-{guild_id}",
                             cls="link link-hover text-xs",
                         )
                     ),
