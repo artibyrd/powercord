@@ -191,7 +191,7 @@ class UtilitiesCog(commands.Cog):
         description="Displays the current config parameters.",
     )
     async def slash_audit_config_get(self, interaction: nextcord.Interaction):
-        """Displays the current config parameters for the separator role and staff/announcement channels."""
+        """Displays the current config parameters for the lowest admin role and staff/announcement channels."""
         if not interaction.guild or not isinstance(interaction.user, nextcord.Member):
             await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
             return
@@ -240,7 +240,7 @@ class UtilitiesCog(commands.Cog):
         announcement_channels_str = format_channels(config.announcement_channel_ids)
 
         embed = nextcord.Embed(title="Auditor Configuration", color=nextcord.Color.blue())
-        embed.add_field(name="Staff Separator Role", value=role_mention, inline=False)
+        embed.add_field(name="Lowest Admin Role", value=role_mention, inline=False)
         embed.add_field(name="Staff Channels", value=staff_channels_str, inline=False)
         embed.add_field(name="Announcement Channels", value=announcement_channels_str, inline=False)
 
@@ -248,14 +248,14 @@ class UtilitiesCog(commands.Cog):
 
     @slash_audit_config.subcommand(
         name="set",
-        description="Allows setting/updating the separator role, staff channels, and announcement channels.",
+        description="Allows setting/updating the lowest admin role, staff channels, and announcement channels.",
     )
     async def slash_audit_config_set(
         self,
         interaction: nextcord.Interaction,
         separator_role: nextcord.Role = nextcord.SlashOption(
-            name="separator_role",
-            description="The staff separator role",
+            name="admin_role",
+            description="The lowest admin role in the hierarchy",
             required=False,
             default=None,
         ),
@@ -272,7 +272,7 @@ class UtilitiesCog(commands.Cog):
             default=None,
         ),
     ):
-        """Allows setting/updating the separator role, staff channels, and announcement channels."""
+        """Allows setting/updating the lowest admin role, staff channels, and announcement channels."""
         if not interaction.guild or not isinstance(interaction.user, nextcord.Member):
             await interaction.response.send_message("❌ This command must be used in a server.", ephemeral=True)
             return
@@ -322,7 +322,7 @@ class UtilitiesCog(commands.Cog):
 
             if not has_updates:
                 await interaction.response.send_message(
-                    "❌ Please provide at least one configuration parameter to update (separator_role, staff_channels, or announcement_channels).",
+                    "❌ Please provide at least one configuration parameter to update (admin_role, staff_channels, or announcement_channels).",
                     ephemeral=True,
                 )
                 return

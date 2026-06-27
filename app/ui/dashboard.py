@@ -1125,7 +1125,7 @@ async def toggle_nav_route(guild_id: int, req, sess):
 
 @dashboard_router("/dashboard/{guild_id:int}/auditor-settings", methods=["POST"])
 async def post_auditor_settings(guild_id: int, req):
-    """Parses separator role and staff/announcement channels, validates, and saves in DB."""
+    """Parses lowest admin role and staff/announcement channels, validates, and saves in DB."""
     import json
 
     from sqlmodel import Session, select

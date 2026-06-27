@@ -658,8 +658,8 @@ def test_security_rule_engine(session: Session):
     result = engine.run_all(guild_id, session)
 
     # Expected alerts: LowTierRolePrivileges (high), SuggestiveHoneypotIntegration (low)
-    # score = 100 * 0.85 * 0.95 = 81
-    assert result["score"] == 81
+    # score = 100 - 15 (high) - 5 (low) = 80
+    assert result["score"] == 80
 
 
 def test_security_rule_engine_evaluate_caching(session: Session):

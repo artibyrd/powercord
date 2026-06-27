@@ -1067,7 +1067,7 @@ class UnauthorizedChatPings(SecurityRule):
                                 "category": self.category,
                                 "severity": self.severity,
                                 "message": f"Non-text location #{c.name} allows role '{r.name}' to send messages or mention everyone.",
-                                "details": f"Channel of type '{c.type}' allows role '{r.name}' below staff separator to Send Messages or Mention Everyone. Allowed permissions: {decode_permissions(p)}.",
+                                "details": f"Channel of type '{c.type}' allows non-admin role '{r.name}' to Send Messages or Mention Everyone. Allowed permissions: {decode_permissions(p)}.",
                                 "action_buttons": [],
                             }
                         )
@@ -1136,7 +1136,7 @@ class GeneralRoleMentionability(SecurityRule):
                         "category": self.category,
                         "severity": self.severity,
                         "message": f"Low-tier role '{r.name}' is mentionable.",
-                        "details": f"Role '{r.name}' below staff separator is set to mentionable, posing a mass ping raid vulnerability.",
+                        "details": f"Role '{r.name}' is a non-admin role set to mentionable, posing a mass ping raid vulnerability.",
                         "action_buttons": [],
                     }
                 )
@@ -1467,7 +1467,7 @@ class SecurityRuleEngine:
                 elif sev == "low":
                     num_low += 1
 
-        score = int(round(100 * (0.85**num_high) * (0.90**num_medium) * (0.95**num_low)))
+        score = 100 - (15 * num_high + 10 * num_medium + 5 * num_low)
         score = max(0, min(100, score))
         severity_order = {"high": 0, "medium": 1, "low": 2}
         filtered_alerts.sort(key=lambda a: severity_order.get(a.get("severity", "").lower(), 3))
@@ -1716,14 +1716,14 @@ def get_security_rules_modal(guild_id: int) -> FT:
             "name": "5. Low-Tier Role Privileges",
             "category": "Roles",
             "severity": "High",
-            "desc": "Checks if a role below the staff separator has dangerous permissions like Administrator, Manage Server, Manage Roles, Manage Channels, Kick Members, Ban Members, or Mention Everyone.",
-            "remediation": "Remove dangerous permissions from roles below the separator or move the role above it.",
+            "desc": "Checks if a non-admin role has dangerous permissions like Administrator, Manage Server, Manage Roles, Manage Channels, Kick Members, Ban Members, or Mention Everyone.",
+            "remediation": "Remove dangerous permissions from non-admin roles or promote the role above the lowest admin role.",
         },
         {
             "name": "6. General Role Mentionability",
             "category": "Pings",
             "severity": "Low",
-            "desc": "Ensures non-staff, unmanaged roles do not have mentionable set to true.",
+            "desc": "Ensures non-admin, unmanaged roles do not have mentionable set to true.",
             "remediation": "Disable mentionability or restrict via channel overwrites.",
         },
         {
@@ -1821,9 +1821,26 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     with Session(engine) as session:
         evaluation = SecurityRuleEngine.evaluate(guild_id, session)
         alerts = evaluation["alerts"]
+        config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
+        admin_role_configured = config and config.staff_separator_role_id is not None
 
     if category != "all":
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]
+
+    warning_banner = ""
+    if not admin_role_configured:
+        warning_banner = Div(
+            I(cls="fa-solid fa-triangle-exclamation text-warning mr-2 text-lg"),
+            Span(
+                "Lowest Admin Role is not configured. ",
+                "Alerts for ",
+                Span("Roles", cls="font-semibold"),
+                " and ",
+                Span("Pings", cls="font-semibold"),
+                " categories require this setting.",
+            ),
+            cls="flex items-center p-3 mb-3 rounded-md border border-warning/30 bg-warning/10 text-sm",
+        )
 
     tabs_ui = TabGroup(tabs, f"alerts-list-content-{guild_id}")
     content_id = f"alerts-list-content-{guild_id}"
@@ -1856,6 +1873,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
     return Card(
         title_comp,
         Div(
+            warning_banner,
             tabs_ui,
             alerts_list_ui,
             color_legend,
@@ -1891,7 +1909,7 @@ def guild_admin_auditor_settings_widget(guild_id: int):
         except Exception:  # noqa: S110
             pass
 
-    role_options = [Option("None / Select a role...", value="", selected=(selected_role_id is None))]
+    role_options = [Option("Not configured — select a role...", value="", selected=(selected_role_id is None))]
     for role in roles:
         role_options.append(Option(role.name, value=str(role.id), selected=(role.id == selected_role_id)))
 
@@ -1932,11 +1950,11 @@ def guild_admin_auditor_settings_widget(guild_id: int):
     form_content = Form(
         Div(
             Div(
-                Label("Staff Separator Role", cls="label text-sm font-semibold"),
+                Label("Lowest Admin Role", cls="label text-sm font-semibold"),
                 Div(
                     I(cls="fa-solid fa-circle-info text-info opacity-60 cursor-help"),
                     cls="tooltip tooltip-right",
-                    data_tip='The role that divides staff from community members in the role hierarchy. Roles below this position are treated as "non-staff" by the security auditor.',
+                    data_tip="Select the lowest role in your hierarchy that is considered admin. This role and all roles above it are treated as admin. All roles below it are non-admin and subject to security auditing.",
                 ),
                 cls="flex items-center gap-2",
             ),
