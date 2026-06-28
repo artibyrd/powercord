@@ -1365,3 +1365,47 @@ async def test_api_role_endpoints_forbidden_for_non_admins(session):
         resp_remove = await remove_api_role(guild_id, mock_req_remove, sess)
         html_remove = to_xml(resp_remove)
         assert "Forbidden" in html_remove
+
+
+@pytest.mark.asyncio
+async def test_dashboard_keys_ui_visibility_without_configured_role(session):
+    """Verify that admins can see self-service keys UI even if no role is configured, but non-admins cannot."""
+    from fasthtml.common import to_xml
+
+    from app.ui.dashboard import dashboard
+
+    guild_id_admin = 999401
+    guild_id_non_admin = 999402
+
+    mock_guilds = {
+        str(guild_id_admin): {"name": "Admin Server", "permissions": "8"},
+        str(guild_id_non_admin): {"name": "Non-Admin Server", "permissions": "0"},
+    }
+
+    def mock_get(url, *args, **kwargs):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"roles": []}
+        return resp
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=mock_get)
+
+    with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+        with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                with patch("app.ui.dashboard.get_internal_api_client") as mock_get_client:
+                    mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                    mock_get_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+                    sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+
+                    # 1. Admin view (no role configured, but is admin -> shows self-service keys panel)
+                    resp_admin = await dashboard(guild_id_admin, sess)
+                    html_admin = to_xml(resp_admin)
+                    assert "Self-Service API Keys" in html_admin
+
+                    # 2. Non-admin view (no role configured, not admin -> hides self-service keys panel)
+                    resp_non_admin = await dashboard(guild_id_non_admin, sess)
+                    html_non_admin = to_xml(resp_non_admin)
+                    assert "Self-Service API Keys" not in html_non_admin

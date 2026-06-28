@@ -465,7 +465,8 @@ async def dashboard(guild_id: int, sess):
     except Exception as e:
         logging.error(f"Failed to check API user role for guild {guild_id}: {e}")
 
-    api_keys_section = await _render_self_service_keys(guild_id, user_id, sess) if has_api_user_role else Div()
+    show_api_keys = is_guild_admin or has_api_user_role
+    api_keys_section = await _render_self_service_keys(guild_id, user_id, sess) if show_api_keys else Div()
 
     return DashboardPage(
         f"Dashboard: {guild['name']}",
@@ -1509,7 +1510,8 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         try:
             admin_guilds = await get_admin_guilds(user_access_token, user_id)
             guild = admin_guilds.get(str(guild_id), {})
-            is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+            from app.ui.helpers import is_dashboard_admin
+            is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(user_id)
         except Exception:
             is_guild_admin = False
 
@@ -1638,6 +1640,16 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
         logging.error(f"Failed to fetch user roles: {e}")
         return P("Error fetching user roles.", cls="text-error")
 
+    is_guild_admin = False
+    if user_access_token and user_id:
+        try:
+            admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+            guild = admin_guilds.get(str(guild_id), {})
+            from app.ui.helpers import is_dashboard_admin
+            is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(int(user_id))
+        except Exception:
+            is_guild_admin = False
+
     engine = init_connection_engine()
     with Session(engine) as session:
         stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
@@ -1647,8 +1659,8 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
     if api_user_role:
         has_api_user_role = int(api_user_role.role_id) in user_roles
 
-    if not has_api_user_role:
-        return P("Forbidden: API User Role required.", cls="text-error")
+    if not (is_guild_admin or has_api_user_role):
+        return P("Forbidden: API User Role or Guild Administrator required.", cls="text-error")
 
     form = await req.form()
     label = form.get("label", "").strip()
@@ -1752,6 +1764,16 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
         logging.error(f"Failed to fetch user roles: {e}")
         return P("Error fetching user roles.", cls="text-error")
 
+    is_guild_admin = False
+    if user_access_token and user_id:
+        try:
+            admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+            guild = admin_guilds.get(str(guild_id), {})
+            from app.ui.helpers import is_dashboard_admin
+            is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(int(user_id))
+        except Exception:
+            is_guild_admin = False
+
     engine = init_connection_engine()
     with Session(engine) as session:
         stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
@@ -1761,8 +1783,8 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
     if api_user_role:
         has_api_user_role = int(api_user_role.role_id) in user_roles
 
-    if not has_api_user_role:
-        return P("Forbidden: API User Role required.", cls="text-error")
+    if not (is_guild_admin or has_api_user_role):
+        return P("Forbidden: API User Role or Guild Administrator required.", cls="text-error")
 
     form = await req.form()
     key_id_str = form.get("key_id")
