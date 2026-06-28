@@ -1589,7 +1589,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
                     cls="checkbox checkbox-primary checkbox-sm",
                 ),
                 Span(label, cls="ml-3 text-sm font-medium text-base-content/85"),
-                cls="flex items-center p-3 bg-base-300/40 border border-base-content/10 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200"
+                cls="flex items-center p-3 bg-base-300/40 border border-base-content/20 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200 w-full max-w-sm"
             )
         )
 
@@ -1614,7 +1614,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
             Label("Key Label:", cls="label-text mb-1 font-semibold text-xs opacity-70"),
             label_input,
             Label("Select Scopes:", cls="label-text mb-1 font-semibold text-xs opacity-70 mt-2"),
-            Div(*scope_checkboxes, cls="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4"),
+            Div(*scope_checkboxes, cls="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 max-w-2xl"),
             cls="flex flex-col gap-1",
         ),
         Div(
@@ -1630,7 +1630,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         hx_post=f"/dashboard/{guild_id}/api-key/generate",
         hx_target="#self-service-keys-container",
         hx_swap="outerHTML",
-        cls="mt-4 hidden p-4 bg-base-300/40 border border-base-content/10 rounded-xl",
+        cls="mt-4 hidden p-4 bg-base-200 border border-base-content/20 rounded-lg",
         id="key-gen-form",
     )
 

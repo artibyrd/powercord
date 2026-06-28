@@ -302,18 +302,27 @@ async def _render_client_keys(sess):
         ext_names.remove("powerloader")
 
     scope_options = [
-        Option("global.admin", value="global.admin", selected=True),
-        Option("global.user", value="global.user"),
+        ("Global: admin", "global.admin"),
+        ("Global: user", "global.user"),
     ]
     for ext in ext_names:
-        scope_options.append(Option(f"global.{ext}.admin", value=f"global.{ext}.admin"))
-        scope_options.append(Option(f"global.{ext}.user", value=f"global.{ext}.user"))
+        scope_options.append((f"Global: {ext}.admin", f"global.{ext}.admin"))
+        scope_options.append((f"Global: {ext}.user", f"global.{ext}.user"))
 
-    scopes_select = Select(
-        *scope_options,
-        name="scope",
-        cls="select select-bordered select-sm max-w-xs mr-2",
-    )
+    scope_checkboxes = []
+    for label, val in scope_options:
+        scope_checkboxes.append(
+            Label(
+                Input(
+                    type="checkbox",
+                    name="scope",
+                    value=val,
+                    cls="checkbox checkbox-primary checkbox-sm",
+                ),
+                Span(label, cls="ml-3 text-sm font-medium text-base-content/85"),
+                cls="flex items-center p-3 bg-base-300/40 border border-base-content/20 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200 w-full max-w-sm"
+            )
+        )
 
     tooltip = Div(
         I(cls="fa-solid fa-circle-info cursor-help text-info"),
@@ -321,18 +330,39 @@ async def _render_client_keys(sess):
         data_tip='Available global scopes include "global.admin", "global.user", "global.{extension}.admin", etc.',
     )
 
-    generate_btn = Form(
+    show_form_btn = Button(
+        I(cls="fa-solid fa-plus mr-2"),
+        "Generate Client Key",
+        cls="btn btn-primary btn-sm mt-2",
+        onclick="document.getElementById('client-key-gen-form').classList.remove('hidden'); this.classList.add('hidden');",
+        id="show-client-keygen-btn"
+    )
+
+    generate_form = Form(
         Div(
-            Label("Select Scope:", cls="label-text mr-2 font-semibold"),
-            scopes_select,
-            tooltip,
-            cls="flex items-center mb-4",
+            Div(
+                Label("Select Scope(s):", cls="label-text mb-1 font-semibold text-xs opacity-70"),
+                tooltip,
+                cls="flex items-center mb-1"
+            ),
+            Div(*scope_checkboxes, cls="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 max-w-2xl"),
+            cls="flex flex-col gap-1",
         ),
-        Button(I(cls="fa-solid fa-key mr-2"), "Generate New Client Key", cls="btn btn-primary btn-sm"),
+        Div(
+            Button(I(cls="fa-solid fa-key mr-2"), "Generate Key", cls="btn btn-primary btn-sm"),
+            Button(
+                "Cancel",
+                type="button",
+                cls="btn btn-ghost btn-sm",
+                onclick="document.getElementById('client-key-gen-form').classList.add('hidden'); document.getElementById('show-client-keygen-btn').classList.remove('hidden');"
+            ),
+            cls="flex items-center gap-2 mt-4"
+        ),
         hx_post="/profile/client-key/generate",
         hx_target="#client-keys-container",
         hx_swap="outerHTML",
-        cls="mt-4",
+        cls="mt-4 hidden p-4 bg-base-200 border border-base-content/20 rounded-lg",
+        id="client-key-gen-form",
     )
 
     return Div(
@@ -343,7 +373,8 @@ async def _render_client_keys(sess):
         ),
         Div(
             table,
-            generate_btn,
+            show_form_btn,
+            generate_form,
             cls="card bg-base-100 shadow-sm border border-base-content/20 p-4",
         ),
         id="client-keys-container",
@@ -375,8 +406,17 @@ async def generate_client_key_route(req, sess):
             return await _render_client_keys(sess)
 
         form = await req.form()
-        selected_scope = form.get("scope", "global.admin")
-        scopes = json.dumps([selected_scope])
+        if hasattr(form, "getlist"):
+            selected_scopes = form.getlist("scope")
+        else:
+            selected_scopes = form.get("scope")
+            if isinstance(selected_scopes, str):
+                selected_scopes = [selected_scopes]
+            elif not selected_scopes:
+                selected_scopes = []
+        if not selected_scopes:
+            selected_scopes = ["global.admin"]
+        scopes = json.dumps(selected_scopes)
         random_suffix = secrets.token_hex(4)
         name = f"client_{user_id}_{random_suffix}"
         new_key = f"pc_{secrets.token_urlsafe(32)}"
