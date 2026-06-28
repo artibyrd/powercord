@@ -1558,6 +1558,15 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         else P("You have no active keys for this server.", cls="italic opacity-70 mb-4")
     )
 
+    guild_name = "Server"
+    if user_access_token:
+        try:
+            admin_guilds = await get_admin_guilds(user_access_token, user_id)
+            guild = admin_guilds.get(str(guild_id), {})
+            guild_name = guild.get("name", "Server")
+        except Exception as e:
+            logging.error(f"Failed to fetch guild name: {e}")
+
     inspector = GadgetInspector()
     ext_names = list(inspector.inspect_extensions().keys())
     if "powerloader" in ext_names:
@@ -1565,16 +1574,24 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
 
     scope_options = []
     for ext in ext_names:
-        scope_options.append(Option(f"{guild_id}.{ext}.user", value=f"{guild_id}.{ext}.user"))
+        scope_options.append((f"{guild_name}: {ext}.user", f"{guild_id}.{ext}.user"))
         if is_guild_admin:
-            scope_options.append(Option(f"{guild_id}.{ext}.admin", value=f"{guild_id}.{ext}.admin"))
+            scope_options.append((f"{guild_name}: {ext}.admin", f"{guild_id}.{ext}.admin"))
 
-    scopes_select = Select(
-        *scope_options,
-        name="scopes",
-        multiple=True,
-        cls="select select-bordered select-sm w-full max-w-xs h-24",
-    )
+    scope_checkboxes = []
+    for label, val in scope_options:
+        scope_checkboxes.append(
+            Label(
+                Input(
+                    type="checkbox",
+                    name="scopes",
+                    value=val,
+                    cls="checkbox checkbox-primary checkbox-sm",
+                ),
+                Span(label, cls="ml-3 text-sm font-medium text-base-content/85"),
+                cls="flex items-center p-3 bg-base-300/40 border border-base-content/10 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200"
+            )
+        )
 
     label_input = Input(
         type="text",
@@ -1584,19 +1601,37 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         cls="input input-bordered input-sm w-full max-w-xs mb-2",
     )
 
-    generate_btn = Form(
+    show_form_btn = Button(
+        I(cls="fa-solid fa-plus mr-2"),
+        "Generate API Key",
+        cls="btn btn-primary btn-sm mt-2",
+        onclick="document.getElementById('key-gen-form').classList.remove('hidden'); this.classList.add('hidden');",
+        id="show-keygen-btn"
+    )
+
+    generate_form = Form(
         Div(
-            Label("Key Label:", cls="label-text mb-1 font-semibold"),
+            Label("Key Label:", cls="label-text mb-1 font-semibold text-xs opacity-70"),
             label_input,
-            Label("Select Scopes (Hold Ctrl to select multiple):", cls="label-text mb-1 font-semibold"),
-            scopes_select,
-            cls="flex flex-col gap-1 mb-4",
+            Label("Select Scopes:", cls="label-text mb-1 font-semibold text-xs opacity-70 mt-2"),
+            Div(*scope_checkboxes, cls="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4"),
+            cls="flex flex-col gap-1",
         ),
-        Button(I(cls="fa-solid fa-key mr-2"), "Generate API Key", cls="btn btn-primary btn-sm"),
+        Div(
+            Button(I(cls="fa-solid fa-key mr-2"), "Generate Key", cls="btn btn-primary btn-sm"),
+            Button(
+                "Cancel",
+                type="button",
+                cls="btn btn-ghost btn-sm",
+                onclick="document.getElementById('key-gen-form').classList.add('hidden'); document.getElementById('show-keygen-btn').classList.remove('hidden');"
+            ),
+            cls="flex items-center gap-2 mt-4"
+        ),
         hx_post=f"/dashboard/{guild_id}/api-key/generate",
         hx_target="#self-service-keys-container",
         hx_swap="outerHTML",
-        cls="mt-4",
+        cls="mt-4 hidden p-4 bg-base-300/40 border border-base-content/10 rounded-xl",
+        id="key-gen-form",
     )
 
     return Div(
@@ -1604,7 +1639,8 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         P("Manage your API keys for this guild. You can have up to 5 active keys.", cls="text-sm opacity-80 mb-4"),
         Div(
             table,
-            generate_btn,
+            show_form_btn,
+            generate_form,
             cls="p-4 bg-base-200 rounded-lg shadow-inner mb-8",
         ),
         id="self-service-keys-container",
