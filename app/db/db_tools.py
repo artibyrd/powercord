@@ -36,11 +36,18 @@ def get_or_create_internal_key() -> str:
         statement = select(ApiKey).where(ApiKey.name == "system_internal")
         existing_key = session.exec(statement).first()
         if existing_key:
-            return existing_key.key
+            return existing_key.key_hash
 
         # Key does not exist, let's try to create one
         new_key_value = f"pc_internal_{secrets.token_urlsafe(32)}"
-        new_key = ApiKey(key=new_key_value, name="system_internal", is_active=True, scopes='["global"]')
+        new_key = ApiKey(
+            key_hash=new_key_value,
+            name="system_internal",
+            is_active=True,
+            key_type="internal",
+            guild_id=None,
+            scopes='["global.admin"]',
+        )
         session.add(new_key)
         try:
             session.commit()
@@ -50,7 +57,7 @@ def get_or_create_internal_key() -> str:
             session.rollback()
             existing_key = session.exec(select(ApiKey).where(ApiKey.name == "system_internal")).first()
             if existing_key:
-                return existing_key.key
+                return existing_key.key_hash
             raise RuntimeError("Failed to get or create internal API key due to unexpected database state.") from None
 
 

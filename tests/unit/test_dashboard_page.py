@@ -927,3 +927,174 @@ async def test_get_rules_info():
     assert "General Role Mentionability" in html
     assert "Suggestive Honeypot Integration" in html
     assert "Over-privileged Bot Integrations" in html
+
+
+@pytest.mark.asyncio
+async def test_dashboard_gating_for_non_admin(session):
+    """Verify that when a user is not a guild admin, certain parts of the dashboard are hidden/disabled."""
+    from fasthtml.common import to_xml
+
+    from app.ui.dashboard import dashboard
+
+    guild_id = 999555
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "0"}}
+
+    mock_client = AsyncMock()
+    mock_client_cls = MagicMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": []}
+    mock_client.get.return_value = mock_resp
+
+    with (
+        patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()),
+        patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()),
+        patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds),
+        patch("app.ui.dashboard.get_internal_api_client", return_value=mock_client_cls),
+    ):
+        sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+        resp = await dashboard(guild_id, sess)
+
+        html = to_xml(resp)
+
+        # Access Roles form is hidden/empty
+        assert "Dashboard Access Roles" not in html
+        # Edit Layout button is hidden
+        assert "Edit Layout" not in html
+        # Render the toggle switches for cogs disabled
+        assert 'disabled="disabled"' in html or "disabled" in html
+
+
+@pytest.mark.asyncio
+async def test_dashboard_self_service_keys_restricted(session):
+    """Verify that self-service keys are restricted to users with the configured role."""
+    from fasthtml.common import to_xml
+    from sqlmodel import select
+
+    from app.db.models import ApiKey, ApiUserRole
+    from app.ui.dashboard import dashboard, generate_guild_api_key_route
+
+    guild_id = 999666
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "0"}}
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": [123]}
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    try:
+        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+                with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                    with patch("app.ui.dashboard.get_internal_api_client") as mock_get_client:
+                        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=False)
+                        # 1. No role configured yet, card should NOT show
+                        sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+                        resp = await dashboard(guild_id, sess)
+                        assert "Self-Service API Keys" not in to_xml(resp)
+
+                        role_setting = ApiUserRole(guild_id=guild_id, role_id=999)
+                        session.add(role_setting)
+                        session.commit()
+
+                        resp = await dashboard(guild_id, sess)
+                        assert "Self-Service API Keys" not in to_xml(resp)
+
+                        # 3. Configured role ID 123, user has 123 -> card SHOULD show
+                        session.delete(role_setting)
+                        session.commit()
+                        role_setting = ApiUserRole(guild_id=guild_id, role_id=123)
+                        session.add(role_setting)
+                        session.commit()
+
+                        resp = await dashboard(guild_id, sess)
+                        html = to_xml(resp)
+                        assert "Self-Service API Keys" in html
+                        assert "Key Label" in html
+
+                        # 4. Generate key post route
+                        mock_req = AsyncMock()
+                        mock_req.form.return_value = {"label": "my-key", "scopes": [f"{guild_id}.utilities.user"]}
+
+                        # Call generation
+                        gen_resp = await generate_guild_api_key_route(guild_id, mock_req, sess)
+                        assert "Self-Service API Keys" in to_xml(gen_resp)
+
+                        # Verify key was created
+                        keys = session.exec(select(ApiKey).where(ApiKey.guild_id == guild_id)).all()
+                        assert len(keys) == 1
+                        assert keys[0].name.startswith(f"guild_{guild_id}_12345_my-key_")
+                        assert keys[0].key_type == "user"
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id == guild_id))
+        session.exec(delete(ApiKey).where(ApiKey.guild_id == guild_id))
+        session.commit()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_self_service_keys_limit(session):
+    """Verify limit of max 5 active keys for self-service guild keys."""
+    import json
+
+    from sqlmodel import select
+
+    from app.db.models import ApiKey, ApiUserRole
+    from app.ui.dashboard import generate_guild_api_key_route
+
+    guild_id = 999777
+    user_id = 12345
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "0"}}
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": [123]}
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    try:
+        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+                with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                    with patch("app.ui.dashboard.get_internal_api_client") as mock_get_client:
+                        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=False)
+                        # Configure role
+                        role_setting = ApiUserRole(guild_id=guild_id, role_id=123)
+                        session.add(role_setting)
+                        session.commit()
+
+                        # Insert 5 active keys
+                        for i in range(5):
+                            key = ApiKey(
+                                key_hash=f"hash_{i}",
+                                name=f"guild_{guild_id}_{user_id}_key_{i}",
+                                scopes=json.dumps([f"{guild_id}.utilities.user"]),
+                                is_active=True,
+                                key_type="user",
+                                guild_id=guild_id,
+                            )
+                            session.add(key)
+                        session.commit()
+
+                        sess = {"auth": {"id": str(user_id), "token_data": {"access_token": "dummy_token"}}}
+                        mock_req = AsyncMock()
+                        mock_req.form.return_value = {"label": "sixth-key", "scopes": [f"{guild_id}.utilities.user"]}
+
+                        # Try generating 6th key
+                        await generate_guild_api_key_route(guild_id, mock_req, sess)
+
+                        # Verify the 6th key was NOT created (limit enforced)
+                        keys = session.exec(select(ApiKey).where(ApiKey.guild_id == guild_id)).all()
+                        assert len(keys) == 5
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id == guild_id))
+        session.exec(delete(ApiKey).where(ApiKey.guild_id == guild_id))
+        session.commit()

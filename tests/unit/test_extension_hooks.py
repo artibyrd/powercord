@@ -265,3 +265,65 @@ async def test_autocomplete_deletable_extensions():
     interaction.response.send_autocomplete.reset_mock()
     await loader.autocomplete_deletable_extensions(interaction, extension="hon")
     interaction.response.send_autocomplete.assert_called_with(["honeypot"])
+
+
+@pytest.mark.integration
+def test_utilities_core_cleanup_api_keys_and_roles(session):
+    """Deleting utilities extension guild data deletes api_user_roles and deactivates api_keys."""
+    from app.db.models import ApiKey, ApiUserRole
+
+    guild_id = 777
+    other_guild_id = 888
+
+    # Add ApiUserRole mapping for our guild and another guild
+    session.add(ApiUserRole(guild_id=guild_id, role_id=123))
+    session.add(ApiUserRole(guild_id=other_guild_id, role_id=456))
+
+    # Add ApiKey for our guild (user type), another guild, and a global key for our guild
+    session.add(
+        ApiKey(
+            key_hash="hash1",
+            name="user_key_our_guild",
+            is_active=True,
+            key_type="user",
+            guild_id=guild_id,
+        )
+    )
+    session.add(
+        ApiKey(
+            key_hash="hash2",
+            name="user_key_other_guild",
+            is_active=True,
+            key_type="user",
+            guild_id=other_guild_id,
+        )
+    )
+    session.add(
+        ApiKey(
+            key_hash="hash3",
+            name="global_key_our_guild",
+            is_active=True,
+            key_type="global",
+            guild_id=guild_id,
+        )
+    )
+    session.commit()
+
+    # Call run_hook under patch
+    with patch("app.common.extension_hooks.init_connection_engine", return_value=session.get_bind()):
+        run_hook("utilities", "delete_guild_data", guild_id=guild_id)
+
+    # Assert ApiUserRole for our guild is deleted
+    assert len(session.exec(select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)).all()) == 0
+    # Assert ApiUserRole for other guild is NOT deleted
+    assert len(session.exec(select(ApiUserRole).where(ApiUserRole.guild_id == other_guild_id)).all()) == 1
+
+    # Assert ApiKey status
+    user_key_our = session.exec(select(ApiKey).where(ApiKey.name == "user_key_our_guild")).one()
+    assert user_key_our.is_active is False
+
+    user_key_other = session.exec(select(ApiKey).where(ApiKey.name == "user_key_other_guild")).one()
+    assert user_key_other.is_active is True
+
+    global_key_our = session.exec(select(ApiKey).where(ApiKey.name == "global_key_our_guild")).one()
+    assert global_key_our.is_active is True

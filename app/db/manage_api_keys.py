@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import secrets
 import sys
 from pathlib import Path
@@ -16,7 +17,13 @@ from app.db.models import ApiKey
 # Remove logging config
 
 
-def add_api_key(name: str, scopes: str, specific_key: str | None = None):
+def add_api_key(
+    name: str,
+    scopes: str,
+    specific_key: str | None = None,
+    key_type: str = "global",
+    guild_id: int | None = None,
+):
     engine = init_connection_engine()
     with Session(engine) as session:
         # Check if name exists
@@ -25,13 +32,21 @@ def add_api_key(name: str, scopes: str, specific_key: str | None = None):
             print(f"ERROR: API Key with name '{name}' already exists.")
             sys.exit(1)
 
-        new_key = specific_key if specific_key else f"pc_{secrets.token_urlsafe(32)}"
-        api_key = ApiKey(key=new_key, name=name, scopes=scopes, is_active=True)
+        raw_key = specific_key if specific_key else f"pc_{secrets.token_urlsafe(32)}"
+        key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        api_key = ApiKey(
+            key_hash=key_hash,
+            name=name,
+            scopes=scopes,
+            is_active=True,
+            key_type=key_type,
+            guild_id=guild_id,
+        )
         session.add(api_key)
         session.commit()
         print("API Key created successfully.")
         print(f"Name:   {name}")
-        print(f"Key:    {new_key}")
+        print(f"Key:    {raw_key}")
         print(f"Scopes: {scopes}")
 
 
@@ -57,11 +72,11 @@ def list_api_keys():
             print("No API Keys found.")
             return
 
-        print(f"{'ID':<5} | {'Name':<20} | {'Active':<8} | {'Scopes'}")
-        print("-" * 60)
+        print(f"{'ID':<5} | {'Name':<20} | {'Active':<8} | {'Type':<10} | {'Scopes'}")
+        print("-" * 75)
         for k in keys:
             active = "Yes" if k.is_active else "No"
-            print(f"{k.id:<5} | {k.name:<20} | {active:<8} | {k.scopes}")
+            print(f"{k.id:<5} | {k.name:<20} | {active:<8} | {k.key_type:<10} | {k.scopes}")
 
 
 if __name__ == "__main__":
@@ -83,6 +98,18 @@ if __name__ == "__main__":
         default=None,
         help="Specific exact key to insert (e.g. for pre-shared partner keys). If omitted, a secure key is generated.",
     )
+    add_parser.add_argument(
+        "--type",
+        type=str,
+        default="global",
+        help="Type of the API key (e.g. global, user, internal)",
+    )
+    add_parser.add_argument(
+        "--guild-id",
+        type=int,
+        default=None,
+        help="Guild ID associated with the API key",
+    )
 
     # REVOKE
     revoke_parser = subparsers.add_parser("revoke", help="Revoke an existing API Key")
@@ -94,7 +121,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.action == "add":
-        add_api_key(args.name, args.scopes, args.key)
+        add_api_key(args.name, args.scopes, args.key, key_type=args.type, guild_id=args.guild_id)
     elif args.action == "revoke":
         revoke_api_key(args.id)
     elif args.action == "list":

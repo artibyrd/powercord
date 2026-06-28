@@ -33,10 +33,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from sqlmodel import Session, col, delete
+from sqlmodel import Session, col, delete, select
 
 from app.common.alchemy import init_connection_engine
-from app.db.models import GuildExtensionSettings, WidgetSettings
+from app.db.models import ApiKey, ApiUserRole, GuildExtensionSettings, WidgetSettings
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,21 @@ def _delete_core_settings(guild_id: int, extension_name: str) -> None:
                     col(WidgetSettings.extension_name) == extension_name,
                 )
             )
+            if extension_name == "utilities":
+                session.exec(
+                    delete(ApiUserRole).where(
+                        col(ApiUserRole.guild_id) == guild_id,
+                    )
+                )
+                api_keys = session.exec(
+                    select(ApiKey).where(
+                        col(ApiKey.guild_id) == guild_id,
+                        col(ApiKey.key_type) == "user",
+                    )
+                ).all()
+                for key in api_keys:
+                    key.is_active = False
+                    session.add(key)
             session.commit()
         logger.info(
             "Core settings cleaned for extension '%s' on guild %s.",

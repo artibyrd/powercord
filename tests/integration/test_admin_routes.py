@@ -117,7 +117,7 @@ async def test_dashboard_extensions_section(
     mock_session,
 ):
     mock_get_settings.return_value = {}
-    mock_get_guilds.return_value = {"123": {"id": "123", "name": "Test Guild", "icon": None}}
+    mock_get_guilds.return_value = {"123": {"id": "123", "name": "Test Guild", "permissions": "8", "icon": None}}
 
     # Mock global and local enabled states
     def mock_get_gadgets(guild_id):

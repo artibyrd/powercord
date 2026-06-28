@@ -46,7 +46,7 @@ async def test_get_current_api_user(mock_get_key):
     # Valid key (internal system)
     user_info = await get_current_api_user(request=req, authorization=f"Bearer {internal_key}")
     assert user_info["identity"] == "system_internal"
-    assert "global" in user_info["scopes"]
+    assert "global.admin" in user_info["scopes"]
 
     # Invalid Auth scheme
     with pytest.raises(HTTPException) as exc:

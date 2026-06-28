@@ -35,6 +35,27 @@ from app.ui.helpers import (
 from app.ui.page import DashboardPage
 
 
+async def _check_guild_admin(guild_id: int, req) -> bool:
+    session = getattr(req, "session", None)
+    if session is None or not isinstance(session, dict):
+        return True
+    auth = session.get("auth", {})
+    if not isinstance(auth, dict):
+        return True
+    user_access_token = (
+        auth.get("token_data", {}).get("access_token") if isinstance(auth.get("token_data"), dict) else None
+    )
+    user_id = auth.get("id")
+    if not user_access_token or not user_id:
+        return False
+    try:
+        admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+        guild = admin_guilds.get(str(guild_id), {})
+        return (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+    except Exception:
+        return False
+
+
 def server_extension_card(
     guild_id: int,
     extension_name: str,
@@ -42,6 +63,7 @@ def server_extension_card(
     enabled_cogs: list[str],
     enabled_sprockets: list[str],
     enabled_widgets: list[str],
+    disabled: bool = False,
 ) -> FT:
     """Renders a card for a single extension with toggles for its components, for a specific server."""
 
@@ -58,32 +80,52 @@ def server_extension_card(
         (extension_name in enabled_cogs) or (extension_name in enabled_sprockets) or (extension_name in enabled_widgets)
     )
 
-    toggle_form = Form(
-        Label(
-            Input(
-                type="checkbox",
-                name="enabled",
-                value="on",
-                checked="checked" if is_enabled else False,
-                id=f"all-{extension_name}-server-{guild_id}",
-                cls="toggle toggle-primary toggle-sm",
-                hx_post=f"/dashboard/{guild_id}/extensions/toggle",
-                hx_trigger="change",
-                hx_target=f"#server-extension-{extension_name}-{guild_id}",
-                hx_swap="outerHTML",
-                hx_include="closest form",
+    if disabled:
+        toggle_form = Form(
+            Label(
+                Input(
+                    type="checkbox",
+                    name="enabled",
+                    value="on",
+                    checked="checked" if is_enabled else False,
+                    disabled=True,
+                    id=f"all-{extension_name}-server-{guild_id}",
+                    cls="toggle toggle-primary toggle-sm cursor-not-allowed opacity-50",
+                ),
+                cls="label cursor-pointer p-0",
             ),
-            cls="label cursor-pointer p-0",
-        ),
-        Hidden(name="extension_name", value=extension_name),
-        Hidden(name="gadget_type", value="all"),
-        cls="flex items-center",
-        id=f"form-all-{extension_name}-server-{guild_id}",
-    )
+            Hidden(name="extension_name", value=extension_name),
+            Hidden(name="gadget_type", value="all"),
+            cls="flex items-center",
+            id=f"form-all-{extension_name}-server-{guild_id}",
+        )
+    else:
+        toggle_form = Form(
+            Label(
+                Input(
+                    type="checkbox",
+                    name="enabled",
+                    value="on",
+                    checked="checked" if is_enabled else False,
+                    id=f"all-{extension_name}-server-{guild_id}",
+                    cls="toggle toggle-primary toggle-sm",
+                    hx_post=f"/dashboard/{guild_id}/extensions/toggle",
+                    hx_trigger="change",
+                    hx_target=f"#server-extension-{extension_name}-{guild_id}",
+                    hx_swap="outerHTML",
+                    hx_include="closest form",
+                ),
+                cls="label cursor-pointer p-0",
+            ),
+            Hidden(name="extension_name", value=extension_name),
+            Hidden(name="gadget_type", value="all"),
+            cls="flex items-center",
+            id=f"form-all-{extension_name}-server-{guild_id}",
+        )
 
     # "Delete Data" button — only shown for extensions that registered a cleanup hook
     delete_btn = None
-    if supports_delete_data(extension_name):
+    if supports_delete_data(extension_name) and not disabled:
         delete_btn = Button(
             I(cls="fa-solid fa-trash-can mr-1"),
             "Delete Data",
@@ -121,6 +163,9 @@ async def server_extension_details_route(guild_id: int, extension_name: str, req
 @dashboard_router("/dashboard/{guild_id:int}/extensions/{extension_name}/confirm-delete", methods=["GET"])
 async def confirm_delete_data_route(guild_id: int, extension_name: str, req):
     """Returns a confirmation modal before deleting extension data for a guild."""
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
     modal_content = Dialog(
         Div(
             H3(
@@ -164,6 +209,9 @@ async def confirm_delete_data_route(guild_id: int, extension_name: str, req):
 @dashboard_router("/dashboard/{guild_id:int}/extensions/{extension_name}/delete-data", methods=["POST"])
 async def delete_server_data_route(guild_id: int, extension_name: str, req):
     """Executes deletion of all extension-specific data for a guild."""
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
     if not supports_delete_data(extension_name):
         return P(f"Extension '{extension_name}' does not support data deletion.", cls="text-error")
 
@@ -198,6 +246,9 @@ async def delete_server_data_route(guild_id: int, extension_name: str, req):
 @dashboard_router("/dashboard/{guild_id:int}/extensions/toggle", methods=["POST"])
 async def toggle_server_gadget_route(guild_id: int, req):
     """Handles toggling an extension on/off for a specific server."""
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
     form_data = await req.form()
     extension_name = form_data.get("extension_name")
     is_enabled = form_data.get("enabled") == "on"
@@ -236,6 +287,8 @@ async def dashboard(guild_id: int, sess):
     except Exception as e:
         return Titled("Error", P(f"Failed to fetch guild information: {e}"))
 
+    is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+
     inspector = GadgetInspector()
     all_extensions = inspector.inspect_extensions()
 
@@ -268,7 +321,15 @@ async def dashboard(guild_id: int, sess):
 
         if server_gadgets:
             server_extension_cards.append(
-                server_extension_card(guild_id, name, server_gadgets, enabled_cogs, enabled_sprockets, enabled_widgets)
+                server_extension_card(
+                    guild_id,
+                    name,
+                    server_gadgets,
+                    enabled_cogs,
+                    enabled_sprockets,
+                    enabled_widgets,
+                    disabled=not is_guild_admin,
+                )
             )
 
     server_extensions = Div(
@@ -341,29 +402,65 @@ async def dashboard(guild_id: int, sess):
         Div(c["component"], style=f"grid-column: span {c['span']};", cls="h-full") for c in grid_widgets
     ]
 
+    edit_layout_btn = ""
+    if is_guild_admin:
+        edit_layout_btn = A(
+            I(cls="fa-solid fa-pen-to-square mr-1"),
+            "Edit Layout",
+            href=f"/dashboard/{guild_id}/layout",
+            cls="btn btn-sm btn-ghost text-info",
+        )
+
     guild_widgets = Div(
         Div(
             H2("Guild Admin Widgets", cls="text-2xl font-bold"),
-            A(
-                I(cls="fa-solid fa-pen-to-square mr-1"),
-                "Edit Layout",
-                href=f"/dashboard/{guild_id}/layout",
-                cls="btn btn-sm btn-ghost text-info",
-            ),
+            edit_layout_btn,
             cls="flex justify-between items-center mb-4",
         ),
         Div(*rendered_guild_widgets, cls="grid grid-cols-12 gap-6")
         if rendered_guild_widgets
-        else P("No guild admin widgets enabled. Click 'Edit Layout' to configure."),
+        else P(
+            "No guild admin widgets enabled. Click 'Edit Layout' to configure."
+            if is_guild_admin
+            else "No guild admin widgets are currently enabled."
+        ),
         cls="mb-8 mt-8",
     )
 
-    access_roles_section = await _render_access_roles(guild_id)
+    access_roles_section = await _render_access_roles(guild_id) if is_guild_admin else Div()
+
+    # Check API User Role access
+    has_api_user_role = False
+    try:
+        from sqlmodel import Session, select
+
+        from app.common.alchemy import init_connection_engine
+        from app.db.models import ApiUserRole
+
+        engine = init_connection_engine()
+        with Session(engine) as session:
+            stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
+            api_user_role = session.exec(stmt).first()
+
+        if api_user_role:
+            user_roles = set()
+            async with get_internal_api_client() as client:
+                resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{guild_id}/roles", timeout=2.0)
+                if resp.status_code == 200:
+                    user_role_ids = resp.json().get("roles", [])
+                    user_roles = {int(r) for r in user_role_ids}
+            if int(api_user_role.role_id) in user_roles:
+                has_api_user_role = True
+    except Exception as e:
+        logging.error(f"Failed to check API user role for guild {guild_id}: {e}")
+
+    api_keys_section = await _render_self_service_keys(guild_id, user_id, sess) if has_api_user_role else Div()
 
     return DashboardPage(
         f"Dashboard: {guild['name']}",
         H1(f"Dashboard: {guild['name']}", cls="text-2xl font-extrabold mb-8"),
         access_roles_section,
+        api_keys_section,
         server_extensions,
         guild_widgets,
         auth=auth,
@@ -824,6 +921,10 @@ async def guild_layout_editor(guild_id: int, sess):
     except Exception as e:
         return Titled("Error", P(f"Failed to fetch guild information: {e}"))
 
+    is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+    if not is_guild_admin:
+        return Titled("Error", P("Forbidden: Guild Administrator permissions required."))
+
     widgets = _get_ordered_widgets(guild_id)
 
     return DashboardPage(
@@ -856,9 +957,12 @@ async def layout_update(req):
     ext = form.get("ext")
     widget = form.get("widget")
     field = form.get("field")
-    # form.get returns '' for falsy values like 0; default to SCOPE_PUBLIC
     raw_scope = form.get("scope_id", "")
     scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
+
+    if scope_id > 0:
+        if not await _check_guild_admin(scope_id, req):
+            return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
     if field == "is_enabled":
         value = form.get("enabled") == "on"
@@ -871,7 +975,6 @@ async def layout_update(req):
 
     update_widget_setting(scope_id, ext, widget, field, value)
 
-    # After toggling enabled, re-persist order so disabled widgets stay at bottom
     widgets = _get_ordered_widgets(scope_id)
     if field == "is_enabled":
         for new_order, w in enumerate(widgets):
@@ -887,24 +990,24 @@ async def layout_move(req):
     ext = form.get("ext")
     widget_name = form.get("widget")
     direction = form.get("direction")
-    # form.get returns '' for falsy values like 0; default to SCOPE_PUBLIC
     raw_scope = form.get("scope_id", "")
     scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
 
+    if scope_id > 0:
+        if not await _check_guild_admin(scope_id, req):
+            return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
     widgets = _get_ordered_widgets(scope_id)
 
-    # Find the widget's current index
     idx = next((i for i, w in enumerate(widgets) if w["ext"] == ext and w["widget"] == widget_name), None)
     if idx is None:
         return _render_layout_editor(widgets, scope_id)
 
-    # Swap with neighbor
     if direction == "up" and idx > 0:
         widgets[idx], widgets[idx - 1] = widgets[idx - 1], widgets[idx]
     elif direction == "down" and idx < len(widgets) - 1:
         widgets[idx], widgets[idx + 1] = widgets[idx + 1], widgets[idx]
 
-    # Persist new order
     for new_order, w in enumerate(widgets):
         update_widget_setting(scope_id, w["ext"], w["widget"], "display_order", new_order)
 
@@ -918,6 +1021,10 @@ async def layout_restore(req):
     form = await req.form()
     raw_scope = form.get("scope_id", "")
     scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
+
+    if scope_id > 0:
+        if not await _check_guild_admin(scope_id, req):
+            return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
     from app.ui.helpers import restore_default_widget_settings
 
@@ -1005,6 +1112,9 @@ async def _render_access_roles(guild_id: int):
 
 @dashboard_router("/dashboard/{guild_id:int}/access-roles/add", methods=["POST"])
 async def add_access_role(guild_id: int, req, sess):
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
     auth = sess.get("auth", {})
     user_access_token = auth.get("token_data", {}).get("access_token")
     if not user_access_token:
@@ -1035,6 +1145,9 @@ async def add_access_role(guild_id: int, req, sess):
 
 @dashboard_router("/dashboard/{guild_id:int}/access-roles/remove", methods=["POST"])
 async def remove_access_role(guild_id: int, req, sess):
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
     auth = sess.get("auth", {})
     user_access_token = auth.get("token_data", {}).get("access_token")
     if not user_access_token:
@@ -1364,3 +1477,268 @@ async def dashboard_ping_bot(guild_id: int):
         cls_color = "badge-error text-error-content"
 
     return Span(text, id=f"bot-latency-display-{guild_id}", cls=f"badge {cls_color} badge-sm")
+
+
+async def _render_self_service_keys(guild_id: int, user_id: int, sess):
+    import json
+
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.common.extension_loader import GadgetInspector
+    from app.db.models import ApiKey
+
+    prefix = f"guild_{guild_id}_{user_id}_"
+    engine = init_connection_engine()
+
+    with Session(engine) as session:
+        stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active)
+        active_keys = session.exec(stmt).all()
+
+    key_rows = []
+    for k in active_keys:
+        try:
+            scopes_list = json.loads(k.scopes)
+        except Exception:
+            scopes_list = []
+        scopes_str = ", ".join(scopes_list)
+
+        display_name = k.name.removeprefix(prefix)
+
+        key_rows.append(
+            Tr(
+                Td(display_name, cls="font-mono text-xs opacity-70"),
+                Td(scopes_str, cls="text-xs font-semibold"),
+                Td(
+                    Form(
+                        Hidden(name="key_id", value=str(k.id)),
+                        Button("Revoke", cls="btn btn-error btn-xs"),
+                        hx_post=f"/dashboard/{guild_id}/api-key/revoke",
+                        hx_target="#self-service-keys-container",
+                        hx_swap="outerHTML",
+                    )
+                ),
+            )
+        )
+
+    table = (
+        Table(
+            Thead(Tr(Th("Key Label"), Th("Scopes"), Th("Action"))),
+            Tbody(*key_rows),
+            cls="table w-full",
+        )
+        if key_rows
+        else P("You have no active keys for this server.", cls="italic opacity-70 mb-4")
+    )
+
+    inspector = GadgetInspector()
+    ext_names = list(inspector.inspect_extensions().keys())
+    if "powerloader" in ext_names:
+        ext_names.remove("powerloader")
+
+    scope_options = []
+    for ext in ext_names:
+        scope_options.append(Option(f"{guild_id}.{ext}.user", value=f"{guild_id}.{ext}.user"))
+        scope_options.append(Option(f"{guild_id}.{ext}.admin", value=f"{guild_id}.{ext}.admin"))
+
+    scopes_select = Select(
+        *scope_options,
+        name="scopes",
+        multiple=True,
+        cls="select select-bordered select-sm w-full max-w-xs h-24",
+    )
+
+    label_input = Input(
+        type="text",
+        name="label",
+        placeholder="Key Label (e.g. my-app)",
+        required=True,
+        cls="input input-bordered input-sm w-full max-w-xs mb-2",
+    )
+
+    generate_btn = Form(
+        Div(
+            Label("Key Label:", cls="label-text mb-1 font-semibold"),
+            label_input,
+            Label("Select Scopes (Hold Ctrl to select multiple):", cls="label-text mb-1 font-semibold"),
+            scopes_select,
+            cls="flex flex-col gap-1 mb-4",
+        ),
+        Button(I(cls="fa-solid fa-key mr-2"), "Generate API Key", cls="btn btn-primary btn-sm"),
+        hx_post=f"/dashboard/{guild_id}/api-key/generate",
+        hx_target="#self-service-keys-container",
+        hx_swap="outerHTML",
+        cls="mt-4",
+    )
+
+    return Div(
+        H3("Self-Service API Keys", cls="text-xl font-bold mb-2"),
+        P("Manage your API keys for this guild. You can have up to 5 active keys.", cls="text-sm opacity-80 mb-4"),
+        Div(
+            table,
+            generate_btn,
+            cls="p-4 bg-base-200 rounded-lg shadow-inner mb-8",
+        ),
+        id="self-service-keys-container",
+    )
+
+
+@dashboard_router("/dashboard/{guild_id:int}/api-key/generate", methods=["POST"])
+async def generate_guild_api_key_route(guild_id: int, req, sess):
+    import hashlib
+    import json
+    import re
+    import secrets
+
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey, ApiUserRole
+
+    auth = sess.get("auth", {})
+    user_id = auth.get("id")
+    user_access_token = auth.get("token_data", {}).get("access_token")
+    if not user_id or not user_access_token:
+        return P("Unauthorized", cls="text-error")
+
+    # Fetch user roles from bot to verify API User Role
+    user_roles = set()
+    try:
+        async with get_internal_api_client() as client:
+            resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{guild_id}/roles", timeout=2.0)
+            if resp.status_code == 200:
+                user_roles = {int(r) for r in resp.json().get("roles", [])}
+    except Exception as e:
+        logging.error(f"Failed to fetch user roles: {e}")
+        return P("Error fetching user roles.", cls="text-error")
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
+        api_user_role = session.exec(stmt).first()
+
+    has_api_user_role = False
+    if api_user_role:
+        has_api_user_role = int(api_user_role.role_id) in user_roles
+
+    if not has_api_user_role:
+        return P("Forbidden: API User Role required.", cls="text-error")
+
+    form = await req.form()
+    label = form.get("label", "").strip()
+    if not label:
+        return P("Error: Key Label is required.", cls="text-error")
+    label = re.sub(r"[^a-zA-Z0-9\-_]", "", label)
+    if not label:
+        return P("Error: Invalid Key Label.", cls="text-error")
+
+    prefix = f"guild_{guild_id}_{user_id}_"
+    with Session(engine) as session:
+        stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active)
+        active_keys = session.exec(stmt).all()
+        if len(active_keys) >= 5:
+            add_toast(
+                sess,
+                "Error: You have reached the maximum limit of 5 active keys for this guild.",
+                "error",
+                dismiss=True,
+            )
+            return await _render_self_service_keys(guild_id, int(user_id), sess)
+
+    if hasattr(form, "getlist"):
+        selected_scopes = form.getlist("scopes")
+    else:
+        selected_scopes = form.get("scopes", [])
+        if not isinstance(selected_scopes, list):
+            selected_scopes = [selected_scopes]
+
+    if not selected_scopes:
+        return P("Error: At least one scope must be selected.", cls="text-error")
+
+    allowed_pattern = re.compile(rf"^{guild_id}\.[a-zA-Z0-9\-_]+\.(user|admin)$")
+    validated_scopes = []
+    for s in selected_scopes:
+        if allowed_pattern.match(s):
+            validated_scopes.append(s)
+        else:
+            return P(f"Error: Scope '{s}' is not allowed for this guild.", cls="text-error")
+
+    new_key = f"pc_{secrets.token_urlsafe(32)}"
+    new_key_hash = hashlib.sha256(new_key.encode("utf-8")).hexdigest()
+    full_name = f"{prefix}{label}_{secrets.token_hex(4)}"
+
+    with Session(engine) as session:
+        api_key = ApiKey(
+            key_hash=new_key_hash,
+            name=full_name,
+            scopes=json.dumps(validated_scopes),
+            is_active=True,
+            key_type="user",
+            guild_id=guild_id,
+        )
+        session.add(api_key)
+        session.commit()
+
+    add_toast(
+        sess,
+        f"New API key generated: {new_key} (Copy this now; it will not be displayed again!)",
+        "success",
+        dismiss=True,
+    )
+
+    return await _render_self_service_keys(guild_id, int(user_id), sess)
+
+
+@dashboard_router("/dashboard/{guild_id:int}/api-key/revoke", methods=["POST"])
+async def revoke_guild_api_key_route(guild_id: int, req, sess):
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey, ApiUserRole
+
+    auth = sess.get("auth", {})
+    user_id = auth.get("id")
+    user_access_token = auth.get("token_data", {}).get("access_token")
+    if not user_id or not user_access_token:
+        return P("Unauthorized", cls="text-error")
+
+    user_roles = set()
+    try:
+        async with get_internal_api_client() as client:
+            resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{guild_id}/roles", timeout=2.0)
+            if resp.status_code == 200:
+                user_roles = {int(r) for r in resp.json().get("roles", [])}
+    except Exception as e:
+        logging.error(f"Failed to fetch user roles: {e}")
+        return P("Error fetching user roles.", cls="text-error")
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
+        api_user_role = session.exec(stmt).first()
+
+    has_api_user_role = False
+    if api_user_role:
+        has_api_user_role = int(api_user_role.role_id) in user_roles
+
+    if not has_api_user_role:
+        return P("Forbidden: API User Role required.", cls="text-error")
+
+    form = await req.form()
+    key_id_str = form.get("key_id")
+    if key_id_str:
+        try:
+            key_id = int(key_id_str)
+            engine = init_connection_engine()
+            with Session(engine) as session:
+                api_key = session.get(ApiKey, key_id)
+                prefix = f"guild_{guild_id}_{user_id}_"
+                if api_key and api_key.name.startswith(prefix):
+                    api_key.is_active = False
+                    session.add(api_key)
+                    session.commit()
+                    add_toast(sess, "API key revoked successfully.", "success", dismiss=True)
+        except ValueError:
+            pass
+
+    return await _render_self_service_keys(guild_id, int(user_id), sess)

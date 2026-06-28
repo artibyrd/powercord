@@ -1,3 +1,4 @@
+import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,7 +34,7 @@ def test_add_api_key_new_key(mock_session):
     mock_session.add.assert_called_once()
     added_key = mock_session.add.call_args[0][0]
     assert added_key.name == "Test"
-    assert added_key.key == "pc_12345"
+    assert added_key.key_hash == hashlib.sha256(b"pc_12345").hexdigest()
     assert added_key.scopes == '["global"]'
     assert added_key.is_active is True
     mock_session.commit.assert_called_once()
@@ -49,7 +50,7 @@ def test_add_api_key_specific_key(mock_session):
     mock_session.add.assert_called_once()
     added_key = mock_session.add.call_args[0][0]
     assert added_key.name == "Test Legacy"
-    assert added_key.key == "legacy-12345"
+    assert added_key.key_hash == hashlib.sha256(b"legacy-12345").hexdigest()
     assert added_key.scopes == '["global"]'
     mock_session.commit.assert_called_once()
 

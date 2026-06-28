@@ -20,7 +20,13 @@ def client(session):
     def override_get_session():
         yield session
 
+    from app.api.dependencies import get_current_api_user
+
+    def override_get_current_api_user():
+        return {"identity": "test_user", "scopes": ["global.admin"]}
+
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_api_user] = override_get_current_api_user
     yield TestClient(app)
     app.dependency_overrides.clear()
 

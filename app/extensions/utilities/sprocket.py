@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from app.api.dependencies import api_scope_required
 from app.common.alchemy import get_session
 from app.db.models import DiscordAuditorConfig
 from app.extensions.utilities.widget import SecurityRuleEngine
@@ -18,7 +19,7 @@ class AuditorConfigUpdate(BaseModel):
     announcement_channel_ids: Optional[list[int]] = None
 
 
-@router.get("/api/guild/{guild_id}/audit/score")
+@router.get("/api/guild/{guild_id}/audit/score", dependencies=[Depends(api_scope_required("utilities", level="user"))])
 async def get_audit_score(guild_id: int, session: Session = Depends(get_session)):
     """Calculates the overall health score and severity counts (high, medium, low)."""
     evaluation = SecurityRuleEngine.evaluate(guild_id, session)
@@ -39,7 +40,7 @@ async def get_audit_score(guild_id: int, session: Session = Depends(get_session)
     }
 
 
-@router.get("/api/guild/{guild_id}/audit/alerts")
+@router.get("/api/guild/{guild_id}/audit/alerts", dependencies=[Depends(api_scope_required("utilities", level="user"))])
 async def get_audit_alerts(
     guild_id: int,
     category: Optional[str] = Query(None),
@@ -55,7 +56,7 @@ async def get_audit_alerts(
     return alerts
 
 
-@router.get("/api/guild/{guild_id}/audit/config")
+@router.get("/api/guild/{guild_id}/audit/config", dependencies=[Depends(api_scope_required("utilities", level="user"))])
 async def get_auditor_config(guild_id: int, session: Session = Depends(get_session)):
     """Returns the current auditor configuration settings."""
     config = session.get(DiscordAuditorConfig, guild_id)
@@ -83,7 +84,9 @@ async def get_auditor_config(guild_id: int, session: Session = Depends(get_sessi
     }
 
 
-@router.post("/api/guild/{guild_id}/audit/config")
+@router.post(
+    "/api/guild/{guild_id}/audit/config", dependencies=[Depends(api_scope_required("utilities", level="admin"))]
+)
 async def update_auditor_config(
     guild_id: int,
     payload: AuditorConfigUpdate,

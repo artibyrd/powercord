@@ -1,6 +1,7 @@
+import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Column, Text
+from sqlalchemy import BigInteger, Column, DateTime, Text, func
 from sqlmodel import Field, SQLModel
 
 
@@ -74,10 +75,23 @@ class ApiKey(SQLModel, table=True):
     __tablename__ = "api_keys"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    key: str = Field(index=True, max_length=255, unique=True)
+    key_hash: str = Field(index=True, max_length=255, unique=True)
     name: str = Field(max_length=255, unique=True)
     is_active: bool = Field(default=True)
     scopes: str = Field(default="[]", description="JSON list of valid scopes")
+    key_type: str = Field(default="user", max_length=50)
+    guild_id: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True, index=True))
+    created_at: datetime.datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    )
+
+
+class ApiUserRole(SQLModel, table=True):
+    __tablename__ = "api_user_roles"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    guild_id: int = Field(sa_column=Column(BigInteger, unique=True, index=True))
+    role_id: int = Field(sa_column=Column(BigInteger))
 
 
 class ApiAccessRole(SQLModel, table=True):

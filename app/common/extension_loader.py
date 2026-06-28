@@ -5,9 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import Depends, FastAPI
-
-from app.api.dependencies import api_scope_required
+from fastapi import FastAPI
 
 
 class GadgetType(str, Enum):
@@ -131,7 +129,6 @@ class GadgetInspector:
                             router,
                             prefix=f"/{extension_name}",
                             tags=[extension_name],
-                            dependencies=[Depends(api_scope_required(extension_name))],
                         )
                         logging.info(f"Loaded router '{router_name}' from extension '{extension_name}'.")
             except ImportError as e:

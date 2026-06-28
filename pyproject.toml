@@ -26,6 +26,13 @@ nh3 = "^0.3.3"
 markdown = "^3.10.2"
 apscheduler = "^3.11.2"
 cachetools = ">=5.0,<6.0"
+pretty-midi = ">=0.2.11"
+librosa = ">=0.11.0"
+matplotlib = ">=3.10.8"
+py7zr = ">=1.1.0"
+rarfile = ">=4.2"
+google-cloud-storage = ">=3.9.0"
+cryptography = ">=46.0.5"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^9.0.2"
@@ -51,6 +58,7 @@ omit = [
     "app/ui/dashboard.py",
     "app/ui/helpers.py",
 ]
+
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.15.0"

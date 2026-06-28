@@ -234,11 +234,29 @@ async def _render_client_keys(sess):
 
     from app.common.alchemy import init_connection_engine
     from app.db.models import ApiKey
+    from app.ui.helpers import is_dashboard_admin
 
     auth = sess.get("auth", {})
     user_id = auth.get("id")
     if not user_id:
         return Div()
+
+    is_admin = False
+    try:
+        is_admin = is_dashboard_admin(int(user_id))
+    except (ValueError, TypeError):
+        pass
+
+    if not is_admin:
+        return Div(
+            H2("Companion Client Keys", cls="text-2xl font-bold mb-4"),
+            P(
+                "Companion Client key generation and management is restricted to global administrators.",
+                cls="text-error mb-4",
+            ),
+            id="client-keys-container",
+            cls="mb-8",
+        )
 
     prefix = f"client_{user_id}_"
     engine = init_connection_engine()
@@ -253,7 +271,7 @@ async def _render_client_keys(sess):
             Tr(
                 Td(str(k.id)),
                 Td(k.name, cls="font-mono text-xs opacity-70"),
-                Td(Code(k.key, cls="bg-base-300 p-1 rounded"), cls="font-mono text-sm text-success"),
+                Td(Code("••••••••••••••••", cls="bg-base-300 p-1 rounded"), cls="font-mono text-sm text-success"),
                 Td(
                     Form(
                         Hidden(name="key_id", value=str(k.id)),
@@ -276,11 +294,45 @@ async def _render_client_keys(sess):
         else P("You have no active client keys.", cls="italic opacity-70 mb-4")
     )
 
+    from app.common.extension_loader import GadgetInspector
+
+    inspector = GadgetInspector()
+    ext_names = list(inspector.inspect_extensions().keys())
+    if "powerloader" in ext_names:
+        ext_names.remove("powerloader")
+
+    scope_options = [
+        Option("global.admin", value="global.admin", selected=True),
+        Option("global.user", value="global.user"),
+    ]
+    for ext in ext_names:
+        scope_options.append(Option(f"global.{ext}.admin", value=f"global.{ext}.admin"))
+        scope_options.append(Option(f"global.{ext}.user", value=f"global.{ext}.user"))
+
+    scopes_select = Select(
+        *scope_options,
+        name="scope",
+        cls="select select-bordered select-sm max-w-xs mr-2",
+    )
+
+    tooltip = Div(
+        I(cls="fa-solid fa-circle-info cursor-help text-info"),
+        cls="tooltip tooltip-right ml-2",
+        data_tip='Available global scopes include "global.admin", "global.user", "global.{extension}.admin", etc.',
+    )
+
     generate_btn = Form(
+        Div(
+            Label("Select Scope:", cls="label-text mr-2 font-semibold"),
+            scopes_select,
+            tooltip,
+            cls="flex items-center mb-4",
+        ),
         Button(I(cls="fa-solid fa-key mr-2"), "Generate New Client Key", cls="btn btn-primary btn-sm"),
         hx_post="/profile/client-key/generate",
         hx_target="#client-keys-container",
         hx_swap="outerHTML",
+        cls="mt-4",
     )
 
     return Div(
@@ -301,27 +353,53 @@ async def _render_client_keys(sess):
 
 @rt("/profile/client-key/generate", methods=["POST"])
 async def generate_client_key_route(req, sess):
+    import hashlib
+    import json
     import secrets
 
     from sqlmodel import Session
 
     from app.common.alchemy import init_connection_engine
     from app.db.models import ApiKey
+    from app.ui.helpers import is_dashboard_admin
 
     auth = sess.get("auth", {})
     user_id = auth.get("id")
     if user_id:
-        # Give full API scope to personal client keys for now
-        scopes = '["global"]'
+        try:
+            is_admin = is_dashboard_admin(int(user_id))
+        except (ValueError, TypeError):
+            is_admin = False
+
+        if not is_admin:
+            return await _render_client_keys(sess)
+
+        form = await req.form()
+        selected_scope = form.get("scope", "global.admin")
+        scopes = json.dumps([selected_scope])
         random_suffix = secrets.token_hex(4)
         name = f"client_{user_id}_{random_suffix}"
         new_key = f"pc_{secrets.token_urlsafe(32)}"
+        new_key_hash = hashlib.sha256(new_key.encode("utf-8")).hexdigest()
 
         engine = init_connection_engine()
         with Session(engine) as session:
-            api_key = ApiKey(key=new_key, name=name, scopes=scopes, is_active=True)
+            api_key = ApiKey(
+                key_hash=new_key_hash,
+                name=name,
+                scopes=scopes,
+                is_active=True,
+                key_type="global",
+            )
             session.add(api_key)
             session.commit()
+
+        add_toast(
+            sess,
+            f"New client key generated: {new_key} (Copy this now; it will not be displayed again!)",
+            "success",
+            dismiss=True,
+        )
 
     return await _render_client_keys(sess)
 
@@ -332,14 +410,25 @@ async def revoke_client_key_route(req, sess):
 
     from app.common.alchemy import init_connection_engine
     from app.db.models import ApiKey
+    from app.ui.helpers import is_dashboard_admin
 
     auth = sess.get("auth", {})
     user_id = auth.get("id")
+    if not user_id:
+        return await _render_client_keys(sess)
+
+    try:
+        is_admin = is_dashboard_admin(int(user_id))
+    except (ValueError, TypeError):
+        is_admin = False
+
+    if not is_admin:
+        return await _render_client_keys(sess)
 
     form = await req.form()
     key_id_str = form.get("key_id")
 
-    if user_id and key_id_str:
+    if key_id_str:
         try:
             key_id = int(key_id_str)
             engine = init_connection_engine()
@@ -350,6 +439,7 @@ async def revoke_client_key_route(req, sess):
                     api_key.is_active = False
                     session.add(api_key)
                     session.commit()
+                    add_toast(sess, "Client key revoked successfully.", "success", dismiss=True)
         except ValueError:
             pass
 
@@ -765,12 +855,15 @@ async def admin_home(sess):
         cls="mb-8",
     )
 
+    manage_api_keys = await _render_admin_api_keys(sess)
+
     return DashboardPage(
         "Admin Dashboard",
         H1("System Administration", cls="text-2xl font-extrabold mb-8"),
         stats_grid,
         logs_component,
         manage_admins,
+        manage_api_keys,
         extension_section,
         restart_section,
         admin_widgets,
@@ -876,6 +969,136 @@ async def _render_admin_list(sess):
         ),
         id="admin-list",
     )
+
+
+async def _render_admin_api_keys(sess):
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        stmt = select(ApiKey).order_by(ApiKey.created_at.desc())
+        keys = session.exec(stmt).all()
+
+    key_rows = []
+    for k in keys:
+        import json
+
+        try:
+            scopes_list = json.loads(k.scopes)
+        except Exception:
+            scopes_list = []
+        scopes_str = ", ".join(scopes_list)
+
+        status_badge = (
+            Span("Active", cls="badge badge-success badge-sm")
+            if k.is_active
+            else Span("Inactive", cls="badge badge-ghost badge-sm")
+        )
+
+        action_btn = Form(
+            Hidden(name="key_id", value=str(k.id)),
+            Hidden(name="action", value="revoke" if k.is_active else "reactivate"),
+            Button(
+                "Revoke" if k.is_active else "Reactivate",
+                cls=f"btn {'btn-warning' if k.is_active else 'btn-success'} btn-xs",
+            ),
+            hx_post="/admin/api-key/toggle",
+            hx_target="#admin-api-keys-list",
+            hx_swap="outerHTML",
+            style="display:inline-block;",
+        )
+
+        key_rows.append(
+            Tr(
+                Td(str(k.id)),
+                Td(k.name, cls="font-mono text-xs opacity-70"),
+                Td(status_badge),
+                Td(k.key_type, cls="text-xs"),
+                Td(scopes_str, cls="font-mono text-xs max-w-xs truncate"),
+                Td(k.created_at.strftime("%Y-%m-%d %H:%M:%S") if k.created_at else "N/A"),
+                Td(action_btn),
+            )
+        )
+
+    table = (
+        Table(
+            Thead(
+                Tr(
+                    Th("ID"),
+                    Th("Name"),
+                    Th("Status"),
+                    Th("Type"),
+                    Th("Scopes"),
+                    Th("Created At"),
+                    Th("Actions"),
+                )
+            ),
+            Tbody(*key_rows),
+            cls="table w-full",
+        )
+        if key_rows
+        else P("No API keys found in database.", cls="italic opacity-70")
+    )
+
+    return Div(
+        H2("Manage API Keys", cls="text-2xl font-bold mb-4"),
+        Div(
+            table,
+            cls="card bg-base-100 shadow-sm border border-base-content/20 p-4 max-h-96 overflow-y-auto",
+        ),
+        id="admin-api-keys-list",
+        cls="mb-8",
+    )
+
+
+@rt("/admin/api-key/toggle", methods=["POST"])
+async def toggle_api_key_route(req, sess):
+    from sqlmodel import Session
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiKey
+    from app.ui.helpers import is_dashboard_admin
+
+    auth = sess.get("auth", {})
+    user_id = auth.get("id")
+    if not user_id:
+        return P("Unauthorized", cls="text-error")
+
+    try:
+        is_admin = is_dashboard_admin(int(user_id))
+    except (ValueError, TypeError):
+        is_admin = False
+
+    if not is_admin:
+        return P("Forbidden", cls="text-error")
+
+    form = await req.form()
+    key_id_str = form.get("key_id")
+    action = form.get("action")
+
+    if key_id_str and action in ("revoke", "reactivate"):
+        try:
+            key_id = int(key_id_str)
+            engine = init_connection_engine()
+            with Session(engine) as session:
+                api_key = session.get(ApiKey, key_id)
+                if api_key:
+                    api_key.is_active = action == "reactivate"
+                    session.add(api_key)
+                    session.commit()
+                    add_toast(
+                        sess,
+                        f"API Key '{api_key.name}' {'reactivated' if action == 'reactivate' else 'revoked'} successfully.",
+                        "success",
+                        dismiss=True,
+                    )
+        except ValueError:
+            pass
+
+    return await _render_admin_api_keys(sess)
 
 
 @rt("/admin/extensions/reload", methods=["POST"])
