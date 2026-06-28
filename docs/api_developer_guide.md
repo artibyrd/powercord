@@ -20,7 +20,7 @@ sequenceDiagram
     Client->>GW: Request with Bearer Token (or ?token=)
     GW->>Auth: Validate credentials
     alt Internal System Key
-        Auth->>Auth: Match POWERCORD_INTERNAL_API_KEY
+        Auth->>Auth: Match auto-generated DB key (system_internal)
         Auth-->>GW: System identity with 'global.admin' scope
     else Database API Key
         Auth->>DB: Query api_keys table by key
@@ -121,7 +121,7 @@ Global administrators can self-service generate and revoke **Companion Client Ke
 
 * **Generation**: Toggled under a single **"+ Generate Client Key"** button. Clicking the button expands the form inline to display:
   * **Scopes**: Multi-select checkbox cards structured as `Global: admin`, `Global: user`, `Global: {extension}.admin`, etc.
-  * **Information Tooltips**: Hoverable DaisyUI info tooltips explaining exactly what each scope grants.
+  * **Information Tooltip**: A DaisyUI info tooltip next to the "Select Scope(s)" label explaining scope format.
 * **Revocation**: Clicking "Revoke" on an active key immediately invalidates the key.
 * **Key Format**: Prefix `pc_` followed by a cryptographically secure, url-safe token.
 * **Name Format**: Bound to the Discord ID (`client_{discord_user_id}_{random_hex_suffix}`).
@@ -134,7 +134,7 @@ Guild administrators and users with the designated **API User Role** can generat
   * **Server Owners & Powercord Admins**: Can configure "Dashboard Access Roles", set the designated "API User Role", and generate keys with `{guild_id}.{extension}.admin` or `{guild_id}.{extension}.user` scopes.
   * **Self-Service Users**: Users possessing dashboard access and the designated "API User Role" can generate keys, but are restricted to selecting only `{guild_id}.{extension}.user` scopes. (Admin scope checkboxes are hidden/disabled).
 * **Generation**: Under a single toggleable **"+ Generate API Key"** button, which expands inline to show a text box for the **Key Label** and a clean 2-column grid of checkbox cards formatted as `Readable Guild Name: extension.user` (e.g. `NerdMercs: custom_content.user`).
-* **Name Format**: `guild_{guild_id}_{discord_user_id}_{random_hex_suffix}`.
+* **Name Format**: `guild_{guild_id}_{discord_user_id}_{label}_{random_hex_suffix}` (where `{label}` is the user-provided key label).
 
 ### Global Keys Management (Web Admin Dashboard)
 
@@ -147,7 +147,7 @@ Global Powercord Admins can monitor, revoke, and reactivate all API keys across 
 Administrators can also manage keys from the command-line terminal:
 * **Create a Partner API Key**:
   ```bash
-  just add-api-key <name> '<json_scope_list>' [--key <optional_pre_shared_key>]
+  just add-api-key <name> [--scopes '<json_scope_list>'] [--key <legacy_key>]
   ```
 * **List All Keys**:
   ```bash
@@ -362,7 +362,7 @@ Starts an asynchronous background scan of Discord channel attachments to import 
 
 #### `GET /midi_library/scan/{job_id}`
 Retrieves progress/status of the background importer job.
-* **Auth Required**: `{guild_id}.midi_library.admin` or higher.
+* **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Response**:
   ```json
   {
@@ -429,7 +429,7 @@ Calculates and retrieves the server's security health score.
   ```json
   {
     "score": 85,
-    "counts": {
+    "severities": {
       "high": 1,
       "medium": 0,
       "low": 2
@@ -466,21 +466,20 @@ Lists active security auditor alerts.
 * **Auth Required**: `{guild_id}.utilities.user` or higher.
 * **Query Parameters**:
   * `category` (string, optional)
-* **Response**:
+* **Response** (bare list, not wrapped in an object):
   ```json
-  {
-    "alerts": [
-      {
-        "rule": "Low-Tier Role Privileges",
-        "category": "Role Security",
-        "message": "Low-tier role 'LowTierAdmin' holds high-severity 'Administrator' permission.",
-        "severity": "high",
-        "alert_hash": "a4f8d9...",
-        "parent_hash": null,
-        "child_count": 2
-      }
-    ]
-  }
+  [
+    {
+      "rule": "Low-Tier Role Privileges",
+      "category": "Role Security",
+      "message": "Low-tier role 'LowTierAdmin' holds high-severity 'Administrator' permission.",
+      "details": "Detailed explanation of the finding.",
+      "severity": "high",
+      "alert_hash": "a4f8d9...",
+      "parent_hash": null,
+      "child_count": 2
+    }
+  ]
   ```
 
 ---
@@ -501,6 +500,9 @@ Lutebot historically requested data using a legacy query format. Powercord maint
 | **Response Format** | Flat dictionary (raw SQL row mapping) | Structured nested JSON models |
 | **Fuzzy Search Key** | `find` | `q` |
 | **Direct Lookup Key**| `checksum` | Path variable: `/{checksum}` |
+| **Pagination** | `limit` (default 20, max 50) + `page` | `limit` query parameter |
+| **Sorting** | `sort` + `order` (asc/desc) | N/A (ranked by trigram similarity) |
+| **Count Query** | `find` + `count` | N/A |
 
 ### Field Mapping
 

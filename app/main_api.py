@@ -105,12 +105,12 @@ class ReloadConfigPayload(BaseModel):
     guild_id: int
 
 
-@app.get("/", dependencies=[Depends(api_scope_required("default"))])
+@app.get("/", dependencies=[Depends(api_scope_required("core", level="user"))])
 def read_root():
     return {"Hello": "World"}
 
 
-@app.post("/reload_config", dependencies=[Depends(api_scope_required("default"))])
+@app.post("/reload_config", dependencies=[Depends(api_scope_required("core", level="admin"))])
 async def reload_config(payload: ReloadConfigPayload):
     """
     Reloads configuration for a specific guild.
@@ -120,7 +120,7 @@ async def reload_config(payload: ReloadConfigPayload):
     return {"status": "success", "message": f"Config reload received for guild {payload.guild_id}"}
 
 
-@app.post("/restart", dependencies=[Depends(api_scope_required("default"))])
+@app.post("/restart", dependencies=[Depends(api_scope_required("core", level="admin"))])
 async def restart_api():
     """
     Restarts the API process gracefully.
