@@ -24,7 +24,7 @@ async def test_profile_client_keys_non_admin(session):
 
         assert "Companion Client Keys" in html
         assert "restricted to global administrators" in html
-        assert "Generate New Client Key" not in html
+        assert "Generate Client Key" not in html
         assert "Select Scope" not in html
 
 
@@ -60,7 +60,7 @@ async def test_profile_client_keys_admin(session):
         assert "Companion Client Keys" in html
         assert "••••••••••••••••" in html  # masked key
         assert "dummyhash" not in html  # no hash displayed
-        assert "Generate New Client Key" in html
+        assert "Generate Client Key" in html
         assert "global.admin" in html
         assert "global.utilities.admin" in html  # dynamically populated from GadgetInspector
 
