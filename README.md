@@ -71,6 +71,7 @@ just qa fix    # Same, but auto-fix lint and formatting issues
 | **[Fresh Setup Guide](docs/SETUP.md)** | Clone, install extensions, and run Powercord from scratch |
 | **[Extending Powercord](docs/extensions.md)** | Extension framework: creating, managing, and publishing extensions |
 | **[API Security & Management](docs/api.md)** | API authentication, scopes, Swagger docs, and API key management |
+| **[API Developer Guide](docs/api_developer_guide.md)** | API integration guide for third-party tools, companion clients, and Lutebot/Lutemod |
 | **[Database Documentation](docs/db.md)** | Database management, models, migrations, and automated backups |
 | **[GCP Deployment Guide](docs/GCP.md)** | Deploying Powercord to Google Cloud Platform |
 | **[Testing Guide](docs/TESTING.md)** | Test execution, coverage targets, and database provisioning |
