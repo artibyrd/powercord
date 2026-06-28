@@ -1226,7 +1226,8 @@ async def test_dashboard_self_service_keys_ui_admin_vs_non_admin(session):
     """Verify that .admin scopes are hidden for non-admins but visible for admins in the UI select options."""
     from fasthtml.common import to_xml
 
-    from app.ui.dashboard import ApiUserRole, dashboard
+    from app.db.models import ApiUserRole
+    from app.ui.dashboard import dashboard
 
     guild_id_non_admin = 999301
     guild_id_admin = 999302
