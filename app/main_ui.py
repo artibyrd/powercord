@@ -320,7 +320,7 @@ async def _render_client_keys(sess):
                     cls="checkbox checkbox-primary checkbox-sm",
                 ),
                 Span(label, cls="ml-3 text-sm font-medium text-base-content/85"),
-                cls="flex items-center p-3 bg-base-300/40 border border-base-content/20 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200 w-full max-w-sm"
+                cls="flex items-center p-3 bg-base-300/40 border border-base-content/20 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200 w-full max-w-sm",
             )
         )
 
@@ -335,7 +335,7 @@ async def _render_client_keys(sess):
         "Generate Client Key",
         cls="btn btn-primary btn-sm mt-2",
         onclick="document.getElementById('client-key-gen-form').classList.remove('hidden'); this.classList.add('hidden');",
-        id="show-client-keygen-btn"
+        id="show-client-keygen-btn",
     )
 
     generate_form = Form(
@@ -343,7 +343,7 @@ async def _render_client_keys(sess):
             Div(
                 Label("Select Scope(s):", cls="label-text mb-1 font-semibold text-xs opacity-70"),
                 tooltip,
-                cls="flex items-center mb-1"
+                cls="flex items-center mb-1",
             ),
             Div(*scope_checkboxes, cls="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 max-w-2xl"),
             cls="flex flex-col gap-1",
@@ -354,9 +354,9 @@ async def _render_client_keys(sess):
                 "Cancel",
                 type="button",
                 cls="btn btn-ghost btn-sm",
-                onclick="document.getElementById('client-key-gen-form').classList.add('hidden'); document.getElementById('show-client-keygen-btn').classList.remove('hidden');"
+                onclick="document.getElementById('client-key-gen-form').classList.add('hidden'); document.getElementById('show-client-keygen-btn').classList.remove('hidden');",
             ),
-            cls="flex items-center gap-2 mt-4"
+            cls="flex items-center gap-2 mt-4",
         ),
         hx_post="/profile/client-key/generate",
         hx_target="#client-keys-container",

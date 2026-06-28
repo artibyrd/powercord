@@ -971,9 +971,9 @@ def test_parent_child_alert_linking(session: Session):
 
     # Since parent is overridden (filtered out), the children should lose their active parent status
     # in score computation, meaning they revert to being counted individually.
-    # Both are High severity. Penalty = 15 + 15 = 30.
-    # Expected score = 100 - 30 = 70.
-    assert res_override["score"] == 70
+    # Both are High severity. Penalty = 15 * log2(3) = 23.77 -> 24.
+    # Expected score = 100 - 24 = 76.
+    assert res_override["score"] == 76
 
 
 def test_parent_child_alert_linking_mention_everyone(session: Session):

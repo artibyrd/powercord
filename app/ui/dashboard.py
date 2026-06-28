@@ -50,6 +50,7 @@ async def _check_guild_admin(guild_id: int, req) -> bool:
         return False
     try:
         from app.ui.helpers import is_dashboard_admin
+
         if is_dashboard_admin(int(user_id)):
             return True
         admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
@@ -291,7 +292,10 @@ async def dashboard(guild_id: int, sess):
         return Titled("Error", P(f"Failed to fetch guild information: {e}"))
 
     from app.ui.helpers import is_dashboard_admin
-    is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(user_id)
+
+    is_guild_admin = (
+        guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(user_id)
+    )
 
     inspector = GadgetInspector()
     all_extensions = inspector.inspect_extensions()
@@ -434,11 +438,11 @@ async def dashboard(guild_id: int, sess):
     access_roles_section = await _render_access_roles(guild_id) if is_guild_admin else Div()
     api_user_role_section = await _render_api_user_role(guild_id) if is_guild_admin else Div()
 
-    roles_grid = Div(
-        access_roles_section,
-        api_user_role_section,
-        cls="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8"
-    ) if is_guild_admin else Div()
+    roles_grid = (
+        Div(access_roles_section, api_user_role_section, cls="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8")
+        if is_guild_admin
+        else Div()
+    )
 
     # Check API User Role access
     has_api_user_role = False
@@ -1513,7 +1517,12 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
             admin_guilds = await get_admin_guilds(user_access_token, user_id)
             guild = admin_guilds.get(str(guild_id), {})
             from app.ui.helpers import is_dashboard_admin
-            is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(user_id)
+
+            is_guild_admin = (
+                guild.get("owner", False)
+                or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+                or is_dashboard_admin(user_id)
+            )
         except Exception:
             is_guild_admin = False
 
@@ -1591,7 +1600,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
                     cls="checkbox checkbox-primary checkbox-sm",
                 ),
                 Span(label, cls="ml-3 text-sm font-medium text-base-content/85"),
-                cls="flex items-center p-3 bg-base-300/40 border border-base-content/20 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200 w-full max-w-sm"
+                cls="flex items-center p-3 bg-base-300/40 border border-base-content/20 rounded-lg cursor-pointer hover:bg-base-300/80 transition-all duration-200 w-full max-w-sm",
             )
         )
 
@@ -1608,7 +1617,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         "Generate API Key",
         cls="btn btn-primary btn-sm mt-2",
         onclick="document.getElementById('key-gen-form').classList.remove('hidden'); this.classList.add('hidden');",
-        id="show-keygen-btn"
+        id="show-keygen-btn",
     )
 
     generate_form = Form(
@@ -1625,9 +1634,9 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
                 "Cancel",
                 type="button",
                 cls="btn btn-ghost btn-sm",
-                onclick="document.getElementById('key-gen-form').classList.add('hidden'); document.getElementById('show-keygen-btn').classList.remove('hidden');"
+                onclick="document.getElementById('key-gen-form').classList.add('hidden'); document.getElementById('show-keygen-btn').classList.remove('hidden');",
             ),
-            cls="flex items-center gap-2 mt-4"
+            cls="flex items-center gap-2 mt-4",
         ),
         hx_post=f"/dashboard/{guild_id}/api-key/generate",
         hx_target="#self-service-keys-container",
@@ -1684,7 +1693,12 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
             admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
             guild = admin_guilds.get(str(guild_id), {})
             from app.ui.helpers import is_dashboard_admin
-            is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(int(user_id))
+
+            is_guild_admin = (
+                guild.get("owner", False)
+                or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+                or is_dashboard_admin(int(user_id))
+            )
         except Exception:
             is_guild_admin = False
 
@@ -1808,7 +1822,12 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
             admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
             guild = admin_guilds.get(str(guild_id), {})
             from app.ui.helpers import is_dashboard_admin
-            is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(int(user_id))
+
+            is_guild_admin = (
+                guild.get("owner", False)
+                or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+                or is_dashboard_admin(int(user_id))
+            )
         except Exception:
             is_guild_admin = False
 

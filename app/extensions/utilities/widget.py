@@ -1566,8 +1566,14 @@ class SecurityRuleEngine:
                 elif sev == "low":
                     num_low += 1
 
-        score = 100 - (15 * num_high + 10 * num_medium + 5 * num_low)
-        score = max(0, min(100, score))
+        import math
+
+        # Diminishing returns using logarithmic penalty scaling
+        high_penalty = 15 * math.log2(num_high + 1)
+        medium_penalty = 10 * math.log2(num_medium + 1)
+        low_penalty = 5 * math.log2(num_low + 1)
+        score = 100 - (high_penalty + medium_penalty + low_penalty)
+        score = max(0, min(100, int(round(score))))
 
         # Sort keeping parent-child grouping intact
         severity_order = {"high": 0, "medium": 1, "low": 2}

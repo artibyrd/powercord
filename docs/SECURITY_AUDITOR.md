@@ -99,13 +99,13 @@ The engine implements 8 rules to identify leaks and misconfigurations:
 The Security Auditor evaluates the server's security health with a numeric score ranging from **0** to **100**. 
 
 1. **Initial Score**: The audit begins with a baseline score of **100**.
-2. **Deductions**: The score is reduced by a fixed amount for each unique security alert generated during evaluation, based on the alert's severity:
-   - **High Severity Alert**: `-15` points
-   - **Medium Severity Alert**: `-10` points
-   - **Low Severity Alert**: `-5` points
-3. **Bounding**: The score is bounded to a minimum of **0** (i.e., the score cannot be negative).
+2. **Deductions**: The score is reduced for each unique active security alert generated during evaluation, based on the alert's severity with logarithmic diminishing returns (preventing multiple alerts of the same severity from immediately tanking the score to 0%):
+   - **High Severity Alert**: \(-15 \times \log_2(N_{\text{high}} + 1)\) points
+   - **Medium Severity Alert**: \(-10 \times \log_2(N_{\text{medium}} + 1)\) points
+   - **Low Severity Alert**: \(-5 \times \log_2(N_{\text{low}} + 1)\) points
+3. **Bounding**: The score is rounded to the nearest integer and bounded to a minimum of **0** (i.e., the score cannot be negative).
 
-$$\text{Health Score} = \max(0, 100 - (15 \times N_{\text{high}} + 10 \times N_{\text{medium}} + 5 \times N_{\text{low}}))$$
+$$\text{Health Score} = \max(0, 100 - \text{round}(15 \times \log_2(N_{\text{high}} + 1) + 10 \times \log_2(N_{\text{medium}} + 1) + 5 \times \log_2(N_{\text{low}} + 1)))$$
 
 ---
 

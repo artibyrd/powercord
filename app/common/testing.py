@@ -42,6 +42,7 @@ def ensure_test_database() -> None:
         database="postgres",
     )
     import time
+
     try:
         maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
         for attempt in range(5):
@@ -58,7 +59,12 @@ def ensure_test_database() -> None:
                 break
             except Exception as e:
                 err_msg = str(e)
-                if ("57P03" in err_msg or "network error" in err_msg or "InterfaceError" in err_msg or "connection" in err_msg) and attempt < 4:
+                if (
+                    "57P03" in err_msg
+                    or "network error" in err_msg
+                    or "InterfaceError" in err_msg
+                    or "connection" in err_msg
+                ) and attempt < 4:
                     time.sleep(2)
                     continue
                 raise e

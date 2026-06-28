@@ -107,8 +107,12 @@ def test_score_boundaries(session):
 
     SecurityRuleEngine.invalidate(guild_id)
     result_worst = SecurityRuleEngine.evaluate(guild_id, session)
-    # The score should deduct properly: 3 high (-45) + 2 medium (-20) + 1 low (-5) = 30
-    assert result_worst["score"] == 30
+    # The score should deduct properly under logarithmic scoring:
+    # 3 high: 15 * log2(4) = 30
+    # 2 medium: 10 * log2(3) = 15.85
+    # 1 low: 5 * log2(2) = 5
+    # Penalty: 30 + 15.85 + 5 = 50.85 -> 51 -> Score: 49
+    assert result_worst["score"] == 49
     assert len(result_worst["alerts"]) > 0
 
 

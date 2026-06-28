@@ -58,16 +58,16 @@ def test_security_rule_engine_score_lower_boundary():
     # Let's mock evaluate to return a high number of high severity alerts
     dummy_high_alerts = [
         {"rule": "Dummy Rule", "category": "exposure", "severity": "high", "message": "leak"},
-    ] * 10  # 10 * 15 = 150 points reduction
+    ] * 15  # 15 * 15 = 225 points reduction in linear, or enough to clamp to 0 under logarithmic
 
     for rule in engine.rules:
-        # Patch evaluate to return 5 high alerts each
+        # Patch evaluate to return 15 high alerts each
         rule.evaluate = MagicMock(return_value=dummy_high_alerts)
 
     result = engine.run_all(12345, MagicMock())
 
     assert result["score"] == 0
-    assert len(result["alerts"]) == 80  # 8 rules * 10 alerts
+    assert len(result["alerts"]) == 120  # 8 rules * 15 alerts
 
 
 def test_security_rule_engine_score_decrements():
