@@ -1852,8 +1852,10 @@ def _render_alerts_list(alerts: list[dict], guild_id: int, active_hashes: Option
                 )
 
         container_cls = f"p-3 rounded-md border-l-4 border {border_cls} mb-3 last:mb-0"
-        if is_child:
-            container_cls += " ml-8 border-dashed opacity-90"
+        if phash and phash in active_hashes:
+            container_cls += " border-dashed opacity-90"
+            if is_child:
+                container_cls += " ml-8"
 
         alert_elements.append(
             Div(

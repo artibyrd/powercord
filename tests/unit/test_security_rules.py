@@ -1080,13 +1080,15 @@ def test_parent_child_alerts_rendering():
 
     # Case 1: Both visible (e.g. All tab)
     html_all = to_xml(_render_alerts_list(alerts, guild_id=123, active_hashes=active_hashes))
-    # Child should be indented (ml-8) and show "Cascaded from"
+    # Child should be indented (ml-8), dashed (border-dashed), and show "Cascaded from"
     assert "ml-8" in html_all
+    assert "border-dashed" in html_all
     assert "Cascaded from: Low-Tier Role Privileges" in html_all
 
     # Case 2: Parent filtered out (e.g. Exposure tab)
     filtered_alerts = [alerts[1]]
     html_filtered = to_xml(_render_alerts_list(filtered_alerts, guild_id=123, active_hashes=active_hashes))
-    # Child should NOT be indented (no ml-8) and show "Associated with upstream alert"
+    # Child should NOT be indented (no ml-8), but STILL be dashed (border-dashed) and show "Associated with upstream alert"
     assert "ml-8" not in html_filtered
+    assert "border-dashed" in html_filtered
     assert "Associated with upstream alert: Low-Tier Role Privileges" in html_filtered
