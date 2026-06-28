@@ -1098,3 +1098,181 @@ async def test_dashboard_self_service_keys_limit(session):
         session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id == guild_id))
         session.exec(delete(ApiKey).where(ApiKey.guild_id == guild_id))
         session.commit()
+
+
+@pytest.mark.asyncio
+async def test_generate_guild_key_privilege_escalation_blocked(session):
+    """Verify that a non-admin user cannot generate an API key with admin scopes."""
+    from fasthtml.common import to_xml
+    from sqlmodel import select
+
+    from app.db.models import ApiKey, ApiUserRole
+    from app.ui.dashboard import generate_guild_api_key_route
+
+    guild_id = 999888
+    # permissions = 0 (non-admin)
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "0"}}
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": [123]}
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    try:
+        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+                with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                    with patch("app.ui.dashboard.get_internal_api_client") as mock_get_client:
+                        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+                        # Configure role
+                        role_setting = ApiUserRole(guild_id=guild_id, role_id=123)
+                        session.add(role_setting)
+                        session.commit()
+
+                        sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+
+                        # Attempt to generate key with .admin scope
+                        mock_req = AsyncMock()
+                        mock_req.form.return_value = {"label": "unsafe-key", "scopes": [f"{guild_id}.utilities.admin"]}
+
+                        # Call generation
+                        gen_resp = await generate_guild_api_key_route(guild_id, mock_req, sess)
+
+                        # Verify the response indicates access was forbidden
+                        html = to_xml(gen_resp)
+                        assert "Forbidden: Non-admins cannot generate keys with admin scopes." in html
+                        assert "text-error" in html
+
+                        # Verify NO key was created in the database
+                        keys = session.exec(select(ApiKey).where(ApiKey.guild_id == guild_id)).all()
+                        assert len(keys) == 0
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id == guild_id))
+        session.exec(delete(ApiKey).where(ApiKey.guild_id == guild_id))
+        session.commit()
+
+
+@pytest.mark.asyncio
+async def test_generate_guild_key_admin_allowed(session):
+    """Verify that a guild admin can generate an API key with admin scopes."""
+    from fasthtml.common import to_xml
+    from sqlmodel import select
+
+    from app.db.models import ApiKey, ApiUserRole
+    from app.ui.dashboard import generate_guild_api_key_route
+
+    guild_id = 999999
+    # permissions = 8 (guild admin)
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "8"}}
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": [123]}
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    try:
+        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+                with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                    with patch("app.ui.dashboard.get_internal_api_client") as mock_get_client:
+                        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+                        # Configure role
+                        role_setting = ApiUserRole(guild_id=guild_id, role_id=123)
+                        session.add(role_setting)
+                        session.commit()
+
+                        sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+
+                        # Attempt to generate key with .admin scope
+                        mock_req = AsyncMock()
+                        mock_req.form.return_value = {
+                            "label": "safe-key-admin",
+                            "scopes": [f"{guild_id}.utilities.admin"],
+                        }
+
+                        # Call generation
+                        gen_resp = await generate_guild_api_key_route(guild_id, mock_req, sess)
+
+                        # Verify the response indicates success (re-renders self-service keys UI)
+                        html = to_xml(gen_resp)
+                        assert "Self-Service API Keys" in html
+                        assert "safe-key-admin" in html
+
+                        # Verify key was created in the database
+                        keys = session.exec(select(ApiKey).where(ApiKey.guild_id == guild_id)).all()
+                        assert len(keys) == 1
+                        assert keys[0].name.startswith(f"guild_{guild_id}_12345_safe-key-admin_")
+                        assert "admin" in keys[0].scopes
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id == guild_id))
+        session.exec(delete(ApiKey).where(ApiKey.guild_id == guild_id))
+        session.commit()
+
+
+@pytest.mark.asyncio
+async def test_dashboard_self_service_keys_ui_admin_vs_non_admin(session):
+    """Verify that .admin scopes are hidden for non-admins but visible for admins in the UI select options."""
+    from fasthtml.common import to_xml
+
+    from app.ui.dashboard import ApiUserRole, dashboard
+
+    guild_id_non_admin = 999301
+    guild_id_admin = 999302
+
+    mock_guilds = {
+        str(guild_id_non_admin): {"name": "Non-Admin Server", "permissions": "0"},
+        str(guild_id_admin): {"name": "Admin Server", "permissions": "8"},
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"roles": [123]}
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    try:
+        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+                with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                    with patch("app.ui.dashboard.get_internal_api_client") as mock_get_client:
+                        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+                        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+                        # Configure API User roles
+                        role_non_admin = ApiUserRole(guild_id=guild_id_non_admin, role_id=123)
+                        role_admin = ApiUserRole(guild_id=guild_id_admin, role_id=123)
+                        session.add(role_non_admin)
+                        session.add(role_admin)
+                        session.commit()
+
+                        sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+
+                        # 1. Non-admin view
+                        resp_non_admin = await dashboard(guild_id_non_admin, sess)
+                        html_non_admin = to_xml(resp_non_admin)
+                        assert f"{guild_id_non_admin}.utilities.user" in html_non_admin
+                        assert f"{guild_id_non_admin}.utilities.admin" not in html_non_admin
+
+                        # 2. Admin view
+                        resp_admin = await dashboard(guild_id_admin, sess)
+                        html_admin = to_xml(resp_admin)
+                        assert f"{guild_id_admin}.utilities.user" in html_admin
+                        assert f"{guild_id_admin}.utilities.admin" in html_admin
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id.in_([guild_id_non_admin, guild_id_admin])))
+        session.commit()

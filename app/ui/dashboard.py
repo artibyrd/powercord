@@ -1488,6 +1488,20 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
     from app.common.extension_loader import GadgetInspector
     from app.db.models import ApiKey
 
+    # Fetch admin guilds to verify if the user is a guild administrator
+    is_guild_admin = False
+    auth = sess.get("auth", {})
+    user_access_token = (
+        auth.get("token_data", {}).get("access_token") if isinstance(auth.get("token_data"), dict) else None
+    )
+    if user_access_token:
+        try:
+            admin_guilds = await get_admin_guilds(user_access_token, user_id)
+            guild = admin_guilds.get(str(guild_id), {})
+            is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+        except Exception:
+            is_guild_admin = False
+
     prefix = f"guild_{guild_id}_{user_id}_"
     engine = init_connection_engine()
 
@@ -1539,7 +1553,8 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
     scope_options = []
     for ext in ext_names:
         scope_options.append(Option(f"{guild_id}.{ext}.user", value=f"{guild_id}.{ext}.user"))
-        scope_options.append(Option(f"{guild_id}.{ext}.admin", value=f"{guild_id}.{ext}.admin"))
+        if is_guild_admin:
+            scope_options.append(Option(f"{guild_id}.{ext}.admin", value=f"{guild_id}.{ext}.admin"))
 
     scopes_select = Select(
         *scope_options,
@@ -1654,6 +1669,20 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
 
     if not selected_scopes:
         return P("Error: At least one scope must be selected.", cls="text-error")
+
+    # Privilege Escalation Protection:
+    # If any requested scope ends with '.admin', the user must be a guild administrator.
+    if any(s.endswith(".admin") for s in selected_scopes):
+        is_guild_admin = False
+        if user_access_token and user_id:
+            try:
+                admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+                guild = admin_guilds.get(str(guild_id), {})
+                is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+            except Exception:
+                is_guild_admin = False
+        if not is_guild_admin:
+            return P("Forbidden: Non-admins cannot generate keys with admin scopes.", cls="text-error")
 
     allowed_pattern = re.compile(rf"^{guild_id}\.[a-zA-Z0-9\-_]+\.(user|admin)$")
     validated_scopes = []
