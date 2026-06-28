@@ -2039,7 +2039,7 @@ def guild_admin_alerts_widget(guild_id: int, category: str = "all"):
         config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
         admin_role_configured = config and config.staff_separator_role_id is not None
 
-    active_hashes = {a["alert_hash"] for a in alerts}
+    active_hashes = {a.get("alert_hash", "") for a in alerts}
 
     if category != "all":
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]

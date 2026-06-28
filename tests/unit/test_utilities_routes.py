@@ -64,8 +64,20 @@ async def test_get_alerts_list(mock_evaluate, mock_session_cls, mock_init_engine
     mock_evaluate.return_value = {
         "score": 90,
         "alerts": [
-            {"rule": "Rule A", "category": "exposure", "severity": "high", "message": "leak"},
-            {"rule": "Rule B", "category": "roles", "severity": "low", "message": "role_ping"},
+            {
+                "rule": "Rule A",
+                "category": "exposure",
+                "severity": "high",
+                "message": "leak",
+                "alert_hash": "hash_a",
+            },
+            {
+                "rule": "Rule B",
+                "category": "roles",
+                "severity": "low",
+                "message": "role_ping",
+                "alert_hash": "hash_b",
+            },
         ],
     }
 

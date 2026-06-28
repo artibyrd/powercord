@@ -198,4 +198,3 @@ def enable_honeypot(session):
     session.add(honeypot_setting)
     session.commit()
     return honeypot_setting
-

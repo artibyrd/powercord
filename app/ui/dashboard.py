@@ -1217,7 +1217,7 @@ async def get_alerts_list(guild_id: int, req, category: str = "all"):
         evaluation = SecurityRuleEngine.evaluate(guild_id, session)
         alerts = evaluation["alerts"]
 
-    active_hashes = {a["alert_hash"] for a in alerts}
+    active_hashes = {a.get("alert_hash", "") for a in alerts}
 
     if category != "all":
         alerts = [a for a in alerts if a.get("category", "").lower() == category.lower()]

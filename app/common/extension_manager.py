@@ -266,11 +266,12 @@ def install_extension(source_path: str | Path) -> None:
         if root_pyproject.is_file():
             try:
                 import tomllib
+
                 with open(root_pyproject, "rb") as fh:
                     root_doc = tomllib.load(fh)
                 root_deps = root_doc.get("tool", {}).get("poetry", {}).get("dependencies", {})
                 has_all_deps = all(_normalize_pkg_name(dep) in root_deps for dep in deps)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         if is_reinstall and set(deps) == set(old_deps) and has_all_deps:

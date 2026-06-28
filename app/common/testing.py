@@ -59,7 +59,9 @@ def ensure_test_database() -> None:
             print("\n" + "=" * 80)
             print("[DIAGNOSTIC WARNING] Database password authentication failed.")
             print("It seems you ran pytest directly instead of using 'just test'.")
-            print("The running dev container was started with the password from .env, but pytest default password is 'test_pass'.")
+            print(
+                "The running dev container was started with the password from .env, but pytest default password is 'test_pass'."
+            )
             print("To fix this, run your tests using 'just test --type unit' or export your .env variables.")
             print("=" * 80 + "\n")
         raise e

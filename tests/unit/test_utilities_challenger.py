@@ -56,8 +56,8 @@ def test_score_boundaries(session):
     )
     # Add staff separator role
     session.add(DiscordRole(id=1111, guild_id=guild_id, name="StaffSeparator", permissions=0, position=5))
-    # Add low-tier role (pos=2) with Administrator permission (1 << 3) - LowTierRolePrivileges (high: -15)
-    session.add(DiscordRole(id=1112, guild_id=guild_id, name="LowTierAdmin", permissions=1 << 3, position=2))
+    # Add low-tier user role (pos=2) with no base permissions - triggers ExposedStaffChannels, UnauthorizedChatPings, PublicAnnouncementProtection via overwrites
+    session.add(DiscordRole(id=1112, guild_id=guild_id, name="LowTierUser", permissions=0, position=2))
     # Add low-tier role (pos=3) set to mentionable - GeneralRoleMentionability (low: -5)
     session.add(
         DiscordRole(
@@ -70,26 +70,36 @@ def test_score_boundaries(session):
             id=1114, guild_id=guild_id, name="OverprivilegedBot", permissions=1 << 5, position=6, is_managed=True
         )
     )
-    # Add a public announcement channel (pos=1) allowing @everyone (id=guild_id) to send messages (1 << 11) - PublicAnnouncementProtection (high: -15)
+    # Add low-tier privileged role (pos=4) with Kick Members (1 << 1) base permission - LowTierRolePrivileges (high: -15). No overwrites so it is not linked.
+    session.add(DiscordRole(id=1115, guild_id=guild_id, name="LowTierKick", permissions=1 << 1, position=4))
+    # Add a public announcement channel (pos=1) allowing LowTierUser to View Channel (1 << 10) and send messages (1 << 11) - PublicAnnouncementProtection (high: -15)
     session.add(
         DiscordChannel(
             id=3333,
             guild_id=guild_id,
             name="rules-and-announcements",
             type="text",
-            overwrites=json.dumps({str(guild_id): {"allow": 1 << 11, "deny": 0}}),
+            overwrites=json.dumps({"1112": {"allow": (1 << 11) | (1 << 10), "deny": 0}}),
         )
     )
-    # Add exposed staff channel visible to @everyone (View Channel 1 << 10 not denied) - ExposedStaffChannels (high: -15)
-    session.add(DiscordChannel(id=2222, guild_id=guild_id, name="staff-chat", type="text", overwrites="{}"))
-    # Add non-text location (voice channel) allowing low-tier role to send messages (1 << 11) - UnauthorizedChatPings (medium: -10)
+    # Add exposed staff channel visible to LowTierUser (View Channel allowed via overwrite) - ExposedStaffChannels (high: -15)
+    session.add(
+        DiscordChannel(
+            id=2222,
+            guild_id=guild_id,
+            name="staff-chat",
+            type="text",
+            overwrites=json.dumps({"1112": {"allow": 1 << 10, "deny": 0}}),
+        )
+    )
+    # Add non-text location (voice channel) allowing LowTierUser to view (1 << 10) and send messages (1 << 11) - UnauthorizedChatPings (medium: -10)
     session.add(
         DiscordChannel(
             id=4444,
             guild_id=guild_id,
             name="Lounge Voice",
             type="voice",
-            overwrites=json.dumps({"1112": {"allow": 1 << 11, "deny": 0}}),
+            overwrites=json.dumps({"1112": {"allow": (1 << 11) | (1 << 10), "deny": 0}}),
         )
     )
 
