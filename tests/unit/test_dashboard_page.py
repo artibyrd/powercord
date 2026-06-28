@@ -962,8 +962,8 @@ async def test_dashboard_gating_for_non_admin(session):
         assert "Dashboard Access Roles" not in html
         # Edit Layout button is hidden
         assert "Edit Layout" not in html
-        # Render the toggle switches for cogs disabled
-        assert 'disabled="disabled"' in html or "disabled" in html
+        # Manage Extensions (Server) section is hidden
+        assert "Manage Extensions (Server)" not in html
 
 
 @pytest.mark.asyncio

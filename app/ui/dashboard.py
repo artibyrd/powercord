@@ -468,12 +468,14 @@ async def dashboard(guild_id: int, sess):
     show_api_keys = is_guild_admin or has_api_user_role
     api_keys_section = await _render_self_service_keys(guild_id, user_id, sess) if show_api_keys else Div()
 
+    server_extensions_section = server_extensions if is_guild_admin else Div()
+
     return DashboardPage(
         f"Dashboard: {guild['name']}",
         H1(f"Dashboard: {guild['name']}", cls="text-2xl font-extrabold mb-8"),
         roles_grid,
+        server_extensions_section,
         api_keys_section,
-        server_extensions,
         guild_widgets,
         auth=auth,
         guild_id=guild_id,
