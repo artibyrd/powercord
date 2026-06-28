@@ -1239,7 +1239,7 @@ async def test_dashboard_self_service_keys_ui_admin_vs_non_admin(session):
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {"roles": [123]}
+    mock_resp.json.return_value = {"roles": [{"id": "123", "name": "some-role"}]}
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_resp)
 
