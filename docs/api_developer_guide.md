@@ -4,11 +4,41 @@ This document is the official reference for the Powercord REST API, designed for
 
 ---
 
+## Table of Contents
+
+- [1. System Architecture & Flow Diagrams](#1-system-architecture--flow-diagrams)
+  - [Unified Request Authentication & Authorization Flow](#unified-request-authentication--authorization-flow)
+  - [Lutebot Integration Migration Flow](#lutebot-integration-migration-flow)
+- [2. API Security & Access Controls](#2-api-security--access-controls)
+  - [Granular Scopes](#granular-scopes)
+  - [API Sprocket Gating vs. Discord Bot Command Gating](#api-sprocket-gating-vs-discord-bot-command-gating-role-checks)
+- [3. Web Dashboard Key Management](#3-web-dashboard-key-management)
+  - [Companion Client Keys (User Profile)](#companion-client-keys-user-profile)
+  - [Self-Service Guild Keys (Server Dashboard)](#self-service-guild-keys-server-dashboard)
+  - [Global Keys Management (Web Admin Dashboard)](#global-keys-management-web-admin-dashboard)
+  - [System Admin CLI](#system-admin-cli)
+- [4. Core API Reference](#4-core-api-reference)
+  - [Core Operations](#core-operations)
+  - [Client Management](#client-management)
+- [5. Extension API Reference](#5-extension-api-reference)
+  - [MIDI Library Extension](#midi-library-extension-midi_library)
+  - [Honeypot Extension](#honeypot-extension-honeypot)
+  - [Utilities Extension](#utilities-extension-utilities)
+- [6. Lutebot & Lutemod Migration Guide](#6-lutebot--lutemod-migration-guide)
+  - [Comparison Table](#comparison-table)
+  - [Field Mapping](#field-mapping)
+  - [Migration Example: Search Implementation](#migration-example-search-implementation)
+
+---
+
+<br>
+
 ## 1. System Architecture & Flow Diagrams
 
 Powercord uses a decoupled extension structure. When FastAPI starts up, the core framework registers dynamically discovered extension routers (called **Sprockets**) under their respective namespace prefixes, automatically securing them behind granular permission-check dependencies.
 
 ### Unified Request Authentication & Authorization Flow
+
 ```mermaid
 sequenceDiagram
     participant Client as Lutebot / Companion Client
@@ -40,33 +70,38 @@ sequenceDiagram
     GW->>Scope: Verify required scope (e.g. "{guild_id}.midi_library.user")
     alt Scope Authorized
         Scope-->>GW: Authorized
-        GW->>Client: 200 OK Response
+        GW-->>Client: 200 OK Response
     else Scope Missing
         Scope-->>Client: 403 Forbidden (Missing Scope)
     end
 ```
 
+<br>
+
 ### Lutebot Integration Migration Flow
+
 ```mermaid
 graph TD
-    subgraph Legacy Integration (v2 Compatibility Shim)
-        A[Lutebot / Lutemod] -->|GET /midi_library/legacy/?key=KEY&find=TERM| B(FastAPI Legacy Compatibility Shim)
-        B -->|Fuzzy Trigram Match| C[(Postgres DB)]
+    subgraph LegacyIntegration["Legacy Integration (v2 Compatibility Shim)"]
+        A["Lutebot / Lutemod"] -->|"GET /midi_library/legacy/?key=KEY&find=TERM"| B["FastAPI Legacy Compatibility Shim"]
+        B -->|Fuzzy Trigram Match| C[("Postgres DB")]
         B -->|Returns Legacy Flat JSON Row| A
     end
 
-    subgraph Modern Integration (v3 Sprocket API)
-        D[Modernized Lutebot / Lutemod] -->|GET /midi_library/search?q=TERM| E(FastAPI sprocket Router)
-        D -.->|Auth: Bearer Token| E
+    subgraph ModernIntegration["Modern Integration (v3 Sprocket API)"]
+        D["Modernized Lutebot / Lutemod"] -->|"GET /midi_library/search?q=TERM"| E["FastAPI Sprocket Router"]
+        D -.->|"Auth: Bearer Token"| E
         E -->|Fuzzy Trigram Match| C
         E -->|Returns Structured JSON Model| D
     end
 
-    style Legacy Integration fill:#ffe6e6,stroke:#f00,stroke-width:2px
-    style Modern Integration fill:#e6f2ff,stroke:#00f,stroke-width:2px
+    style LegacyIntegration fill:#ffe6e6,stroke:#f00,stroke-width:2px
+    style ModernIntegration fill:#e6f2ff,stroke:#00f,stroke-width:2px
 ```
 
 ---
+
+<br>
 
 ## 2. API Security & Access Controls
 
@@ -76,42 +111,51 @@ Powercord implements a unified authentication model that validates three types o
 2. **Database API Keys**: Persistent, cryptographically secure keys mapped to specific user or partner scopes.
 3. **Discord OAuth Tokens**: Temporary tokens generated during user logins to the Discord dashboard.
 
+<br>
+
 ### Granular Scopes
 
 API endpoints require specific scopes to authorize request execution:
-* **Global Scopes**:
-  * `global.admin`: Full administrative access (bypasses all security checks).
-  * `global.user`: Global read-only access.
-* **Core Scopes**:
-  * `core.admin`: Full write access to core administrative endpoints (restart, reload config, toggle extensions).
-  * `core.user`: Read-only access to core configurations and metadata (list guilds, view status).
-* **Extension Scopes** (Multi-tenant):
-  * `{guild_id}.{extension}.admin`: Full write access for a specific extension on a specific server.
-  * `{guild_id}.{extension}.user`: Read-only access for a specific extension on a specific server.
 
-### API sprocket Gating vs. Discord Bot Command Gating (Role Checks)
+| Scope Category | Scope | Description |
+|---|---|---|
+| **Global** | `global.admin` | Full administrative access (bypasses all security checks). |
+| **Global** | `global.user` | Global read-only access. |
+| **Core** | `core.admin` | Full write access to core administrative endpoints (restart, reload config, toggle extensions). |
+| **Core** | `core.user` | Read-only access to core configurations and metadata (list guilds, view status). |
+| **Extension** | `{guild_id}.{extension}.admin` | Full write access for a specific extension on a specific server. |
+| **Extension** | `{guild_id}.{extension}.user` | Read-only access for a specific extension on a specific server. |
+
+<br>
+
+### API Sprocket Gating vs. Discord Bot Command Gating (Role Checks)
 
 There is a clean separation of security responsibilities between the REST API (Sprocket endpoints) and the Discord Bot Cog commands:
 
-1. **Discord Cog Slash Commands (`/scan`)**:
-   * **Gating**: Gated directly inside Discord using command permission decorators:
-     ```python
-     @nextcord.slash_command(
-         description="...",
-         default_member_permissions=nextcord.Permissions(administrator=True)
-     )
-     ```
-     This strictly guarantees that only server members with the `Administrator` permission can invoke the `/scan` bot command.
-   * **Execution**: When run, the bot itself queries Discord's message history, compiles the list of attachments, and calls the API backend via loopback (`localhost:8000`) using the **Internal System Key** (`POWERCORD_INTERNAL_API_KEY`), which grants the bot `global.admin` scope.
+#### 1. Discord Cog Slash Commands (`/scan`)
 
-2. **REST API sprocket Endpoints (`POST /midi_library/scan`)**:
-   * **Gating**: Securely restricted by the `api_scope_required(extension_name, level)` dependency generator. It does **not** perform dynamic Discord guild role checks directly on the API route. Instead, it delegates authority to **scopes** attached to the authenticated caller's identity:
-     * **API Keys (Third-Party/Partner)**: Gated strictly on key creation. To run the `/midi_library/scan` sprocket directly, a partner API key must be created with the `{guild_id}.midi_library.admin` or `global.admin` scope.
-     * **Discord OAuth Tokens**: For a user's Discord OAuth token to access `/midi_library/scan`, they must either:
-       1. Be configured as a global administrator in the `admin_users` table (granting them the `global.admin` scope).
-       2. Be the Server Owner or hold a role in the target server that is mapped to the `midi_library` extension in the `api_access_roles` table.
+* **Gating**: Gated directly inside Discord using command permission decorators:
+  ```python
+  @nextcord.slash_command(
+      description="...",
+      default_member_permissions=nextcord.Permissions(administrator=True)
+  )
+  ```
+  This strictly guarantees that only server members with the `Administrator` permission can invoke the `/scan` bot command.
+
+* **Execution**: When run, the bot itself queries Discord's message history, compiles the list of attachments, and calls the API backend via loopback (`localhost:8000`) using the **Internal System Key**, which grants the bot `global.admin` scope.
+
+#### 2. REST API Sprocket Endpoints (`POST /midi_library/scan`)
+
+* **Gating**: Securely restricted by the `api_scope_required(extension_name, level)` dependency generator. It does **not** perform dynamic Discord guild role checks directly on the API route. Instead, it delegates authority to **scopes** attached to the authenticated caller's identity:
+  * **API Keys (Third-Party/Partner)**: Gated strictly on key creation. To run the `/midi_library/scan` sprocket directly, a partner API key must be created with the `{guild_id}.midi_library.admin` or `global.admin` scope.
+  * **Discord OAuth Tokens**: For a user's Discord OAuth token to access `/midi_library/scan`, they must either:
+    1. Be configured as a global administrator in the `admin_users` table (granting them the `global.admin` scope).
+    2. Be the Server Owner or hold a role in the target server that is mapped to the `midi_library` extension in the `api_access_roles` table.
 
 ---
+
+<br>
 
 ## 3. Web Dashboard Key Management
 
@@ -126,6 +170,8 @@ Global administrators can self-service generate and revoke **Companion Client Ke
 * **Key Format**: Prefix `pc_` followed by a cryptographically secure, url-safe token.
 * **Name Format**: Bound to the Discord ID (`client_{discord_user_id}_{random_hex_suffix}`).
 
+<br>
+
 ### Self-Service Guild Keys (Server Dashboard)
 
 Guild administrators and users with the designated **API User Role** can generate server-specific API keys via the **Guild Dashboard** page (`/dashboard/{guild_id}`):
@@ -136,23 +182,32 @@ Guild administrators and users with the designated **API User Role** can generat
 * **Generation**: Under a single toggleable **"+ Generate API Key"** button, which expands inline to show a text box for the **Key Label** and a clean 2-column grid of checkbox cards formatted as `Readable Guild Name: extension.user` (e.g. `NerdMercs: custom_content.user`).
 * **Name Format**: `guild_{guild_id}_{discord_user_id}_{label}_{random_hex_suffix}` (where `{label}` is the user-provided key label).
 
+<br>
+
 ### Global Keys Management (Web Admin Dashboard)
 
 Global Powercord Admins can monitor, revoke, and reactivate all API keys across the system (both client keys and guild keys) via the **Manage API Keys** panel on the admin page (`/admin`):
+
 * Displays key ID, name, status (Active/Inactive), key type, parsed scopes list, and creation timestamp.
 * Active keys feature a yellow "Revoke" button.
 * Revoked keys feature a green "Reactivate" button.
 
+<br>
+
 ### System Admin CLI
+
 Administrators can also manage keys from the command-line terminal:
+
 * **Create a Partner API Key**:
   ```bash
   just add-api-key <name> [--scopes '<json_scope_list>'] [--key <legacy_key>]
   ```
+
 * **List All Keys**:
   ```bash
   just list-api-keys
   ```
+
 * **Revoke any API Key**:
   ```bash
   just revoke-api-key <key_id>
@@ -160,28 +215,42 @@ Administrators can also manage keys from the command-line terminal:
 
 ---
 
+<br>
+
 ## 4. Core API Reference
 
 ### Core Operations
 
+<br>
+
 #### `GET /`
+
 Returns the operational status of the Powercord API.
+
 * **Auth Required**: `core.user` or higher.
 * **Response**:
   ```json
   {"Hello": "World"}
   ```
 
+<br>
+
 #### `POST /reload_config`
+
 Signals the API to reload settings for a specific guild.
+
 * **Auth Required**: `core.admin` or higher.
 * **Request Body**:
   ```json
   {"guild_id": 123456789}
   ```
 
+<br>
+
 #### `POST /restart`
+
 Gracefully terminates the API process. Relying process managers (e.g., systemd/supervisord) will automatically bring the server back online.
+
 * **Auth Required**: `core.admin` or higher.
 
 ---
@@ -190,8 +259,12 @@ Gracefully terminates the API process. Relying process managers (e.g., systemd/s
 
 These endpoints permit companion app dashboards to query and toggle configurations for individual Discord servers (Guilds).
 
+<br>
+
 #### `GET /client/guilds`
+
 Retrieves all Discord servers the authenticated user administrates.
+
 * **Auth Required**: `core.user` or higher.
 * **Response**:
   ```json
@@ -207,8 +280,12 @@ Retrieves all Discord servers the authenticated user administrates.
   }
   ```
 
+<br>
+
 #### `GET /client/guilds/{guild_id}/config`
+
 Retrieves configuration state for all dynamically discovered extensions on the server.
+
 * **Auth Required**: `core.user` or higher (user must also have guild dashboard access).
 * **Response**:
   ```json
@@ -223,8 +300,12 @@ Retrieves configuration state for all dynamically discovered extensions on the s
   }
   ```
 
+<br>
+
 #### `POST /client/guilds/{guild_id}/config/toggle`
+
 Toggles an extension on or off for the guild.
+
 * **Auth Required**: `core.admin` or higher (user must also be server owner/admin).
 * **Request Body**:
   ```json
@@ -236,14 +317,20 @@ Toggles an extension on or off for the guild.
 
 ---
 
+<br>
+
 ## 5. Extension API Reference
 
 ### MIDI Library Extension (`midi_library`)
 
 This extension serves the centralized MIDI catalog. All routes require dynamic scope validation.
 
+<br>
+
 #### `GET /midi_library/`
+
 Retrieves global library stats.
+
 * **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Response**:
   ```json
@@ -253,8 +340,12 @@ Retrieves global library stats.
   }
   ```
 
+<br>
+
 #### `GET /midi_library/search`
+
 Performs a fast trigram-based fuzzy search against MIDI filenames and tags.
+
 * **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Query Parameters**:
   * `q` (string, *required*): Fuzzy query term.
@@ -271,8 +362,12 @@ Performs a fast trigram-based fuzzy search against MIDI filenames and tags.
   ]
   ```
 
+<br>
+
 #### `GET /midi_library/random`
+
 Retrieves a random list of files for public galleries.
+
 * **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Query Parameters**:
   * `count` (int, default=24, min=1, max=100)
@@ -288,8 +383,12 @@ Retrieves a random list of files for public galleries.
   ]
   ```
 
+<br>
+
 #### `GET /midi_library/{checksum}`
+
 Retrieves basic details and metadata analysis for a specific checksum.
+
 * **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Response**:
   ```json
@@ -313,8 +412,12 @@ Retrieves basic details and metadata analysis for a specific checksum.
   }
   ```
 
+<br>
+
 #### `GET /midi_library/{checksum}/detail`
+
 Retrieves full details including structural instrument breakdowns.
+
 * **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Response**:
   ```json
@@ -338,8 +441,12 @@ Retrieves full details including structural instrument breakdowns.
   }
   ```
 
+<br>
+
 #### `POST /midi_library/scan`
+
 Starts an asynchronous background scan of Discord channel attachments to import files.
+
 * **Auth Required**: `{guild_id}.midi_library.admin` or higher.
 * **Request Body (JSON)**:
   ```json
@@ -360,8 +467,12 @@ Starts an asynchronous background scan of Discord channel attachments to import 
   }
   ```
 
+<br>
+
 #### `GET /midi_library/scan/{job_id}`
+
 Retrieves progress/status of the background importer job.
+
 * **Auth Required**: `{guild_id}.midi_library.user` or higher.
 * **Response**:
   ```json
@@ -375,8 +486,12 @@ Retrieves progress/status of the background importer job.
   }
   ```
 
+<br>
+
 #### `POST /midi_library/upload`
+
 Uploads a MIDI file or archive directly.
+
 * **Auth Required**: `{guild_id}.midi_library.admin` or higher.
 * **Content-Type**: `multipart/form-data`
 * **Form Fields**:
@@ -396,8 +511,12 @@ Uploads a MIDI file or archive directly.
 
 Enables spam prevention and moderation configurations.
 
+<br>
+
 #### `POST /honeypot/config/{guild_id}/settings`
+
 Updates guild-level honeypot parameters.
+
 * **Auth Required**: `{guild_id}.honeypot.admin` or higher.
 * **Content-Type**: `application/x-www-form-urlencoded`
 * **Form Parameters**:
@@ -405,15 +524,23 @@ Updates guild-level honeypot parameters.
   * `log_channel_id` (integer): Log target channel.
   * `shame_mode` (boolean, default=false): Sends public kick announcements.
 
+<br>
+
 #### `POST /honeypot/config/{guild_id}/remove_channel`
+
 Removes a channel from active honeypot monitoring.
+
 * **Auth Required**: `{guild_id}.honeypot.admin` or higher.
 * **Content-Type**: `application/x-www-form-urlencoded`
 * **Form Parameters**:
   * `channel_id` (integer)
 
+<br>
+
 #### `POST /honeypot/config/{guild_id}/clear_channels`
+
 Cleans up and removes all monitored channels.
+
 * **Auth Required**: `{guild_id}.honeypot.admin` or higher.
 
 ---
@@ -422,8 +549,12 @@ Cleans up and removes all monitored channels.
 
 Provides auditing parameters generated by the Discord Permission Auditor.
 
+<br>
+
 #### `GET /utilities/api/guild/{guild_id}/audit/score`
+
 Calculates and retrieves the server's security health score.
+
 * **Auth Required**: `{guild_id}.utilities.user` or higher.
 * **Response**:
   ```json
@@ -437,8 +568,12 @@ Calculates and retrieves the server's security health score.
   }
   ```
 
+<br>
+
 #### `GET /utilities/api/guild/{guild_id}/audit/config`
+
 Retrieves active auditor config parameters.
+
 * **Auth Required**: `{guild_id}.utilities.user` or higher.
 * **Response**:
   ```json
@@ -449,8 +584,12 @@ Retrieves active auditor config parameters.
   }
   ```
 
+<br>
+
 #### `POST /utilities/api/guild/{guild_id}/audit/config`
+
 Saves new Auditor settings.
+
 * **Auth Required**: `{guild_id}.utilities.admin` or higher.
 * **Request Body (JSON)**:
   ```json
@@ -461,8 +600,12 @@ Saves new Auditor settings.
   }
   ```
 
+<br>
+
 #### `GET /utilities/api/guild/{guild_id}/audit/alerts`
+
 Lists active security auditor alerts.
+
 * **Auth Required**: `{guild_id}.utilities.user` or higher.
 * **Query Parameters**:
   * `category` (string, optional)
@@ -484,12 +627,16 @@ Lists active security auditor alerts.
 
 ---
 
+<br>
+
 ## 6. Lutebot & Lutemod Migration Guide
 
 Lutebot historically requested data using a legacy query format. Powercord maintains a temporary **Legacy compatibility shim** at `/midi_library/legacy/` (which translates incoming v2 queries into v3 database lookups). This shim is deprecated and will be removed.
 
 > [!IMPORTANT]
 > The legacy compatibility endpoint is **restricted to the legacy Lutebot API Key**. Developers must transition to the modern Sprocket API `/api/midi_library/...` endpoints and request a new scoped API Key from the server administrator.
+
+<br>
 
 ### Comparison Table
 
@@ -503,6 +650,8 @@ Lutebot historically requested data using a legacy query format. Powercord maint
 | **Pagination** | `limit` (default 20, max 50) + `page` | `limit` query parameter |
 | **Sorting** | `sort` + `order` (asc/desc) | N/A (ranked by trigram similarity) |
 | **Count Query** | `find` + `count` | N/A |
+
+<br>
 
 ### Field Mapping
 
@@ -527,9 +676,12 @@ The legacy API returned a flat `SELECT midi.*, meta.*` row join. If your parsing
 | `optimal_high` | *(Deprecated)* | **Always returns `null`**. |
 | `deviance` | *(Deprecated)* | **Always returns `0`**; no longer tracked. |
 
+<br>
+
 ### Migration Example: Search Implementation
 
 #### Legacy Query (Python Example)
+
 ```python
 import requests
 
@@ -544,7 +696,10 @@ for row in response:
     print(f"Song: {row['filename']}, Score: {row['m_score']}")
 ```
 
+<br>
+
 #### Modernized Query (Python Example)
+
 ```python
 import requests
 
