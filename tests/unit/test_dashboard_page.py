@@ -1237,11 +1237,17 @@ async def test_dashboard_self_service_keys_ui_admin_vs_non_admin(session):
         str(guild_id_admin): {"name": "Admin Server", "permissions": "8"},
     }
 
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"roles": [{"id": "123", "name": "some-role"}]}
+    def mock_get(url, *args, **kwargs):
+        resp = MagicMock()
+        resp.status_code = 200
+        if "user" in url:
+            resp.json.return_value = {"roles": [123]}
+        else:
+            resp.json.return_value = {"roles": [{"id": "123", "name": "some-role"}]}
+        return resp
+
     mock_client = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.get = AsyncMock(side_effect=mock_get)
 
     try:
         with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
