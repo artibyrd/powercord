@@ -52,7 +52,7 @@ rg "LEGACY" --type-add 'config:*.conf' --type-add 'just:Justfile,*.just' -t py -
 
 | Table | Record | Description |
 |---|---|---|
-| `api_keys` | LuteBot key entry | A third-party API key row with `midi_library` scope, inserted via `just add-api-key`. The key value matches `POWERCORD_LUTEBOT_LEGACY_API_KEY`. |
+| `api_keys` | LuteBot key entry | A third-party API key row with `global.midi_library.user` scope, inserted via `just add-api-key`. The stored `key_hash` is the SHA-256 hash of the `POWERCORD_LUTEBOT_LEGACY_API_KEY` value. |
 
 ---
 

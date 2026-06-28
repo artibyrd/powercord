@@ -22,9 +22,9 @@ async def read_item(item_id: int):
 
 #### `get_current_api_user`
 
-Unified API authentication dependency. Validates Internal API keys,
-Database API keys, and Discord OAuth tokens. Returns a dict with
-`identity` and `scopes`.
+Unified API authentication dependency. Validates internal system keys, database API keys, and Discord OAuth tokens. Returns a dict containing:
+- `identity`: String identifying the caller (e.g. `system_internal`, `api_key_name`, or `discord_user_id`).
+- `scopes`: List of valid resolved scope strings.
 
 ```python
 from app.api.dependencies import get_current_api_user
@@ -37,16 +37,30 @@ async def protected_route():
 
 #### `api_scope_required`
 
-Dependency generator to secure an endpoint to a specific scope.
+Dependency generator to secure an endpoint to a specific scope. Supports dynamic hierarchy evaluation (global super-scopes, core-scopes, extension-wide wildcard scopes, and guild-specific scopes).
 
+Signature:
+```python
+def api_scope_required(extension: str, level: str = "user"):
+    ...
+```
+
+Usage Examples:
 ```python
 from app.api.dependencies import api_scope_required
 from fastapi import Depends
 
-@app.get("/honeypot/data", dependencies=[Depends(api_scope_required("honeypot"))])
-async def honeypot_data():
+# Secure endpoint to honeypot admin scope (requires 'global.admin' or '{guild_id}.honeypot.admin')
+@app.get("/honeypot/config", dependencies=[Depends(api_scope_required("honeypot", "admin"))])
+async def get_honeypot_config():
+    ...
+
+# Secure endpoint to midi_library user scope (requires 'global.midi_library.user' or '{guild_id}.midi_library.user')
+@app.get("/midi/stats", dependencies=[Depends(api_scope_required("midi_library", "user"))])
+async def get_midi_stats():
     ...
 ```
+
 
 ## Bot Utilities
 
