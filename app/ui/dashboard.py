@@ -1630,7 +1630,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
         hx_post=f"/dashboard/{guild_id}/api-key/generate",
         hx_target="#self-service-keys-container",
         hx_swap="outerHTML",
-        cls="mt-4 hidden p-4 bg-base-200 border border-base-content/20 rounded-lg",
+        cls="mt-4 hidden p-4 bg-base-300/30 rounded-lg",
         id="key-gen-form",
     )
 
@@ -1641,7 +1641,7 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess):
             table,
             show_form_btn,
             generate_form,
-            cls="p-4 bg-base-200 rounded-lg shadow-inner mb-8",
+            cls="card bg-base-100 shadow-sm border border-base-content/20 p-4 mb-8",
         ),
         id="self-service-keys-container",
     )

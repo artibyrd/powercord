@@ -361,7 +361,7 @@ async def _render_client_keys(sess):
         hx_post="/profile/client-key/generate",
         hx_target="#client-keys-container",
         hx_swap="outerHTML",
-        cls="mt-4 hidden p-4 bg-base-200 border border-base-content/20 rounded-lg",
+        cls="mt-4 hidden p-4 bg-base-300/30 rounded-lg",
         id="client-key-gen-form",
     )
 
