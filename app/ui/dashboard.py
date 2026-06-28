@@ -49,9 +49,12 @@ async def _check_guild_admin(guild_id: int, req) -> bool:
     if not user_access_token or not user_id:
         return False
     try:
+        from app.ui.helpers import is_dashboard_admin
+        if is_dashboard_admin(int(user_id)):
+            return True
         admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
         guild = admin_guilds.get(str(guild_id), {})
-        return (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+        return guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
     except Exception:
         return False
 
@@ -287,7 +290,8 @@ async def dashboard(guild_id: int, sess):
     except Exception as e:
         return Titled("Error", P(f"Failed to fetch guild information: {e}"))
 
-    is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+    from app.ui.helpers import is_dashboard_admin
+    is_guild_admin = guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(user_id)
 
     inspector = GadgetInspector()
     all_extensions = inspector.inspect_extensions()
@@ -428,6 +432,13 @@ async def dashboard(guild_id: int, sess):
     )
 
     access_roles_section = await _render_access_roles(guild_id) if is_guild_admin else Div()
+    api_user_role_section = await _render_api_user_role(guild_id) if is_guild_admin else Div()
+
+    roles_grid = Div(
+        access_roles_section,
+        api_user_role_section,
+        cls="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8"
+    ) if is_guild_admin else Div()
 
     # Check API User Role access
     has_api_user_role = False
@@ -459,7 +470,7 @@ async def dashboard(guild_id: int, sess):
     return DashboardPage(
         f"Dashboard: {guild['name']}",
         H1(f"Dashboard: {guild['name']}", cls="text-2xl font-extrabold mb-8"),
-        access_roles_section,
+        roles_grid,
         api_keys_section,
         server_extensions,
         guild_widgets,
@@ -1771,3 +1782,139 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
             pass
 
     return await _render_self_service_keys(guild_id, int(user_id), sess)
+
+
+async def _render_api_user_role(guild_id: int):
+    # Fetch roles from bot API
+    guild_roles = []
+    try:
+        async with get_internal_api_client() as client:
+            resp = await client.get(f"http://127.0.0.1:8001/guilds/{guild_id}/roles", timeout=2.0)
+            if resp.status_code == 200:
+                guild_roles = resp.json().get("roles", [])
+    except Exception as e:
+        logging.error(f"Failed to fetch guild roles: {e}")
+
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiUserRole
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
+        api_user_role = session.exec(stmt).first()
+
+    role_badge = None
+    if api_user_role:
+        role_name = str(api_user_role.role_id)
+        role_info = next((gr for gr in guild_roles if gr["id"] == str(api_user_role.role_id)), None)
+        if role_info:
+            role_name = role_info["name"]
+
+        role_badge = Div(
+            Span(role_name, cls="mr-2"),
+            Form(
+                Button(
+                    I(cls="fa-solid fa-xmark"),
+                    cls="btn btn-ghost btn-xs text-error p-0 border-0 bg-transparent shadow-none hover:bg-transparent",
+                ),
+                hx_post=f"/dashboard/{guild_id}/api-role/remove",
+                hx_target="#api-role-container",
+                hx_swap="outerHTML",
+                cls="inline flex items-center",
+            ),
+            cls="badge badge-secondary gap-1 py-3 px-3",
+        )
+
+    # If no role is selected, show dropdown to set it
+    if not role_badge:
+        set_role_form = Form(
+            Select(
+                Option("Select a role...", value="", disabled=True, selected=True),
+                *[Option(r["name"], value=r["id"]) for r in guild_roles],
+                name="role_id",
+                cls="select select-bordered select-sm w-full max-w-xs mr-2",
+            ),
+            Button("Set API User Role", cls="btn btn-secondary btn-sm"),
+            hx_post=f"/dashboard/{guild_id}/api-role/set",
+            hx_target="#api-role-container",
+            hx_swap="outerHTML",
+            cls="mt-4 flex items-center",
+            id="set-api-role-form",
+        )
+    else:
+        set_role_form = ""
+
+    return Div(
+        H3("API User Role", cls="text-xl font-bold mb-2"),
+        P("Users with this role are permitted to generate self-service API keys.", cls="text-sm opacity-80 mb-4"),
+        role_badge if role_badge else P("No API User Role configured.", cls="text-sm italic opacity-60"),
+        set_role_form,
+        id="api-role-container",
+        cls="p-4 bg-base-200 rounded-lg shadow-inner mb-8",
+    )
+
+
+@dashboard_router("/dashboard/{guild_id:int}/api-role/set", methods=["POST"])
+async def set_api_role(guild_id: int, req, sess):
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
+    auth = sess.get("auth", {})
+    user_access_token = auth.get("token_data", {}).get("access_token")
+    if not user_access_token:
+        return P("Unauthorized", cls="text-error")
+
+    form = await req.form()
+    role_id_str = form.get("role_id")
+    if role_id_str:
+        try:
+            role_id = int(role_id_str)
+            from sqlmodel import Session, select
+
+            from app.common.alchemy import init_connection_engine
+            from app.db.models import ApiUserRole
+
+            engine = init_connection_engine()
+            with Session(engine) as session:
+                # Check if an ApiUserRole exists for this guild
+                stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
+                existing = session.exec(stmt).first()
+                if existing:
+                    existing.role_id = role_id
+                    session.add(existing)
+                else:
+                    new_role = ApiUserRole(guild_id=guild_id, role_id=role_id)
+                    session.add(new_role)
+                session.commit()
+        except ValueError:
+            pass
+
+    return await _render_api_user_role(guild_id)
+
+
+@dashboard_router("/dashboard/{guild_id:int}/api-role/remove", methods=["POST"])
+async def remove_api_role(guild_id: int, req, sess):
+    if not await _check_guild_admin(guild_id, req):
+        return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
+
+    auth = sess.get("auth", {})
+    user_access_token = auth.get("token_data", {}).get("access_token")
+    if not user_access_token:
+        return P("Unauthorized", cls="text-error")
+
+    from sqlmodel import Session, select
+
+    from app.common.alchemy import init_connection_engine
+    from app.db.models import ApiUserRole
+
+    engine = init_connection_engine()
+    with Session(engine) as session:
+        stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
+        role = session.exec(stmt).first()
+        if role:
+            session.delete(role)
+            session.commit()
+
+    return await _render_api_user_role(guild_id)

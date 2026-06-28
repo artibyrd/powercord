@@ -1283,3 +1283,85 @@ async def test_dashboard_self_service_keys_ui_admin_vs_non_admin(session):
 
         session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id.in_([guild_id_non_admin, guild_id_admin])))
         session.commit()
+
+
+@pytest.mark.asyncio
+async def test_api_role_configuration_flow(session):
+    """Verify set/remove endpoints for API User Role configuration."""
+    from fasthtml.common import to_xml
+    from sqlmodel import select
+
+    from app.db.models import ApiUserRole
+    from app.ui.dashboard import remove_api_role, set_api_role
+
+    guild_id = 999123
+    # permissions = 8 (guild admin)
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "8"}}
+
+    try:
+        with patch("app.ui.helpers.init_connection_engine", return_value=session.get_bind()):
+            with patch("app.common.alchemy.init_connection_engine", return_value=session.get_bind()):
+                with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+                    sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+
+                    # 1. Set API User Role
+                    mock_req = AsyncMock()
+                    mock_req.session = sess
+                    mock_req.form.return_value = {"role_id": "456"}
+                    resp = await set_api_role(guild_id, mock_req, sess)
+                    html = to_xml(resp)
+                    assert "api-role-container" in html
+                    assert "hx-post" in html  # remove form button/badge should be present
+
+                    # Verify it was saved in DB
+                    db_roles = session.exec(select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)).all()
+                    assert len(db_roles) == 1
+                    assert db_roles[0].role_id == 456
+
+                    # 2. Remove API User Role
+                    mock_req_remove = AsyncMock()
+                    mock_req_remove.session = sess
+                    resp_remove = await remove_api_role(guild_id, mock_req_remove, sess)
+                    html_remove = to_xml(resp_remove)
+                    assert "api-role-container" in html_remove
+                    assert "Set API User Role" in html_remove  # set form button is present when not configured
+
+                    # Verify it was removed from DB
+                    db_roles_post = session.exec(select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)).all()
+                    assert len(db_roles_post) == 0
+
+    finally:
+        from sqlmodel import delete
+
+        session.exec(delete(ApiUserRole).where(ApiUserRole.guild_id == guild_id))
+        session.commit()
+
+
+@pytest.mark.asyncio
+async def test_api_role_endpoints_forbidden_for_non_admins(session):
+    """Verify that non-admins are blocked from set/remove API User Role endpoints."""
+    from fasthtml.common import to_xml
+
+    from app.ui.dashboard import remove_api_role, set_api_role
+
+    guild_id = 999321
+    # permissions = 0 (non-admin)
+    mock_guilds = {str(guild_id): {"name": "Test Server", "permissions": "0"}}
+
+    with patch("app.ui.dashboard.get_admin_guilds", return_value=mock_guilds):
+        sess = {"auth": {"id": "12345", "token_data": {"access_token": "dummy_token"}}}
+
+        # 1. Set role blocked
+        mock_req = AsyncMock()
+        mock_req.session = sess
+        mock_req.form.return_value = {"role_id": "456"}
+        resp = await set_api_role(guild_id, mock_req, sess)
+        html = to_xml(resp)
+        assert "Forbidden" in html
+
+        # 2. Remove role blocked
+        mock_req_remove = AsyncMock()
+        mock_req_remove.session = sess
+        resp_remove = await remove_api_role(guild_id, mock_req_remove, sess)
+        html_remove = to_xml(resp_remove)
+        assert "Forbidden" in html_remove
