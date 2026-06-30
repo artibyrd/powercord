@@ -63,7 +63,17 @@ def require_admin(f):
     @functools.wraps(f)
     async def wrapper(*args, **kwargs):
         # FastHTML injects `sess` by name; grab it from kwargs.
-        sess = kwargs.get("sess", {})
+        sess = kwargs.get("sess")
+        if sess is None:
+            # If not in kwargs, it might be passed positionally. Find the position of 'sess' in f's signature.
+            sig = inspect.signature(f)
+            for idx, param_name in enumerate(sig.parameters):
+                if param_name == "sess" and idx < len(args):
+                    sess = args[idx]
+                    break
+        if sess is None:
+            sess = {}
+
         from app.ui.helpers import is_dashboard_admin
 
         auth = sess.get("auth", {}) if isinstance(sess, dict) else {}

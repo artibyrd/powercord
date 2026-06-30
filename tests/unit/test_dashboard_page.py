@@ -391,10 +391,11 @@ def test_render_layout_editor_rendering():
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_position_config(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_update_position_config(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
@@ -417,10 +418,11 @@ async def test_layout_update_position_config(mock_render, mock_get_ordered, mock
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_missing_keys(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_update_missing_keys(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_update
 
     # 1. Completely empty form payload
@@ -464,7 +466,8 @@ async def test_layout_update_malformed_scope_id():
 
 
 @pytest.mark.asyncio
-async def test_layout_update_column_span_non_integer():
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
+async def test_layout_update_column_span_non_integer(mock_check_admin):
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
@@ -483,10 +486,11 @@ async def test_layout_update_column_span_non_integer():
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_column_span_extreme_values(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_update_column_span_extreme_values(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_update
 
     # Value is extremely large integer
@@ -508,10 +512,11 @@ async def test_layout_update_column_span_extreme_values(mock_render, mock_get_or
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_position_config_arbitrary_values(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_update_position_config_arbitrary_values(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_update
 
     # Check that any arbitrary string is accepted and sent to the database helper
@@ -560,10 +565,11 @@ def test_render_layout_editor_invalid_position_config():
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_move_fixed_or_floating_widget(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_move_fixed_or_floating_widget(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_move
 
     # We mock _get_ordered_widgets to return a list of widgets, where index 0 is fixed
@@ -587,10 +593,11 @@ async def test_layout_move_fixed_or_floating_widget(mock_render, mock_get_ordere
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_sql_injection_attempt(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_update_sql_injection_attempt(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
@@ -613,10 +620,11 @@ async def test_layout_update_sql_injection_attempt(mock_render, mock_get_ordered
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_null_byte_value(mock_render, mock_get_ordered, mock_update_setting):
+async def test_layout_update_null_byte_value(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
@@ -890,10 +898,11 @@ async def test_restore_default_widget_settings(session):
 
 
 @pytest.mark.asyncio
+@patch("app.ui.dashboard._check_guild_admin", new_callable=AsyncMock, return_value=True)
 @patch("app.ui.dashboard._render_layout_editor")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.helpers.restore_default_widget_settings")
-async def test_layout_restore_route(mock_restore, mock_get_ordered, mock_render):
+async def test_layout_restore_route(mock_restore, mock_get_ordered, mock_render, mock_check_admin):
     """Verify that layout_restore route calls restore function and renders the layout editor."""
     from app.ui.dashboard import layout_restore
 
