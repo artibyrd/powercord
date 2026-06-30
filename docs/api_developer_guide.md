@@ -22,6 +22,7 @@ This document is the official reference for the Powercord REST API, designed for
   - [Client Management](#client-management)
 - [5. Extension API Reference](#5-extension-api-reference)
   - [MIDI Library Extension](#midi-library-extension-midi_library)
+    - [MIDI File Storage & Retrieval](#midi-file-storage--retrieval)
   - [Honeypot Extension](#honeypot-extension-honeypot)
   - [Utilities Extension](#utilities-extension-utilities)
 - [6. Lutebot & Lutemod Migration Guide](#6-lutebot--lutemod-migration-guide)
@@ -328,6 +329,99 @@ Toggles an extension on or off for the guild.
 ### MIDI Library Extension (`midi_library`)
 
 This extension serves the centralized MIDI catalog. All routes require dynamic scope validation.
+
+<br>
+
+#### MIDI File Storage & Retrieval
+
+The API endpoints documented below return **metadata** (filenames, checksums, quality scores, etc.) but do not embed the binary MIDI file data in their JSON responses. The actual `.mid` files and their companion piano-roll `.png` visualizations are stored separately in a **Google Cloud Storage (GCS)** bucket.
+
+##### How Files Are Stored
+
+When a MIDI file is imported (via `/scan`, `/upload`, or the Discord bot), the system:
+
+1. **Computes an MD5 checksum** of the raw file bytes — this becomes the file's unique identifier and database primary key.
+2. **Uploads the MIDI binary** to the GCS bucket under the path `mid/{checksum}.mid`.
+3. **Generates a piano-roll PNG** visualization and uploads it to `png/{checksum}.png`.
+4. **Saves metadata** (`MidiFile`, `MidiMeta`, `MidiInstrument` records) to the PostgreSQL database.
+
+The GCS bucket name is configured via the `POWERCORD_BUCKET_URL` environment variable (production default: `bgml`).
+
+##### GCS Object Layout
+
+| Asset | GCS Blob Path | Example |
+|---|---|---|
+| MIDI file | `mid/{checksum}.mid` | `mid/270dc4dd5cff9fc217b35dbce8103009.mid` |
+| Piano-roll PNG | `png/{checksum}.png` | `png/270dc4dd5cff9fc217b35dbce8103009.png` |
+
+##### Retrieving Files by Checksum
+
+Once you have a `checksum` value from any API response (e.g., from `/search`, `/random`, or `/{checksum}`), you can retrieve the actual files in two ways:
+
+**1. Direct GCS Public URL (No Auth Required)**
+
+The GCS bucket is publicly readable. Construct the download URL directly:
+
+```
+https://storage.googleapis.com/{bucket}/mid/{checksum}.mid
+https://storage.googleapis.com/{bucket}/png/{checksum}.png
+```
+
+Using the production bucket:
+
+```
+https://storage.googleapis.com/bgml/mid/270dc4dd5cff9fc217b35dbce8103009.mid
+https://storage.googleapis.com/bgml/png/270dc4dd5cff9fc217b35dbce8103009.png
+```
+
+> [!TIP]
+> This is the recommended approach for bulk downloads or integration into third-party tools like Lutebot/Lutemod. No API key is needed to fetch the binary file once you have the checksum.
+
+**2. Server-Side Proxy Endpoint**
+
+The web application exposes a proxy endpoint that fetches the MIDI from GCS server-side, adding CORS headers for browser-based playback:
+
+```
+GET /midi/proxy/{checksum}.mid
+```
+
+* **Auth Required**: None (listed in `PUBLIC_PATHS` for streaming/playback).
+* **Query Parameters**:
+  * `name` (string, *optional*): When provided, sets `Content-Disposition: attachment` with the given display filename, turning the response into a downloadable file. Download events are logged with user context when a session is present.
+* **Response**: Raw MIDI binary with `Content-Type: audio/midi` and `Access-Control-Allow-Origin: *`.
+* **Caching**: `Cache-Control: public, max-age=86400` (24 hours).
+
+##### Example: Search → Download Workflow
+
+```python
+import requests
+
+# Step 1: Search the library for metadata
+api_url = "https://midi.gallery/api/midi_library/search"
+headers = {"Authorization": "Bearer YOUR_API_KEY"}
+results = requests.get(api_url, headers=headers, params={"q": "Morrowind"}).json()
+
+# Step 2: Download the actual MIDI file using the checksum
+for item in results:
+    checksum = item["checksum"]
+    filename = item["filename"]
+
+    # Direct GCS download (no auth needed)
+    midi_url = f"https://storage.googleapis.com/bgml/mid/{checksum}.mid"
+    midi_bytes = requests.get(midi_url).content
+
+    with open(filename, "wb") as f:
+        f.write(midi_bytes)
+    print(f"Downloaded: {filename} ({len(midi_bytes)} bytes)")
+```
+
+```mermaid
+flowchart LR
+    A["API Client"] -->|"GET /midi_library/search?q=..."| B["Powercord API"]
+    B -->|"JSON metadata + checksums"| A
+    A -->|"GET /bgml/mid/{checksum}.mid"| C["Google Cloud Storage"]
+    C -->|"Raw .mid binary"| A
+```
 
 <br>
 
@@ -663,7 +757,7 @@ The legacy API returned a flat `SELECT midi.*, meta.*` row join. If your parsing
 
 | Legacy Field | v3 Model Source | Migration Notes |
 |---|---|---|
-| `checksum` | `MidiFile.checksum` | Stored as a hex-encoded SHA-256 string. |
+| `checksum` | `MidiFile.checksum` | Stored as a hex-encoded MD5 string. |
 | `filename` | `MidiFile.filename` | String. |
 | `contributor` | `MidiFile.contributor` | String. |
 | `tags` | `MidiFile.tags` | Comma-separated tags string. |
