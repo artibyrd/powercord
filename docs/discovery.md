@@ -40,7 +40,7 @@ PUBLIC_PATHS: list[str] = [
 ]
 ```
 
-At startup, `GadgetInspector.collect_public_paths()` scans all installed extensions for this constant and aggregates the regex patterns. The core framework then extends the `Beforeware.skip` list dynamically, eliminating the need to hardcode extension-specific paths in `main_ui.py`.
+At startup, `GadgetInspector.collect_public_paths()` scans all installed extensions for this constant and aggregates the regex patterns. The core framework then extends the `Beforeware.skip` list dynamically. The static skip list in `main_ui.py` contains only core framework paths (`/`, `/login`, `/logout`, `/auth/discord/callback`, `/dev/login`, `/static/*`, `/favicon.ico`) — extension paths should never be hardcoded there.
 
 **Key properties:**
 - **Opt-in**: Extensions without `PUBLIC_PATHS` are unaffected (no breaking changes).

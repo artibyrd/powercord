@@ -104,14 +104,12 @@ def test_logout():
 
 
 @pytest.mark.asyncio
-@patch("app.ui.auth.get_user_guilds")
-@patch("app.ui.auth.get_bot_guild_ids")
+@patch("app.ui.helpers.get_admin_guilds", new_callable=AsyncMock)
 @patch("httpx.AsyncClient")
-async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_guilds):
+async def test_discord_callback_success(mock_client, mock_get_admin_guilds):
     """Integrates successful logic parsing: exchange for tokens via mocked httpx -> user info fetch -> user validation."""
-    mock_bot_guilds.return_value = {"1"}
-    # Permission integer 8 implies administrator role
-    mock_user_guilds.return_value = [{"id": "1", "permissions": "8"}]
+    # get_admin_guilds returns non-empty dict when user has access
+    mock_get_admin_guilds.return_value = {"1": {"id": "1", "name": "Test Guild", "permissions": "8"}}
 
     # Mocking Token Exchange endpoint
     mock_resp1 = MagicMock()
@@ -146,6 +144,86 @@ async def test_discord_callback_success(mock_client, mock_bot_guilds, mock_user_
                 assert res.status_code == 303
                 assert res.headers["location"] == "/profile"
                 assert sess["auth"]["id"] == "123"
+
+
+@pytest.mark.asyncio
+@patch("app.ui.helpers.get_admin_guilds", new_callable=AsyncMock)
+@patch("httpx.AsyncClient")
+async def test_discord_callback_role_based_access(mock_client, mock_get_admin_guilds):
+    """A user with a DashboardAccessRole (but NOT Discord Admin) should be able to log in."""
+    # get_admin_guilds returns access via DashboardAccessRole, not Discord Admin perm
+    mock_get_admin_guilds.return_value = {"1": {"id": "1", "name": "Role Access Guild", "permissions": "0"}}
+
+    mock_resp1 = MagicMock()
+    mock_resp1.status_code = 200
+    mock_resp1.json.return_value = {"access_token": "acc_tok"}
+
+    mock_resp2 = MagicMock()
+    mock_resp2.status_code = 200
+    mock_resp2.json.return_value = {"id": "456", "username": "roleuser"}
+
+    mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_resp1)
+    mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_resp2)
+
+    with patch.dict(
+        os.environ,
+        {
+            "POWERCORD_DISCORD_CLIENT_ID": "1",
+            "POWERCORD_DISCORD_CLIENT_SECRET": "2",
+            "POWERCORD_DISCORD_TOKEN": "3",
+        },
+    ):
+        req = MagicMock()
+        req.headers = {"host": "localhost"}
+        sess = {}
+        with patch("app.ui.auth.add_toast"):
+            with patch("app.ui.helpers.is_dashboard_admin", return_value=False):
+                res = await discord_callback(req, sess, "auth_code")
+
+                # Should still succeed — role-based access is sufficient
+                assert res.status_code == 303
+                assert res.headers["location"] == "/profile"
+                assert sess["auth"]["id"] == "456"
+                assert sess["auth"]["is_dashboard_admin"] is False
+
+
+@pytest.mark.asyncio
+@patch("app.ui.helpers.get_admin_guilds", new_callable=AsyncMock)
+@patch("httpx.AsyncClient")
+async def test_discord_callback_no_access_at_all(mock_client, mock_get_admin_guilds):
+    """A user with no dashboard access (no Discord Admin, no roles) should be rejected."""
+    # get_admin_guilds returns empty dict — no access
+    mock_get_admin_guilds.return_value = {}
+
+    mock_resp1 = MagicMock()
+    mock_resp1.status_code = 200
+    mock_resp1.json.return_value = {"access_token": "acc_tok"}
+
+    mock_resp2 = MagicMock()
+    mock_resp2.status_code = 200
+    mock_resp2.json.return_value = {"id": "789", "username": "nobody"}
+
+    mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_resp1)
+    mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_resp2)
+
+    with patch.dict(
+        os.environ,
+        {
+            "POWERCORD_DISCORD_CLIENT_ID": "1",
+            "POWERCORD_DISCORD_CLIENT_SECRET": "2",
+            "POWERCORD_DISCORD_TOKEN": "3",
+        },
+    ):
+        req = MagicMock()
+        req.headers = {"host": "localhost"}
+        sess = {}
+        with patch("app.ui.auth.add_toast"):
+            res = await discord_callback(req, sess, "auth_code")
+
+            # Should be rejected — redirect back to /login
+            assert res.status_code == 303
+            assert res.headers["location"] == "/login"
+            assert "auth" not in sess
 
 
 # ── auth_before edge cases ───────────────────────────────────────────

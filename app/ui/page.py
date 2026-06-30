@@ -1,6 +1,21 @@
 # mypy: ignore-errors
 from fasthtml.common import *
 
+from app.ui.helpers import is_dashboard_admin as _is_dashboard_admin
+
+
+def _check_admin_for_nav(auth: dict | None) -> bool:
+    """Live DB check for admin status, used by nav menus."""
+    if not auth:
+        return False
+    user_id = auth.get("id")
+    if not user_id:
+        return False
+    try:
+        return _is_dashboard_admin(int(user_id))
+    except (ValueError, TypeError):
+        return False
+
 
 def PageHeader(auth: dict | None = None):
     """A standard header for public pages."""
@@ -36,7 +51,7 @@ def PageHeader(auth: dict | None = None):
                     *[
                         Li(A(text, href=href, cls="py-2 active:bg-neutral active:text-neutral-content"))
                         for text, href in [("System Admin", "/admin"), ("Edit Page Layout", "/admin/layout")]
-                        if auth.get("is_dashboard_admin")
+                        if _check_admin_for_nav(auth)
                     ],
                     Li(A("Logout", href="/logout", cls="py-2 text-error active:bg-error active:text-error-content")),
                     tabindex="0",
@@ -136,7 +151,7 @@ def TopAppBar(
                     *[
                         Li(A(text, href=href, cls="py-2 active:bg-neutral active:text-neutral-content"))
                         for text, href in [("System Admin", "/admin"), ("Edit Page Layout", "/admin/layout")]
-                        if auth.get("is_dashboard_admin")
+                        if _check_admin_for_nav(auth)
                     ],
                     Li(A("Logout", href="/logout", cls="py-2 text-error active:bg-error active:text-error-content")),
                     tabindex="0",

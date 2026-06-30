@@ -94,7 +94,7 @@ This runs `poetry install` to set up all Python dependencies.
 # Run Alembic migrations to create all core tables
 just db-upgrade
 
-# Add yourself as an admin (required for dashboard access)
+# Add yourself as a global admin (required for full admin dashboard access)
 just add-admin <YOUR_DISCORD_USER_ID> --comment "Initial Admin"
 ```
 
@@ -176,7 +176,7 @@ The system restart buttons in the Admin Dashboard rely on an external process ma
 The Docker database is exposed to the host machine on port `5433` so that local CLI commands (like `just db-upgrade`) function seamlessly using the `.env` file, while internal Dockerized applications securely resolve to the native `5432` port via an environment override.
 
 #### Shared Sessions
-Because both `just dev` and `just run` use the same local `.env` file (which contains your `SESSION_KEY`), your browser session cookies remain valid across both environments. If you log in during `just dev` and then switch to `just run`, the UI will still recognize your session — but since the Docker database is empty, your admin permissions will be revoked and you'll be redirected to your profile until you add yourself as an admin to the container's database.
+Because both `just dev` and `just run` use the same local `.env` file (which contains your `SESSION_KEY`), your browser session cookies remain valid across both environments. If you log in during `just dev` and then switch to `just run`, the UI will still recognize your session — but since the Docker database is empty, your admin permissions will be revoked and you'll be redirected to your profile until you add yourself as an admin to the container's database. Similarly, any DashboardAccessRole or ApiUserRole grants will be absent from the fresh database.
 
 ---
 

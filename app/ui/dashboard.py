@@ -38,10 +38,10 @@ from app.ui.page import DashboardPage
 async def _check_guild_admin(guild_id: int, req) -> bool:
     session = getattr(req, "session", None)
     if session is None or not isinstance(session, dict):
-        return True
+        return False  # Default-deny: missing session should never grant access
     auth = session.get("auth", {})
     if not isinstance(auth, dict):
-        return True
+        return False  # Default-deny: malformed auth should never grant access
     user_access_token = (
         auth.get("token_data", {}).get("access_token") if isinstance(auth.get("token_data"), dict) else None
     )

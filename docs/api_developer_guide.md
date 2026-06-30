@@ -179,6 +179,10 @@ Guild administrators and users with the designated **API User Role** can generat
 * **Access Gating**:
   * **Server Owners & Powercord Admins**: Can configure "Dashboard Access Roles", set the designated "API User Role", and generate keys with `{guild_id}.{extension}.admin` or `{guild_id}.{extension}.user` scopes.
   * **Self-Service Users**: Users possessing dashboard access and the designated "API User Role" can generate keys, but are restricted to selecting only `{guild_id}.{extension}.user` scopes. (Admin scope checkboxes are hidden/disabled).
+
+> [!NOTE]
+> All dashboard users — including Self-Service Users — authenticate via Discord OAuth. The login flow grants access to any user who has Discord Administrator permission, a configured DashboardAccessRole, or an ApiUserRole on at least one guild where the bot is present.
+
 * **Generation**: Under a single toggleable **"+ Generate API Key"** button, which expands inline to show a text box for the **Key Label** and a clean 2-column grid of checkbox cards formatted as `Readable Guild Name: extension.user` (e.g. `NerdMercs: custom_content.user`).
 * **Name Format**: `guild_{guild_id}_{discord_user_id}_{label}_{random_hex_suffix}` (where `{label}` is the user-provided key label).
 

@@ -1,5 +1,7 @@
 # mypy: ignore-errors
 # TODO: Enable mypy strict checking for this file (currently excluded in pyproject.toml)
+import functools
+import inspect
 import json
 import logging
 import os
@@ -45,6 +47,50 @@ from app.ui.page import DashboardPage
 
 gsecrets.load_env()
 
+
+def require_admin(f):
+    """Defense-in-depth decorator for /admin/* route handlers.
+
+    Verifies the session user is a dashboard admin before executing
+    the wrapped handler.  Complements the Beforeware check so that
+    a regression in auth_before cannot silently expose admin operations.
+
+    NOTE: The wrapper must preserve ``__signature__`` because FastHTML
+    inspects handler signatures for automatic parameter injection
+    (``req``, ``sess``, path params, etc.).
+    """
+
+    @functools.wraps(f)
+    async def wrapper(*args, **kwargs):
+        # FastHTML injects `sess` by name; grab it from kwargs.
+        sess = kwargs.get("sess", {})
+        from app.ui.helpers import is_dashboard_admin
+
+        auth = sess.get("auth", {}) if isinstance(sess, dict) else {}
+        user_id = auth.get("id")
+        is_admin = False
+        if user_id:
+            try:
+                is_admin = is_dashboard_admin(int(user_id))
+            except (ValueError, TypeError):
+                pass
+        if not is_admin:
+            return P("Forbidden", cls="text-error")
+        return await f(*args, **kwargs)
+
+    # Preserve the original signature so FastHTML's parameter
+    # injector can still resolve `req`, `sess`, path params, etc.
+    original_sig = inspect.signature(f)
+    # Ensure `sess` is in the signature (some handlers didn't have it)
+    if "sess" not in original_sig.parameters:
+        params = list(original_sig.parameters.values())
+        params.append(inspect.Parameter("sess", inspect.Parameter.POSITIONAL_OR_KEYWORD))
+        wrapper.__signature__ = original_sig.replace(parameters=params)
+    else:
+        wrapper.__signature__ = original_sig
+    return wrapper
+
+
 # Define a Beforeware to apply authentication to all necessary routes.
 # We will skip the public-facing and authentication-related routes.
 beforeware = Beforeware(
@@ -54,6 +100,7 @@ beforeware = Beforeware(
         "/login",
         "/logout",
         "/auth/discord/callback",
+        "/dev/login",  # Dev convenience route must bypass auth
         r"/static/.*",
         r"/favicon\.ico",
     ],
@@ -912,6 +959,7 @@ async def admin_home(sess):
 
 
 @rt("/admin/examples/counters/start", methods=["POST"])
+@require_admin
 async def start_counters_route(req):
     """Starts the example counters via Bot API."""
     try:
@@ -926,6 +974,7 @@ async def start_counters_route(req):
 
 
 @rt("/admin/examples/counters/stop", methods=["POST"])
+@require_admin
 async def stop_counters_route(req):
     """Stops the example counters via Bot API."""
     try:
@@ -940,6 +989,7 @@ async def stop_counters_route(req):
 
 
 @rt("/admin/manage/add", methods=["POST"])
+@require_admin
 async def add_admin_route(req, sess):
     form = await req.form()
     try:
@@ -955,6 +1005,7 @@ async def add_admin_route(req, sess):
 
 
 @rt("/admin/manage/remove", methods=["POST"])
+@require_admin
 async def remove_admin_route(req, sess):
     form = await req.form()
     try:
@@ -1095,6 +1146,7 @@ async def _render_admin_api_keys(sess):
 
 
 @rt("/admin/api-key/toggle", methods=["POST"])
+@require_admin
 async def toggle_api_key_route(req, sess):
     from sqlmodel import Session
 
@@ -1142,6 +1194,7 @@ async def toggle_api_key_route(req, sess):
 
 
 @rt("/admin/extensions/reload", methods=["POST"])
+@require_admin
 async def reload_extension_action(req):
     """Handles reloading a specific extension (Global)."""
     form_data = await req.form()
@@ -1159,6 +1212,7 @@ async def reload_extension_action(req):
 
 
 @rt("/admin/extensions/toggle", methods=["POST"])
+@require_admin
 async def toggle_gadget_route(req):
     """Handles toggling an extension on/off globally (guild_id=0)."""
     form_data = await req.form()
@@ -1228,6 +1282,7 @@ async def toggle_gadget_route(req):
 
 
 @rt("/admin/bot/restart", methods=["POST"])
+@require_admin
 async def restart_bot_action(req):
     """Sends a restart request to the bot's internal API."""
     try:
@@ -1244,6 +1299,7 @@ async def restart_bot_action(req):
 
 
 @rt("/admin/api/restart", methods=["POST"])
+@require_admin
 async def restart_api_action(req):
     """Sends a restart request to the backend API."""
     try:
@@ -1260,6 +1316,7 @@ async def restart_api_action(req):
 
 
 @rt("/admin/ui/restart", methods=["POST"])
+@require_admin
 async def restart_ui_action(req):
     """Restarts the UI process gracefully."""
     logging.info("UI: Received restart request. Exiting...")
@@ -1274,6 +1331,7 @@ async def restart_ui_action(req):
 
 
 @rt("/admin/system/restart", methods=["POST"])
+@require_admin
 async def restart_system_action(req):
     """Restarts Bot, API, and UI."""
     msgs = []
@@ -1308,6 +1366,7 @@ async def restart_system_action(req):
 
 
 @rt("/admin/extensions/{extension_name}/details", methods=["GET"])
+@require_admin
 async def extension_details_route(extension_name: str, req):
     """Returns a modal with the extension details (Global admin)."""
     from app.ui.helpers import get_extension_details_modal

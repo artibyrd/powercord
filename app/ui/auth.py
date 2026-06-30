@@ -1,7 +1,6 @@
 # mypy: ignore-errors
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import sys
@@ -246,9 +245,11 @@ async def get_bot_guild_ids(bot_token: str) -> set[str]:
 async def discord_callback(req, sess, code: str):
     """
     Callback URL that Discord redirects to after authentication.
-    Verifies that the user is an administrator in a guild shared with the bot.
+    Verifies that the user has dashboard access to at least one guild shared
+    with the bot — via Discord Administrator permission, a DashboardAccessRole,
+    or an ApiUserRole.
     """
-    ADMIN_PERM = 1 << 3  # Administrator permission bit.
+
     BOT_TOKEN = os.getenv("POWERCORD_DISCORD_TOKEN")
     CLIENT_ID = os.getenv("POWERCORD_DISCORD_CLIENT_ID")
     CLIENT_SECRET = os.getenv("POWERCORD_DISCORD_CLIENT_SECRET")
@@ -288,24 +289,20 @@ async def discord_callback(req, sess, code: str):
             user_response.raise_for_status()
             user_info = user_response.json()
 
-            # 3. Verify the user has admin permissions in a shared guild.
-            if BOT_TOKEN is None:  # pragma: no cover — already guarded above
-                add_toast(sess, "Application is misconfigured (missing bot token).", "error")
-                return RedirectResponse("/login", status_code=303)
-            user_guilds, bot_guild_ids = await asyncio.gather(
-                get_user_guilds(access_token), get_bot_guild_ids(BOT_TOKEN)
-            )
-            is_admin_on_shared_guild = any(
-                g["id"] in bot_guild_ids and (int(g["permissions"]) & ADMIN_PERM) for g in user_guilds
-            )
+            # 3. Verify the user has dashboard access on a shared guild.
+            #    Uses the same access-check logic that auth_before() uses
+            #    post-login. This accepts Discord Admins, DashboardAccessRole
+            #    holders, and ApiUserRole holders — not just Discord Admins.
+            from app.ui.helpers import get_admin_guilds, is_dashboard_admin
 
-            if is_admin_on_shared_guild:
+            user_id = int(user_info["id"])
+            admin_guilds = await get_admin_guilds(access_token, user_id)
+            has_dashboard_access = len(admin_guilds) > 0
+
+            if has_dashboard_access:
                 user_info["token_data"] = token_json
 
                 # Check Dashboard Admin status
-                from app.ui.helpers import is_dashboard_admin
-
-                user_id = int(user_info["id"])
                 user_info["is_dashboard_admin"] = is_dashboard_admin(user_id)
 
                 sess["auth"] = user_info
@@ -326,7 +323,7 @@ async def discord_callback(req, sess, code: str):
 
     add_toast(
         sess,
-        "Authorization failed. You must be an administrator on a server where the bot is present.",
+        "Authorization failed. You must have dashboard access on a server where the bot is present.",
         "error",
     )
     return RedirectResponse("/login", status_code=303)
