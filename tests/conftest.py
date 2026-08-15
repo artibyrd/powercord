@@ -98,7 +98,7 @@ def _create_test_db():
     ensure_test_database()
 
 
-@pytest.fixture(name="engine", scope="session")
+@pytest.fixture(name="engine", scope="session", autouse=True)
 def fixture_engine(_create_test_db):
     """Provide a SQLAlchemy engine pointed at the isolated test database.
 
