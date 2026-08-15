@@ -490,7 +490,9 @@ async def test_layout_update_column_span_non_integer(mock_check_admin):
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_column_span_extreme_values(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
+async def test_layout_update_column_span_extreme_values(
+    mock_render, mock_get_ordered, mock_update_setting, mock_check_admin
+):
     from app.ui.dashboard import layout_update
 
     # Value is extremely large integer
@@ -516,7 +518,9 @@ async def test_layout_update_column_span_extreme_values(mock_render, mock_get_or
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_position_config_arbitrary_values(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
+async def test_layout_update_position_config_arbitrary_values(
+    mock_render, mock_get_ordered, mock_update_setting, mock_check_admin
+):
     from app.ui.dashboard import layout_update
 
     # Check that any arbitrary string is accepted and sent to the database helper
@@ -569,7 +573,9 @@ def test_render_layout_editor_invalid_position_config():
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_move_fixed_or_floating_widget(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
+async def test_layout_move_fixed_or_floating_widget(
+    mock_render, mock_get_ordered, mock_update_setting, mock_check_admin
+):
     from app.ui.dashboard import layout_move
 
     # We mock _get_ordered_widgets to return a list of widgets, where index 0 is fixed
@@ -597,7 +603,9 @@ async def test_layout_move_fixed_or_floating_widget(mock_render, mock_get_ordere
 @patch("app.ui.dashboard.update_widget_setting")
 @patch("app.ui.dashboard._get_ordered_widgets")
 @patch("app.ui.dashboard._render_layout_editor")
-async def test_layout_update_sql_injection_attempt(mock_render, mock_get_ordered, mock_update_setting, mock_check_admin):
+async def test_layout_update_sql_injection_attempt(
+    mock_render, mock_get_ordered, mock_update_setting, mock_check_admin
+):
     from app.ui.dashboard import layout_update
 
     mock_req = MagicMock()
