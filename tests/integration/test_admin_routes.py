@@ -158,9 +158,10 @@ async def test_dashboard_extensions_section(
 
 
 @pytest.mark.asyncio
+@patch("app.ui.helpers.is_dashboard_admin", return_value=True)
 @patch("app.main_ui._render_admin_list")
 @patch("app.ui.helpers.remove_dashboard_admin")
-async def test_remove_admin_route(mock_remove, mock_render, mock_session):
+async def test_remove_admin_route(mock_remove, mock_render, mock_is_admin, mock_session):
     from app.main_ui import remove_admin_route
 
     class MockReq:
