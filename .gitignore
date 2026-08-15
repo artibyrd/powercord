@@ -48,7 +48,6 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# Agent Rules & Workflows
-.cursorrules
-.agent
-.agents/
+# Agent Rules & Runtime
+.agents_runtime/
+
