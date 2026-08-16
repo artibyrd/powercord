@@ -37,7 +37,6 @@ def get_prefix(bot, message):
 # enable extra intents for advanced functionality
 intents = nextcord.Intents.default()
 intents.members = True
-intents.presences = True
 intents.message_content = True
 
 

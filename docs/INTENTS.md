@@ -13,7 +13,7 @@ This document tracks and justifies the use of Discord privileged gateway intents
 | :--- | :---: | :---: | :---: | :--- |
 | **Guild Members** (`intents.members`) | **Required** (RBAC / Cache) | None | None | **Enabled** |
 | **Message Content** (`intents.message_content`) | None | **Required** (`midi_library`) | None | **Enabled** |
-| **Guild Presences** (`intents.presences`) | None | None | **Legacy/Planned** (Game Server Scale) | **Enabled** |
+| **Guild Presences** (`intents.presences`) | None | None | **Legacy/Planned** (Game Server Scale) | **Disabled** |
 
 ---
 
@@ -55,11 +55,11 @@ This document tracks and justifies the use of Discord privileged gateway intents
 ### A. Guild Presences Intent (`intents.presences`)
 
 *   **Primary Justification**: Dynamic Game Server Scaling & Active Play-Status Monitoring.
-*   **Status**: Currently declared but inactive in the active codebase.
+*   **Status**: Disabled.
 *   **Background / Intent**:
     This intent was originally designated for a legacy feature designed to dynamically provision game servers based on player demand:
     1.  **Presence Monitoring**: The bot monitored player statuses (`member.activities` and `member.status`) to check if users were playing a specific game (e.g., assigning a temporary "NOW PLAYING {GAME}" role).
     2.  **Dynamic Scaling**: If the count of active players playing a specific game on the server crossed threshold \(X\), the bot automatically triggered the startup of a private game server instance.
     3.  **Automatic Shutdown**: Once the game server was empty for duration \(Y\) (monitored by the bot), the bot automatically spun down the instance to conserve hosting resources.
-*   **Next Steps**:
-    This feature has not yet been ported to the new Powercord cogs architecture. If this dynamic server-scaling system is slated for reimplementation, the bot must retain `intents.presences = True`. If this roadmap is abandoned, the presence intent should be set to `False` to streamline the Discord application review.
+*   **Status & Operation**:
+    This feature is not used in the active Powercord architecture. The Presence intent is explicitly disabled (`False`) to allow the bot to operate securely and streamline Discord application verification.
