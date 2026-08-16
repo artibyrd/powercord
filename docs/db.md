@@ -42,6 +42,9 @@ just db-export <file> --migration      # INSERT-only dump (for pre-initialized t
 > [!TIP]
 > **Migrating between environments**: The `just dev` (Local) and `just run` (Containerized) environments use two completely different Postgres databases. If you wish to migrate your local data into the Docker container, run `just db-export my-local-db.sql` while the local environment is active, then terminate it. Start the containerized app with `just run`, let the blank database initialize, and run `just db-import my-local-db.sql` in a new terminal window to migrate your data!
 
+> [!IMPORTANT]
+> **Post-Import Schema Harmonization**: When importing an older database dump into an active environment, always execute `just db-upgrade` and verify with `poetry run alembic current` to ensure that any newly added columns or pending migrations are applied over the imported data.
+
 ### 4. Run Tests
 Execute the test suite (runs against the isolated `powercord_test` database).
 ```bash
@@ -66,9 +69,18 @@ See [TESTING.md](TESTING.md) for full testing documentation.
 
 ## Core Tables
 
-Powercord comes with built-in tables for managing its own state:
-- **GuildExtensionSettings**: Tracks which gadgets (cogs, sprockets, widgets) are enabled for each guild.
-- **WidgetSettings**: Stores configuration layout (order, column span, enabled state) for widgets on the public page.
+Powercord comes with built-in SQLModel tables for framework state, security, and administration:
+- **`GuildExtensionSettings`**: Tracks which extension gadgets (cogs, sprockets, widgets) are enabled per guild.
+- **`WidgetSettings`**: Stores widget layout configurations, column spans (1–12), grid coordinates (`grid_x`, `grid_y`), and optional JSON `position_config`.
+- **`AdminUser`**: Stores global administrator Discord IDs auto-provisioned or managed via `just add-admin`.
+- **`DiscordRole`**: Caches Discord role IDs, guild IDs, names, positions, and permission bitmasks.
+- **`DiscordChannel`**: Caches Discord channel IDs, guild IDs, parent category IDs, names, types, positions, and permission overwrites.
+- **`SiteSetting`**: Stores global key-value configuration flags.
+- **`UserSetting`**: Stores user-level web dashboard layout preferences (e.g., `show_topbar`).
+- **`DiscordAuditorConfig`**: Stores guild security auditor settings (`staff_separator_role_id`, `staff_channel_ids`, `announcement_channel_ids`).
+- **`SecurityAlertOverride`**: Stores administrator-acknowledged security rule exceptions and comments.
+- **`ApiKey`**: Stores SHA-256 hashed API tokens (`key_hash`), scopes, key types (`global`, `internal`, `user`), and guild associations.
+- **`ApiAccessRole` & `ApiUserRole`**: Maps Discord roles to extension API access permissions and user levels.
 
 ## Trigram Search (`pg_trgm`)
 

@@ -38,6 +38,8 @@ by the test configuration.
    SQLModel tables at the start of each test session. This prevents stale data
    from prior runs from bleeding into assertions.
 
+4. **Zero-Config Subset Execution**: The `fixture_engine` in `tests/conftest.py` is configured with `autouse=True`. This guarantees that `powercord_test` and all SQLModel schema tables are provisioned even when executing targeted test subsets (e.g. `just verify-dashboard`, single test files, or individual test functions) without requiring explicit fixture dependencies.
+
 > [!IMPORTANT]
 > The PostgreSQL Docker container **must be running** before tests execute.
 > The `just test` recipe handles this automatically via the `_ensure-db`

@@ -103,8 +103,8 @@ The production environment is configured to automatically and securely manage yo
 ### Automated Daily Backups
 The core Powercord application runs a scheduled background task that automatically creates a compressed database backup (`.sql.gz` file) every 24 hours at **03:00 UTC**.
 - **Location:** Backups are stored in the persistent volume mapped to `/var/lib/postgresql/data/backups`.
-- **Retention:** The system automatically prunes backups older than 7 days to conserve disk space.
-- **Cloud Sync:** The host Google Compute Engine VM runs a daily `systemd` timer at **04:00 UTC** (configured via Terraform) that syncs these local backups to your `powercord-db-backups-<your-project-id>` Cloud Storage bucket. The one-hour offset ensures the backup file is fully written before the sync runs.
+- **Local Volume Retention:** The application automatically prunes backups older than 7 days from the local volume.
+- **Cloud Sync & GCS Retention:** The host Google Compute Engine VM runs a daily `systemd` timer at **04:00 UTC** (configured via Terraform) that syncs these local backups to your `powercord-db-backups-<your-project-id>` Cloud Storage bucket. An off-site GCS bucket lifecycle rule automatically retains a rolling **21-day** archive window.
 
 > [!NOTE]
 > For complete backup behavior across all deployment environments (including non-GCP and local development), see the [Automated Backups](db.md#automated-backups) section in the Database Documentation.
@@ -137,7 +137,8 @@ docker cp your_dump_file.sql <CONTAINER_ID>:/app/your_dump_file.sql
 #### 4. Execute the Restore Command
 Run the database import script directly inside the Docker container:
 ```bash
-docker exec -it <CONTAINER_ID> python app/db/db_tools.py import /app/your_dump_file.sql
+docker exec -it <CONTAINER_ID> /app/.venv/bin/python app/db/db_tools.py import /app/your_dump_file.sql
+docker exec -it <CONTAINER_ID> /app/.venv/bin/alembic upgrade heads
 ```
 
 *(Note: Once the process completes, you can safely delete `your_dump_file.sql` from both the container and the VM to free up disk space).*
@@ -165,9 +166,10 @@ docker ps
 **3. Execute your Python module/script:**
 Run the script using the full path to the container's virtual environment python executable.
 
-**Example: Adding an API Key Manually**
+**Example: Generating an API Key**
 ```bash
-docker exec <CONTAINER_ID> /app/.venv/bin/python app/db/manage_api_keys.py add "Example Legacy Key" --scopes '["midi_library"]' --key "your-hardcoded-key-here"
+# Generates a new SHA-256 hashed API token and prints the raw secret key once:
+docker exec <CONTAINER_ID> /app/.venv/bin/python app/db/manage_api_keys.py add "Client App Key" --scopes '["core.user", "global.midi_library.user"]'
 ```
 
 **Example: Running a Module (e.g., MIDI Rescore)**
