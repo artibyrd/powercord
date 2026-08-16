@@ -81,6 +81,20 @@ def set_bot_instance(bot):
     bot_instance = bot
 
 
+def get_bot_api_base_url() -> str:
+    """Returns the base URL for the Bot Internal API based on environment variables."""
+    host = os.getenv("POWERCORD_BOT_API_HOST", "127.0.0.1")
+    port = int(os.getenv("POWERCORD_BOT_API_PORT", "8001"))
+    return f"http://{host}:{port}"
+
+
+def get_bot_api_url(path: str) -> str:
+    """Returns a full URL for the given Bot Internal API endpoint path."""
+    base = get_bot_api_base_url().rstrip("/")
+    clean_path = path.lstrip("/")
+    return f"{base}/{clean_path}"
+
+
 @api_router.get("/stats")
 async def get_stats():
     """Returns system and bot statistics."""
@@ -92,9 +106,35 @@ async def get_stats():
     memory = psutil.virtual_memory()
 
     # Bot Stats
-    guild_count = len(bot_instance.guilds)
-    user_count = sum(guild.member_count for guild in bot_instance.guilds)
-    latency = round(bot_instance.latency * 1000) if bot_instance.latency else 0
+    is_ready = True
+    if hasattr(bot_instance, "is_ready"):
+        try:
+            is_ready = bool(bot_instance.is_ready())
+        except Exception:
+            is_ready = True
+
+    is_closed = False
+    if hasattr(bot_instance, "is_closed"):
+        try:
+            is_closed = bool(bot_instance.is_closed())
+        except Exception:
+            is_closed = False
+
+    guild_count = len(bot_instance.guilds) if is_ready and hasattr(bot_instance, "guilds") else 0
+    user_count = (
+        sum(getattr(guild, "member_count", 0) for guild in bot_instance.guilds)
+        if is_ready and hasattr(bot_instance, "guilds")
+        else 0
+    )
+    raw_latency = getattr(bot_instance, "latency", None)
+    latency = round(raw_latency * 1000) if (raw_latency is not None and is_ready) else None
+
+    if is_closed:
+        bot_status = "closed"
+    elif is_ready:
+        bot_status = "connected"
+    else:
+        bot_status = "connecting"
 
     return {
         "system": {
@@ -104,6 +144,8 @@ async def get_stats():
             "memory_total_gb": round(memory.total / (1024**3), 2),
         },
         "bot": {
+            "status": bot_status,
+            "is_ready": is_ready,
             "guilds": guild_count,
             "users": user_count,
             "latency": latency,
@@ -366,12 +408,13 @@ api.include_router(api_router)
 
 
 async def start_bot_api(bot):
-    """Starts the internal FastAPI server."""
+    """Starts the internal FastAPI server with retry and error handling."""
+    import asyncio
+
     set_bot_instance(bot)
 
-    port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
-    # Force localhost to avoid Windows firewall issues and listen on the loopback interface
-    host = "127.0.0.1"
+    host = os.getenv("POWERCORD_BOT_API_HOST", "127.0.0.1")
+    port = int(os.getenv("POWERCORD_BOT_API_PORT", "8001"))
 
     # We use loop="none" because we are already running inside the Nextcord event loop
     config = Config(app=api, host=host, port=port, log_level="warning", access_log=False, loop="none")
@@ -379,7 +422,19 @@ async def start_bot_api(bot):
     bot.bot_api_server = server
 
     logging.info(f"Starting Bot Internal API on {host}:{port}")
-    try:
-        await server.serve()
-    except Exception as e:
-        logging.error(f"Failed to start Bot Internal API: {e}", exc_info=True)
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            await server.serve()
+            break
+        except OSError as e:
+            if getattr(e, "errno", None) == 98 or "address already in use" in str(e).lower():
+                logging.warning(f"Port {port} in use on attempt {attempt}/{max_retries}. Waiting to retry...")
+                if attempt < max_retries:
+                    await asyncio.sleep(1.0)
+                    continue
+            logging.error(f"Failed to start Bot Internal API: {e}", exc_info=True)
+            break
+        except Exception as e:
+            logging.error(f"Failed to start Bot Internal API: {e}", exc_info=True)
+            break

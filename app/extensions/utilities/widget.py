@@ -2556,6 +2556,33 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
         "</svg>"
     )
 
+    dismiss_script = Script(
+        NotStr(f"""
+(function() {{
+    function initHelpBubble() {{
+        const card = document.getElementById('help-bubble-card-{guild_id}');
+        const container = document.getElementById('guild-admin-utilities-help-bubble-{guild_id}');
+        if (!card || !container) return;
+        document.addEventListener('click', function(e) {{
+            if (!container.contains(e.target) && !card.classList.contains('hidden')) {{
+                card.classList.add('hidden');
+            }}
+        }});
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape' && !card.classList.contains('hidden')) {{
+                card.classList.add('hidden');
+            }}
+        }});
+    }}
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', initHelpBubble);
+    }} else {{
+        initHelpBubble();
+    }}
+}})();
+""")
+    )
+
     card_content = Div(
         # Header with close button
         Div(
@@ -2584,12 +2611,12 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
             Div(
                 Span("Status: ", cls="text-xs font-semibold mr-1"),
                 Span(
-                    "🔴 Disconnected",
+                    "Connecting...",
                     id=f"bot-latency-display-{guild_id}",
                     hx_get=f"/dashboard/{guild_id}/ping-bot",
                     hx_trigger="load",
                     hx_swap="outerHTML",
-                    cls="badge badge-error badge-sm text-error-content",
+                    cls="badge badge-warning badge-sm text-warning-content",
                 ),
                 cls="mb-3 flex items-center",
             ),
@@ -2602,7 +2629,7 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
             ),
         ),
         id=f"help-bubble-card-{guild_id}",
-        cls="hidden absolute bottom-16 right-0 w-80 bg-neutral/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl p-4 z-50 text-left",
+        cls="hidden absolute bottom-16 right-0 w-80 max-h-[80vh] overflow-y-auto bg-neutral/95 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl p-4 z-50 text-left",
     )
 
     toggle_btn = Button(
@@ -2612,7 +2639,9 @@ def _render_utilities_help_bubble(guild_id: int, session: Optional[Session] = No
         style="border-radius: 50% !important; background-color: hsl(var(--n) / 0.8) !important; backdrop-filter: blur(8px) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important;",
     )
 
-    return Div(card_content, toggle_btn, id=f"guild-admin-utilities-help-bubble-{guild_id}", cls="relative")
+    return Div(
+        card_content, toggle_btn, dismiss_script, id=f"guild-admin-utilities-help-bubble-{guild_id}", cls="relative"
+    )
 
 
 def guild_admin_utilities_help_bubble(guild_id: int, session: Optional[Session] = None) -> FT:

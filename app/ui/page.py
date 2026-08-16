@@ -246,7 +246,12 @@ def DashboardPage(
         else:
             left_fixed.append(comp)
 
-    floating_containers = []
+    floating_groups: dict[str, list] = {
+        "bottom-right": [],
+        "bottom-left": [],
+        "top-right": [],
+        "top-left": [],
+    }
     for w in floating_widgets or []:
         if w is None:
             continue
@@ -258,20 +263,43 @@ def DashboardPage(
             pos = getattr(w, "position_config", None)
         if not comp:
             continue
+        if pos not in floating_groups:
+            pos = "bottom-right"
+        floating_groups[pos].append(comp)
 
-        style = ""
-        if pos == "bottom-right":
-            style = "position: fixed; z-index: 50; bottom: 20px; right: 20px;"
-        elif pos == "bottom-left":
-            style = "position: fixed; z-index: 50; bottom: 20px; left: 20px;"
-        elif pos == "top-right":
-            style = "position: fixed; z-index: 50; top: 100px; right: 20px;"
-        elif pos == "top-left":
-            style = "position: fixed; z-index: 50; top: 100px; left: 20px;"
-        else:
-            style = "position: fixed; z-index: 50; bottom: 20px; right: 20px;"
-
-        floating_containers.append(Div(comp, style=style))
+    floating_containers = []
+    if floating_groups["bottom-right"]:
+        floating_containers.append(
+            Div(
+                *floating_groups["bottom-right"],
+                style="position: fixed; z-index: 50; bottom: 20px; right: 20px;",
+                cls="flex flex-col gap-3 items-end pointer-events-none [&>*]:pointer-events-auto",
+            )
+        )
+    if floating_groups["bottom-left"]:
+        floating_containers.append(
+            Div(
+                *floating_groups["bottom-left"],
+                style="position: fixed; z-index: 50; bottom: 20px; left: 20px;",
+                cls="flex flex-col gap-3 items-start pointer-events-none [&>*]:pointer-events-auto",
+            )
+        )
+    if floating_groups["top-right"]:
+        floating_containers.append(
+            Div(
+                *floating_groups["top-right"],
+                style="position: fixed; z-index: 50; top: 100px; right: 20px;",
+                cls="flex flex-col gap-3 items-end pointer-events-none [&>*]:pointer-events-auto",
+            )
+        )
+    if floating_groups["top-left"]:
+        floating_containers.append(
+            Div(
+                *floating_groups["top-left"],
+                style="position: fixed; z-index: 50; top: 100px; left: 20px;",
+                cls="flex flex-col gap-3 items-start pointer-events-none [&>*]:pointer-events-auto",
+            )
+        )
 
     content_style = "min-width: 0; "
     if left_fixed:
@@ -318,12 +346,37 @@ def DashboardPage(
         TopAppBar(auth=auth, guild_id=guild_id, guild_name=guild_name, guild_icon=guild_icon) if show_topbar else None
     )
 
+    hash_scroll_script = Script(
+        NotStr("""
+(function() {
+    function scrollToHash() {
+        const hash = window.location.hash;
+        if (!hash || hash === '#') return;
+        try {
+            const target = document.querySelector(hash);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                target.classList.add('ring-2', 'ring-primary', 'transition-all', 'duration-500');
+                setTimeout(() => {
+                    target.classList.remove('ring-2', 'ring-primary');
+                }, 2000);
+            }
+        } catch (e) {}
+    }
+    window.addEventListener('load', () => setTimeout(scrollToHash, 200));
+    window.addEventListener('hashchange', scrollToHash);
+    document.addEventListener('htmx:afterSettle', scrollToHash);
+})();
+""")
+    )
+
     # Construct complete layout elements
     layout_elements = []
     if topbar_el:
         layout_elements.append(topbar_el)
     layout_elements.append(main_layout)
     layout_elements.append(Div(id="modal-container"))
+    layout_elements.append(hash_scroll_script)
     layout_elements.append(PageFooter())
 
     return Title(title), Div(*layout_elements, cls="min-h-screen bg-base-100")

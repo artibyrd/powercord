@@ -109,8 +109,10 @@ async def get_current_api_user(
                                 user_scopes.add(f"{x_guild_id}.{ext}.admin")
                                 user_scopes.add(f"{x_guild_id}.{ext}.user")
 
+            from app.bot.internal_server import get_bot_api_url
+
             roles_resp = await client.get(
-                f"http://127.0.0.1:8001/user/{user_id}/guilds/{x_guild_id}/roles",
+                get_bot_api_url(f"/user/{user_id}/guilds/{x_guild_id}/roles"),
                 headers={"Authorization": f"Bearer {internal_key}"},
                 timeout=5.0,
             )

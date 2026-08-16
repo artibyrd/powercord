@@ -13,6 +13,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 
+from app.bot.internal_server import get_bot_api_url
 from app.common.extension_hooks import run_hook, supports_delete_data
 from app.common.extension_loader import GadgetInspector
 from app.common.extension_manager import get_installed_extensions
@@ -35,6 +36,13 @@ from app.ui.helpers import (
 from app.ui.page import DashboardPage
 
 
+def format_extension_title(extension_name: str) -> str:
+    """Format an extension identifier into a clean, human-readable title."""
+    if extension_name.lower() in ("midi_library", "midilibrary"):
+        return "MIDI Library"
+    return extension_name.replace("_", " ").title()
+
+
 async def _check_guild_admin(guild_id: int, req) -> bool:
     session = getattr(req, "session", None)
     if session is None or not isinstance(session, dict):
@@ -45,15 +53,18 @@ async def _check_guild_admin(guild_id: int, req) -> bool:
     user_access_token = (
         auth.get("token_data", {}).get("access_token") if isinstance(auth.get("token_data"), dict) else None
     )
-    user_id = auth.get("id")
-    if not user_access_token or not user_id:
+    if not user_access_token:
+        return False
+    user_id_str = auth.get("id")
+    if not user_id_str:
         return False
     try:
+        user_id = int(user_id_str)
         from app.ui.helpers import is_dashboard_admin
 
-        if is_dashboard_admin(int(user_id)):
+        if is_dashboard_admin(user_id):
             return True
-        admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+        admin_guilds = await get_admin_guilds(user_access_token, user_id)
         guild = admin_guilds.get(str(guild_id), {})
         return guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
     except Exception:
@@ -70,9 +81,10 @@ def server_extension_card(
     disabled: bool = False,
 ) -> FT:
     """Renders a card for a single extension with toggles for its components, for a specific server."""
+    display_title = format_extension_title(extension_name)
 
     details_link = A(
-        extension_name.capitalize(),
+        display_title,
         cls="flex-grow font-bold text-lg cursor-pointer hover:underline text-base-content",
         hx_get=f"/dashboard/{guild_id}/extensions/{extension_name}/details",
         hx_target="#modal-container",
@@ -133,18 +145,20 @@ def server_extension_card(
         delete_btn = Button(
             I(cls="fa-solid fa-trash-can mr-1"),
             "Delete Data",
-            cls="btn btn-error btn-xs mt-2",
+            cls="btn btn-error btn-xs",
             hx_get=f"/dashboard/{guild_id}/extensions/{extension_name}/confirm-delete",
             hx_target="#modal-container",
             hx_swap="innerHTML",
         )
 
     title_comp = Div(details_link, toggle_form, cls="flex items-center w-full justify-between")
+    bottom_action = Div(delete_btn, cls="flex justify-end mt-4") if delete_btn else Div(cls="mt-4 min-h-[24px]")
 
     return Card(
         title_comp,
-        Div(delete_btn, cls="flex justify-end") if delete_btn else "",
+        bottom_action,
         id=f"server-extension-{extension_name}-{guild_id}",
+        cls="min-h-[110px] flex flex-col justify-between",
     )
 
 
@@ -179,7 +193,7 @@ async def confirm_delete_data_route(guild_id: int, extension_name: str, req):
             ),
             P(
                 "This will permanently delete all ",
-                Strong(extension_name.capitalize()),
+                Strong(format_extension_title(extension_name)),
                 " data for this server. This action cannot be undone.",
                 cls="py-4",
             ),
@@ -235,7 +249,7 @@ async def delete_server_data_route(guild_id: int, extension_name: str, req):
     close_modal = Dialog(id="modal-container", hx_swap_oob="true")
     toast = Div(
         Div(
-            Span(f"✅ {extension_name.capitalize()} data deleted for this server."),
+            Span(f"✅ {format_extension_title(extension_name)} data deleted for this server."),
             cls="alert alert-success",
         ),
         id="toast-container",
@@ -460,7 +474,7 @@ async def dashboard(guild_id: int, sess):
         if api_user_role:
             user_roles = set()
             async with get_internal_api_client() as client:
-                resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{guild_id}/roles", timeout=2.0)
+                resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{guild_id}/roles"), timeout=2.0)
                 if resp.status_code == 200:
                     user_role_ids = resp.json().get("roles", [])
                     user_roles = {int(r) for r in user_role_ids}
@@ -1052,16 +1066,45 @@ async def layout_restore(req):
     return _render_layout_editor(widgets, scope_id)
 
 
-async def _render_access_roles(guild_id: int):
-    # Fetch roles from bot API
+async def _get_guild_roles(guild_id: int) -> tuple[list[dict], bool]:
+    """Fetch roles for a guild.
+
+    First queries the Bot Internal API. If unavailable or empty, falls back
+    to cached DiscordRole records in the database.
+    Returns (roles_list, is_live_from_bot).
+    """
     guild_roles = []
+    is_live = False
     try:
         async with get_internal_api_client() as client:
-            resp = await client.get(f"http://127.0.0.1:8001/guilds/{guild_id}/roles", timeout=2.0)
+            resp = await client.get(get_bot_api_url(f"/guilds/{guild_id}/roles"), timeout=2.0)
             if resp.status_code == 200:
-                guild_roles = resp.json().get("roles", [])
+                fetched = resp.json().get("roles", [])
+                if fetched:
+                    guild_roles = fetched
+                    is_live = True
     except Exception as e:
-        logging.error(f"Failed to fetch guild roles: {e}")
+        logging.debug(f"Failed to fetch live guild roles for {guild_id}: {e}")
+
+    if not guild_roles:
+        from sqlmodel import Session, select
+
+        from app.common.alchemy import init_connection_engine
+        from app.db.models import DiscordRole
+
+        engine = init_connection_engine()
+        with Session(engine) as session:
+            db_roles = session.exec(
+                select(DiscordRole).where(DiscordRole.guild_id == guild_id).order_by(DiscordRole.position.desc())
+            ).all()
+            if db_roles:
+                guild_roles = [{"id": str(r.id), "name": r.name} for r in db_roles if not r.is_managed]
+
+    return guild_roles, is_live
+
+
+async def _render_access_roles(guild_id: int):
+    guild_roles, is_live = await _get_guild_roles(guild_id)
 
     from sqlmodel import Session, select
 
@@ -1076,7 +1119,7 @@ async def _render_access_roles(guild_id: int):
 
     active_role_badges = []
     for r in saved_roles:
-        role_name = str(r.role_id)
+        role_name = f"Role {r.role_id}"
         role_info = next((gr for gr in guild_roles if gr["id"] == str(r.role_id)), None)
         if role_info:
             role_name = role_info["name"]
@@ -1099,30 +1142,59 @@ async def _render_access_roles(guild_id: int):
         active_role_badges.append(badge)
 
     available_roles = [r for r in guild_roles if r["id"] not in saved_role_ids]
-    add_role_form = Form(
-        Select(
+
+    if available_roles:
+        role_input = Select(
             Option("Select a role...", value="", disabled=True, selected=True),
             *[Option(r["name"], value=r["id"]) for r in available_roles],
             name="role_id",
             cls="select select-bordered select-sm w-full max-w-xs mr-2",
+        )
+        status_msg = ""
+    elif guild_roles and not available_roles:
+        role_input = Input(
+            type="text",
+            name="role_id_manual",
+            placeholder="Enter Role Snowflake ID...",
+            cls="input input-bordered input-sm w-64 mr-2",
+        )
+        status_msg = P("All available roles have been granted access.", cls="text-sm text-success mt-2")
+    else:
+        role_input = Input(
+            type="text",
+            name="role_id_manual",
+            placeholder="Enter Role Snowflake ID...",
+            cls="input input-bordered input-sm w-64 mr-2",
+        )
+        status_msg = P(
+            "⚠️ No server roles found in cache. Ensure the bot is connected to synchronize server roles.",
+            cls="text-sm text-warning mt-2",
+        )
+
+    cache_notice = (
+        Span(" (Loaded from DB cache)", cls="text-xs italic opacity-70") if (not is_live and guild_roles) else ""
+    )
+
+    add_role_form = Form(
+        Div(
+            role_input,
+            Button("Grant Access", cls="btn btn-primary btn-sm"),
+            cls="flex items-center flex-wrap gap-2 mt-4",
         ),
-        Button("Grant Access", cls="btn btn-primary btn-sm"),
+        status_msg,
         hx_post=f"/dashboard/{guild_id}/access-roles/add",
         hx_target="#access-roles-container",
         hx_swap="outerHTML",
-        cls="mt-4 flex items-center",
         id="add-role-form",
     )
 
     return Div(
-        H3("Dashboard Access Roles", cls="text-xl font-bold mb-2"),
+        H3("Dashboard Access Roles", cache_notice, cls="text-xl font-bold mb-2"),
         P("Users with these roles can access this server's dashboard.", cls="text-sm opacity-80 mb-4"),
         Div(*active_role_badges, cls="flex gap-2 flex-wrap mb-4")
         if active_role_badges
         else P("No additional roles granted.", cls="text-sm italic opacity-60"),
-        add_role_form
-        if available_roles
-        else P("All available roles have been granted access.", cls="text-sm text-success mt-4"),
+        add_role_form,
         id="access-roles-container",
         cls="p-4 bg-base-200 rounded-lg shadow-inner mb-8",
     )
@@ -1141,10 +1213,10 @@ async def add_access_role(guild_id: int, req, sess):
     # Authorization is handled in auth_before middleware.
 
     form = await req.form()
-    role_id_str = form.get("role_id")
-    if role_id_str:
+    role_id_str = form.get("role_id") or form.get("role_id_manual")
+    if role_id_str and str(role_id_str).strip():
         try:
-            role_id = int(role_id_str)
+            role_id = int(str(role_id_str).strip())
             from sqlmodel import Session
 
             from app.common.alchemy import init_connection_engine
@@ -1454,12 +1526,10 @@ async def post_alert_override_remove(guild_id: int, req):
 
 @dashboard_router("/dashboard/{guild_id:int}/scan", methods=["POST"])
 async def dashboard_scan_guild(guild_id: int):
-    import os
-
-    bot_port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
+    url = get_bot_api_url(f"/guilds/{guild_id}/scan")
     try:
         async with get_internal_api_client() as client:
-            resp = await client.post(f"http://127.0.0.1:{bot_port}/guilds/{guild_id}/scan")
+            resp = await client.post(url)
             if resp.status_code != 200:
                 logging.error(f"Failed to scan guild {guild_id}: Bot returned status {resp.status_code}")
     except Exception as e:
@@ -1474,27 +1544,34 @@ async def dashboard_scan_guild(guild_id: int):
 
 @dashboard_router("/dashboard/{guild_id:int}/ping-bot", methods=["GET"])
 async def dashboard_ping_bot(guild_id: int):
-    import os
-
-    bot_port = int(os.getenv("POWERCORD_BOT_API_PORT", 8001))
-    latency = None
+    url = get_bot_api_url("/stats")
+    status_text = "🔴 Disconnected"
+    cls_color = "badge-error text-error-content"
     try:
         async with get_internal_api_client() as client:
-            resp = await client.get(f"http://127.0.0.1:{bot_port}/stats", timeout=1.5)
+            resp = await client.get(url, timeout=2.0)
             if resp.status_code == 200:
                 stats = resp.json()
-                latency = stats.get("bot", {}).get("latency")
+                if isinstance(stats, dict) and "bot" in stats:
+                    bot_info = stats.get("bot", {})
+                    status_val = bot_info.get("status")
+                    latency = bot_info.get("latency")
+                    if status_val == "connected" and latency is not None:
+                        status_text = f"🟢 Connected ({latency}ms)"
+                        cls_color = "badge-success text-success-content"
+                    elif status_val == "connecting":
+                        status_text = "🟡 Connecting..."
+                        cls_color = "badge-warning text-warning-content"
+                    elif latency is not None:
+                        status_text = f"🟢 Connected ({latency}ms)"
+                        cls_color = "badge-success text-success-content"
+                    elif status_val == "connected" or bot_info.get("is_ready"):
+                        status_text = "🟢 Connected (Ready)"
+                        cls_color = "badge-success text-success-content"
     except Exception as e:
-        logging.error(f"Failed to ping bot stats: {e}")
+        logging.debug(f"Failed to ping bot stats: {e}")
 
-    if latency is not None:
-        text = f"🟢 Connected ({latency}ms)"
-        cls_color = "badge-success text-success-content"
-    else:
-        text = "🔴 Disconnected"
-        cls_color = "badge-error text-error-content"
-
-    return Span(text, id=f"bot-latency-display-{guild_id}", cls=f"badge {cls_color} badge-sm")
+    return Span(status_text, id=f"bot-latency-display-{guild_id}", cls=f"badge {cls_color} badge-sm")
 
 
 async def _render_self_service_keys(guild_id: int, user_id: int, sess):
@@ -1680,7 +1757,7 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
     user_roles = set()
     try:
         async with get_internal_api_client() as client:
-            resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{guild_id}/roles", timeout=2.0)
+            resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{guild_id}/roles"), timeout=2.0)
             if resp.status_code == 200:
                 user_roles = {int(r) for r in resp.json().get("roles", [])}
     except Exception as e:
@@ -1809,7 +1886,7 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
     user_roles = set()
     try:
         async with get_internal_api_client() as client:
-            resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{guild_id}/roles", timeout=2.0)
+            resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{guild_id}/roles"), timeout=2.0)
             if resp.status_code == 200:
                 user_roles = {int(r) for r in resp.json().get("roles", [])}
     except Exception as e:
@@ -1864,15 +1941,7 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
 
 
 async def _render_api_user_role(guild_id: int):
-    # Fetch roles from bot API
-    guild_roles = []
-    try:
-        async with get_internal_api_client() as client:
-            resp = await client.get(f"http://127.0.0.1:8001/guilds/{guild_id}/roles", timeout=2.0)
-            if resp.status_code == 200:
-                guild_roles = resp.json().get("roles", [])
-    except Exception as e:
-        logging.error(f"Failed to fetch guild roles: {e}")
+    guild_roles, is_live = await _get_guild_roles(guild_id)
 
     from sqlmodel import Session, select
 
@@ -1886,7 +1955,7 @@ async def _render_api_user_role(guild_id: int):
 
     role_badge = None
     if api_user_role:
-        role_name = str(api_user_role.role_id)
+        role_name = f"Role {api_user_role.role_id}"
         role_info = next((gr for gr in guild_roles if gr["id"] == str(api_user_role.role_id)), None)
         if role_info:
             role_name = role_info["name"]
@@ -1906,27 +1975,43 @@ async def _render_api_user_role(guild_id: int):
             cls="badge badge-secondary gap-1 py-3 px-3",
         )
 
-    # If no role is selected, show dropdown to set it
+    # If no role is selected, show dropdown or manual input to set it
     if not role_badge:
-        set_role_form = Form(
-            Select(
+        if guild_roles:
+            role_selector = Select(
                 Option("Select a role...", value="", disabled=True, selected=True),
                 *[Option(r["name"], value=r["id"]) for r in guild_roles],
                 name="role_id",
                 cls="select select-bordered select-sm w-full max-w-xs mr-2",
+            )
+        else:
+            role_selector = Input(
+                type="text",
+                name="role_id",
+                placeholder="Enter Role Snowflake ID...",
+                cls="input input-bordered input-sm w-64 mr-2",
+            )
+
+        set_role_form = Form(
+            Div(
+                role_selector,
+                Button("Set API User Role", cls="btn btn-secondary btn-sm"),
+                cls="flex items-center flex-wrap gap-2 mt-4",
             ),
-            Button("Set API User Role", cls="btn btn-secondary btn-sm"),
             hx_post=f"/dashboard/{guild_id}/api-role/set",
             hx_target="#api-role-container",
             hx_swap="outerHTML",
-            cls="mt-4 flex items-center",
             id="set-api-role-form",
         )
     else:
         set_role_form = ""
 
+    cache_notice = (
+        Span(" (Loaded from DB cache)", cls="text-xs italic opacity-70") if (not is_live and guild_roles) else ""
+    )
+
     return Div(
-        H3("API User Role", cls="text-xl font-bold mb-2"),
+        H3("API User Role", cache_notice, cls="text-xl font-bold mb-2"),
         P("Users with this role are permitted to generate self-service API keys.", cls="text-sm opacity-80 mb-4"),
         role_badge if role_badge else P("No API User Role configured.", cls="text-sm italic opacity-60"),
         set_role_form,

@@ -18,6 +18,7 @@ from typing import Any, Callable, cast
 
 from sqlmodel import Session, select
 
+from app.bot.internal_server import get_bot_api_url
 from app.common.alchemy import init_connection_engine
 from app.common.extension_loader import GadgetInspector
 from app.db.db_tools import get_or_create_internal_key
@@ -495,7 +496,7 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
             # Check Bot API for user roles in this guild
             try:
                 async with get_internal_api_client() as client:
-                    resp = await client.get(f"http://127.0.0.1:8001/user/{user_id}/guilds/{gid}/roles", timeout=2.0)
+                    resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{gid}/roles"), timeout=2.0)
                     if resp.status_code == 200:
                         user_role_ids = {str(r) for r in resp.json().get("roles", [])}
                         if allowed_roles_by_guild[gid].intersection(user_role_ids):
@@ -534,7 +535,7 @@ async def notify_api_of_config_change(guild_id: int):
 
 async def notify_bot_of_config_change(guild_id: int):
     """Sends a notification to the bot to reload its configuration for a specific guild."""
-    bot_reload_url = os.getenv("POWERCORD_BOT_RELOAD_URL", "http://127.0.0.1:8001/config/reload")
+    bot_reload_url = os.getenv("POWERCORD_BOT_RELOAD_URL", get_bot_api_url("/config/reload"))
 
     if not bot_reload_url:
         logging.warning("Bot reload URL or key not configured. Skipping notification.")

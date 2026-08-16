@@ -222,7 +222,7 @@ class Bot(commands.Bot):
             self._add_persistent_overrides("view")
             self.persistent_views_added = True
 
-        if not getattr(self, "bot_api_task", None):
+        if not getattr(self, "bot_api_task", None) or self.bot_api_task.done():
             from app.bot.internal_server import start_bot_api
 
             logging.info("Starting Bot Internal API...")
