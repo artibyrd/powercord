@@ -1,6 +1,9 @@
 # Discord Privileged Intents Tracking & Verification
 
-This document tracks and justifies the use of Discord privileged gateway intents across the Powercord ecosystem. Since the bot is deployed in large servers exceeding the **10,000 user threshold**, these details are critical for the Discord Developer Portal application review process.
+This document tracks and justifies the use of Discord privileged gateway intents across the Powercord ecosystem. Since the bot is deployed across large community servers collectively exceeding the **10,000 user threshold**, these details are critical for the Discord Developer Portal application review process.
+
+*   **Privacy Policy**: [`PRIVACY.md`](file:///home/pendragon/Projects/powercord-ecosystem/powercord/PRIVACY.md) | [GitHub Link](https://github.com/artibyrd/powercord/blob/main/PRIVACY.md)
+*   **Public Repository**: [https://github.com/artibyrd/powercord](https://github.com/artibyrd/powercord)
 
 ---
 
