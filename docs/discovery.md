@@ -4,13 +4,15 @@
 Powercord uses a pattern of "active discovery" to find and load extension components. Instead of manual registration for every file, the `GadgetInspector` (in `app/common/extension_loader.py`) scans the extensions directory and uses static analysis and dynamic imports to build the application state.
 
 ## Gadget Types
-The framework recognizes three primary "gadgets":
+The framework recognizes five primary "gadgets":
 - **Cogs**: Discord bot command modules (`cog.py`).
 - **Sprockets**: FastAPI router modules (`sprocket.py`) with automatic scope-based security.
 - **Widgets**: FastHTML UI component modules (`widget.py`).
+- **Routes**: Full-page FastHTML route modules (`routes.py`).
+- **Scheduled Actions**: Periodic cron/interval task modules (`actions.py`).
 
-## Static Analysis (AST Parsing)
-To avoid side effects during discovery, the `GadgetInspector` uses the `ast` module to inspect source code before importing it.
+## Static Analysis & Inspection
+To avoid side effects during discovery, the `GadgetInspector` uses the `ast` module and inspection routines to inspect source code before importing it.
 
 ### Discovery Logic:
 1.  **Cogs**:
@@ -22,12 +24,17 @@ To avoid side effects during discovery, the `GadgetInspector` uses the `ast` mod
     - Used to dynamically mount routes under the extension's name (e.g., `/extension_name/...`).
 3.  **Widgets**:
     - Identifies renderable functions in `widget.py`.
+4.  **Routes**:
+    - Scans `routes.py` for `register_routes(rt)` function and `PUBLIC_PATHS` constants.
+5.  **Scheduled Actions**:
+    - Inspects `actions.py` for `get_scheduled_actions()` or `SCHEDULED_ACTIONS` definitions exporting `list[ScheduledAction]`.
 
 ## Runtime Loading
 Once identified, gadgets are loaded into their respective containers:
 - **Bot**: Loaded via `bot.load_extension()`.
 - **API**: Routers are included in the FastAPI app with `api_scope_required(extension_name)` middleware automatically applied.
 - **UI**: FastHTML `routes.py` are executed via a `register_routes(rt)` callback.
+- **Scheduler**: Scheduled actions are registered with the central `ActionScheduler` and mounted into the application lifespan.
 
 ### Public Path Registration (`PUBLIC_PATHS`)
 Extensions with public-facing UI routes (e.g., gallery pages accessible to unauthenticated users) can declare an optional `PUBLIC_PATHS` constant in their `routes.py`:

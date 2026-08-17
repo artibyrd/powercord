@@ -156,18 +156,18 @@ more aggressively.
 
 ## Automated Backups
 
-Powercord includes an automated backup system (`BackupService` in `app/db/db_tools.py`) that creates compressed daily database snapshots via APScheduler and prunes old backups automatically.
+Powercord includes an automated backup system (`create_daily_backup()` in `app/db/db_tools.py`) registered as a standing job (`daily_database_backup`) with the unified `ActionScheduler` (`app/common/scheduler.py`). It creates compressed daily database snapshots and prunes old backups automatically.
 
 ### How It Works
 
 The backup pipeline has two layers:
 
-1. **Application Layer**: The `BackupService` runs inside the Powercord process. An APScheduler cron job fires `create_daily_backup()` every day at **03:00 UTC**. This creates a `pg_dump` export, compresses it to `.sql.gz`, and removes backups older than **7 days**.
+1. **Application Layer**: The `ActionScheduler` runs inside the Powercord process. An APScheduler cron job fires `create_daily_backup()` every day at **03:00 UTC**. This creates a `pg_dump` export, compresses it to `.sql.gz`, and removes backups older than **7 days**.
 2. **Infrastructure Layer** *(GCP only)*: A host-level `systemd` timer (provisioned via Terraform) syncs the backup files from the persistent volume to a Google Cloud Storage bucket at **04:00 UTC** — one hour after creation to ensure the file is fully written.
 
 ### Backup Directory by Environment
 
-The `BackupService` uses container detection (`/.dockerenv`) to determine the correct storage path. This ensures backups are always written to the appropriate location regardless of how Powercord is deployed:
+The backup logic uses container detection (`/.dockerenv`) to determine the correct storage path. This ensures backups are always written to the appropriate location regardless of how Powercord is deployed:
 
 | Environment | Detection | Backup Directory | Notes |
 |---|---|---|---|
@@ -188,9 +188,9 @@ This runs the same `create_daily_backup()` logic used by the scheduler.
 
 | Setting | Value | Location |
 |---|---|---|
-| Schedule | Daily at 03:00 UTC | `BackupService.start_scheduler()` |
-| Retention | 7 days | `BackupService.RETENTION_DAYS` |
-| Format | `.sql.gz` (gzip-compressed SQL) | `BackupService.create_daily_backup()` |
+| Schedule | Daily at 03:00 UTC | `ActionScheduler` / `main_api.py` (`daily_database_backup`) |
+| Retention | 7 days | `BackupService.RETENTION_DAYS` / `app/db/db_tools.py` |
+| Format | `.sql.gz` (gzip-compressed SQL) | `app/db/db_tools.py` (`create_daily_backup()`) |
 | GCS sync schedule | Daily at 04:00 UTC | `terraform/compute.tf` (systemd timer) |
 
 > [!IMPORTANT]

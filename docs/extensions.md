@@ -14,17 +14,19 @@ app
         ├── blueprint.py        # Shared logic, models, helpers
         ├── cog.py              # Automatically loaded by the bot
         ├── sprocket.py         # Automatically loaded by the API
-        └── widget.py           # Automatically loaded by the UI
+        ├── widget.py           # Automatically loaded by the UI
+        ├── routes.py           # Full-page FastHTML routes (optional)
+        └── actions.py          # Scheduled background jobs (optional)
 ```
 
-The three integration files — `cog.py`, `sprocket.py`, and `widget.py` — are automatically discovered and loaded by their respective components. If your extension doesn't need a particular integration, simply omit that file. Your extension must include **at least one** of the three.
+The five primary integration files — `cog.py`, `sprocket.py`, `widget.py`, `routes.py`, and `actions.py` — are automatically discovered and loaded by their respective framework subsystems. If your extension doesn't need a particular integration, simply omit that file.
 
-Everything else is up to you: add more files, use subfolders, rename `blueprint.py`, or remove it entirely. Only the three integration files carry special meaning.
+Everything else is up to you: add more files, use subfolders, rename `blueprint.py`, or remove it entirely.
 
 See the [example extension](../app/extensions/example/) for working samples of each file.
 
 > [!NOTE]
-> For a deep dive into how Powercord discovers and loads `cog.py`, `sprocket.py`, and `widget.py` at startup, see [Extension Discovery Framework](discovery.md).
+> For a deep dive into how Powercord discovers and loads extension gadgets at startup, see [Extension Discovery Framework](discovery.md).
 
 ## Extension Manifest (`extension.json`)
 

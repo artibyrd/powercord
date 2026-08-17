@@ -603,6 +603,63 @@ Uploads a MIDI file or archive directly.
   }
   ```
 
+<br>
+
+#### `GET /midi_library/health/status`
+
+Retrieves current data health metrics, unresolved error counts, and the most recent audit snapshot.
+
+* **Auth Required**: `{guild_id}.midi_library.user` or higher.
+* **Response**:
+  ```json
+  {
+    "health_score_pct": 98.5,
+    "unresolved_errors": 3,
+    "last_snapshot": {
+      "id": 14,
+      "timestamp": "2026-08-16T17:00:00",
+      "scan_type": "full",
+      "total_files": 136972,
+      "healthy_files": 136969,
+      "missing_png_count": 3,
+      "missing_mid_count": 0,
+      "auto_repaired_count": 0,
+      "pruned_count": 0,
+      "health_score_pct": 98.5,
+      "duration_seconds": 14.2,
+      "summary": "Full scan of 136972 files: 3 missing PNGs, 0 missing MIDs, 0 repaired, 0 pruned."
+    }
+  }
+  ```
+
+<br>
+
+#### `GET /midi_library/health/history`
+
+Retrieves historical audit snapshots recorded over time for health trend analysis.
+
+* **Auth Required**: `{guild_id}.midi_library.user` or higher.
+* **Query Parameters**:
+  * `limit` (int, default=30): Maximum number of historical snapshots to return.
+* **Response**:
+  ```json
+  {
+    "history": [
+      {
+        "id": 14,
+        "timestamp": "2026-08-16T17:00:00",
+        "scan_type": "full",
+        "health_score_pct": 98.5,
+        "total_files": 136972,
+        "healthy_files": 136969,
+        "missing_png_count": 3,
+        "auto_repaired_count": 0,
+        "pruned_count": 0
+      }
+    ]
+  }
+  ```
+
 ---
 
 ### Honeypot Extension (`honeypot`)
