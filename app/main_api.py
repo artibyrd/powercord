@@ -48,15 +48,33 @@ async def lifespan(app: FastAPI):
         logging.debug("midi_library extension not installed — legacy compat shim not loaded.")
     # ── END LEGACY ──────────────────────────────────────────────────
 
-    # Start the automated daily database backup scheduler
+    # ── Scheduled Actions System ─────────────────────────────────────
+    from app.common.scheduler import get_action_scheduler
     from app.db.db_tools import BackupService
 
-    BackupService.start_scheduler()
+    scheduler = get_action_scheduler()
+
+    # Register core daily database backup (03:00 UTC)
+    scheduler.register_action(
+        action_id="daily_database_backup",
+        func=BackupService.create_daily_backup,
+        trigger="cron",
+        hour=3,
+        minute=0,
+        name="Daily Database Backup",
+        description="Automated daily compressed database backup",
+    )
+
+    # Discover and register all extension scheduled actions
+    gadget_inspector.load_scheduled_actions(scheduler)
+
+    # Start framework scheduler
+    scheduler.start()
 
     yield
 
     # Clean up on shutdown
-    BackupService.stop_scheduler()
+    scheduler.shutdown()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)

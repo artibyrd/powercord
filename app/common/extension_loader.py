@@ -272,3 +272,73 @@ class GadgetInspector:
                     e,
                 )
         return collected
+
+    def inspect_scheduled_actions(self) -> dict[str, list[Any]]:
+        """Find and collect scheduled actions declared by installed extensions.
+
+        Scans each installed extension for an ``actions.py`` file. Supports:
+        1. A ``get_scheduled_actions()`` function returning a list of ScheduledAction instances / dicts.
+        2. A ``SCHEDULED_ACTIONS`` list constant.
+        3. A ``register_actions(scheduler)`` callback function.
+        """
+        actions_report: dict[str, list[Any]] = {}
+        for extension_path in sorted(self.extensions_dir.iterdir()):
+            if not extension_path.is_dir():
+                continue
+            actions_file = extension_path / "actions.py"
+            if not actions_file.is_file():
+                continue
+
+            extension_name = extension_path.name
+            module_path = f"app.extensions.{extension_name}.actions"
+            try:
+                module = importlib.import_module(module_path)
+                actions = []
+                get_fn = getattr(module, "get_scheduled_actions", None)
+                if callable(get_fn):
+                    actions.extend(get_fn())
+                elif hasattr(module, "SCHEDULED_ACTIONS"):
+                    actions.extend(module.SCHEDULED_ACTIONS)
+                if actions:
+                    actions_report[extension_name] = actions
+            except ImportError as e:
+                logging.error("Could not import actions for extension '%s': %s", extension_name, e)
+
+        return actions_report
+
+    def load_scheduled_actions(self, scheduler: Any = None) -> None:
+        """Register all discovered extension scheduled actions with the scheduler."""
+        from app.common.scheduler import ScheduledAction, get_action_scheduler
+
+        target_scheduler = scheduler or get_action_scheduler()
+        actions_by_ext = self.inspect_scheduled_actions()
+
+        for extension_name, action_list in actions_by_ext.items():
+            for act in action_list:
+                try:
+                    if isinstance(act, ScheduledAction):
+                        target_scheduler.register_action(act)
+                    elif isinstance(act, dict):
+                        target_scheduler.register_action(**act)
+                    logging.info("Loaded scheduled action from extension '%s'.", extension_name)
+                except Exception as e:
+                    logging.error("Failed to register scheduled action from extension '%s': %s", extension_name, e)
+
+        # Also look for register_actions(scheduler) callbacks
+        for extension_path in sorted(self.extensions_dir.iterdir()):
+            if not extension_path.is_dir():
+                continue
+            actions_file = extension_path / "actions.py"
+            if not actions_file.is_file():
+                continue
+
+            extension_name = extension_path.name
+            module_path = f"app.extensions.{extension_name}.actions"
+            try:
+                module = importlib.import_module(module_path)
+                register_fn = getattr(module, "register_actions", None)
+                if callable(register_fn):
+                    register_fn(target_scheduler)
+                    logging.info("Executed register_actions() callback for extension '%s'.", extension_name)
+            except ImportError as e:
+                logging.error("Could not run register_actions for extension '%s': %s", extension_name, e)
