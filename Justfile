@@ -386,21 +386,15 @@ db-backup: _ensure-db
 import? 'app/extensions/example/extension.just'
 import? 'app/extensions/utilities/extension.just'
 
-# Extension installation is forbidden in core (inv-source-isolation-no-ad-hoc-cp).
+# Install an extension from a local directory or Git repository
 [group: "extensions"]
 ext-install source_path:
-    @echo "ERROR: Direct extension installation into powercord core is forbidden (inv-source-isolation-no-ad-hoc-cp)."
-    @echo "Install extensions strictly inside powercord-downstream-server/:"
-    @echo "  cd ../powercord-downstream-server && just ext-install {{source_path}}"
-    @exit 1
+    poetry run python -m app.common.extension_manager install {{source_path}}
 
-# Extension uninstallation is forbidden in core (inv-source-isolation-no-ad-hoc-cp).
+# Uninstall an extension by name
 [group: "extensions"]
 ext-uninstall name:
-    @echo "ERROR: Direct extension uninstallation in powercord core is forbidden (inv-source-isolation-no-ad-hoc-cp)."
-    @echo "Manage extensions strictly inside powercord-downstream-server/:"
-    @echo "  cd ../powercord-downstream-server && just ext-uninstall {{name}}"
-    @exit 1
+    poetry run python -m app.common.extension_manager uninstall {{name}}
 
 # List all installed Powercord extensions
 [group: "extensions"]
