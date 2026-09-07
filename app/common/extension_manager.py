@@ -19,14 +19,21 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import shutil
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+from app.common.extension_alembic import _update_alembic_ini as _alembic_update_ini
+from app.common.extension_manifest import (
+    _normalize_pkg_name,
+    load_manifest,
+)
+from app.common.extension_manifest import (
+    get_installed_extensions as _manifest_get_installed_extensions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,129 +52,12 @@ TESTS_DIR = Path(__file__).resolve().parents[2] / "tests" / "extensions"
 
 def _update_alembic_ini() -> None:
     """Dynamically reconstructs version_locations in alembic.ini based on active extensions."""
-    ini_path = EXTENSIONS_DIR.parents[1] / "alembic.ini"
-    if not ini_path.exists():
-        return
-    import configparser
-
-    config = configparser.ConfigParser()
-    config.read(ini_path)
-
-    paths = ["%(here)s/alembic/versions"]
-    for d in EXTENSIONS_DIR.iterdir():
-        if d.is_dir() and (d / "alembic" / "versions").exists():
-            paths.append(f"%(here)s/app/extensions/{d.name}/alembic/versions")
-
-    if "alembic" not in config.sections():
-        config.add_section("alembic")
-
-    config.set("alembic", "version_locations", " ".join(paths))
-    with open(ini_path, "w", encoding="utf-8") as configfile:
-        config.write(configfile)
+    _alembic_update_ini(EXTENSIONS_DIR)
 
 
-# ── Package name helpers ──────────────────────────────────────────────
-
-
-def _normalize_pkg_name(dep: str) -> str:
-    """Strip version specifiers from a dependency string.
-
-    For example ``"pretty-midi>=0.2.11"`` → ``"pretty-midi"``.
-    """
-    for sep in (">", "<", "=", "!", "~", "[", "@"):
-        dep = dep.split(sep, 1)[0]
-    return dep.strip()
-
-
-# ── Manifest helpers ──────────────────────────────────────────────────
-
-
-def load_manifest(extension_path: Path) -> dict[str, Any]:
-    """Load and validate an extension's metadata from ``pyproject.toml`` or ``extension.json``.
-
-    Raises ``FileNotFoundError`` if no manifest file is found, or
-    ``ValueError`` if required keys are absent.
-    """
-    toml_file = extension_path / "pyproject.toml"
-    json_file = extension_path / "extension.json"
-
-    if toml_file.is_file():
-        with open(toml_file, "rb") as fh:
-            doc = tomllib.load(fh)
-
-        # Validate required keys
-        poetry_meta = doc.get("tool", {}).get("poetry", {})
-        required_keys = ["name", "version", "description"]
-        missing = [k for k in required_keys if k not in poetry_meta]
-        if missing:
-            raise ValueError(f"pyproject.toml [tool.poetry] missing required keys: {missing}")
-
-        powercord_meta = doc.get("tool", {}).get("powercord", {})
-
-        deps_raw = poetry_meta.get("dependencies", {})
-        # Skip standard framework dependencies and python identifier
-        deps = []
-        for pkg, version in deps_raw.items():
-            if pkg in ("python", "powercord"):
-                continue
-            # Support inline tables like git/path dependencies or simple versions
-            if isinstance(version, str):
-                deps.append(f"{pkg}@{version}")
-            elif isinstance(version, dict):
-                deps.append(pkg)
-
-        manifest = {
-            "name": poetry_meta["name"],
-            "version": poetry_meta["version"],
-            "description": poetry_meta["description"],
-            "python_dependencies": deps,
-            "discord_permissions": powercord_meta.get("discord_permissions", []),
-            "has_migrations": powercord_meta.get("has_migrations", False),
-            "latest_migration_version": powercord_meta.get("latest_migration_version", None),
-            "internal": powercord_meta.get("internal", False),
-            "default_widgets": powercord_meta.get("default_widgets", []),
-        }
-        return manifest
-
-    elif json_file.is_file():
-        with open(json_file, encoding="utf-8") as fh:
-            manifest = json.load(fh)
-
-        required_keys = ["name", "version", "description"]
-        missing = [k for k in required_keys if k not in manifest]
-        if missing:
-            raise ValueError(f"extension.json missing required keys: {missing}")
-
-        manifest_dict = dict(manifest)
-        if "default_widgets" not in manifest_dict:
-            manifest_dict["default_widgets"] = []
-        return manifest_dict
-
-    raise FileNotFoundError(f"No pyproject.toml or extension.json found in {extension_path}")
-
-
-def get_installed_extensions() -> list[dict[str, Any]]:
+def get_installed_extensions(extensions_dir: Path | None = None) -> list[dict[str, Any]]:
     """Return a list of manifest dicts for every installed extension."""
-    extensions: list[dict[str, Any]] = []
-    for ext_path in sorted(EXTENSIONS_DIR.iterdir()):
-        if not ext_path.is_dir() or ext_path.name.startswith((".", "__")):
-            continue
-        try:
-            manifest = load_manifest(ext_path)
-            manifest["_path"] = str(ext_path)
-            extensions.append(manifest)
-        except (FileNotFoundError, ValueError):
-            # Legacy extension without a manifest — still list it, but with minimal info
-            extensions.append(
-                {
-                    "name": ext_path.name,
-                    "version": "unknown",
-                    "description": "(no valid manifest)",
-                    "internal": False,
-                    "_path": str(ext_path),
-                }
-            )
-    return extensions
+    return _manifest_get_installed_extensions(extensions_dir or EXTENSIONS_DIR)
 
 
 # ── Install ───────────────────────────────────────────────────────────
@@ -482,7 +372,6 @@ def _fire_hook(extension_name: str, event: str) -> None:
         run_hook(extension_name, event)
         logger.info("Fired '%s' hook for extension '%s'.", event, extension_name)
     except Exception:
-        # Hook not registered or extension module not importable — that's fine
         logger.debug("No '%s' hook available for '%s'.", event, extension_name)
 
 
@@ -518,6 +407,21 @@ def main() -> None:
         list_extensions()
     else:
         parser.print_help()
+
+
+__all__ = [
+    "EXTENSIONS_DIR",
+    "TESTS_DIR",
+    "_fire_hook",
+    "_normalize_pkg_name",
+    "_update_alembic_ini",
+    "get_installed_extensions",
+    "install_extension",
+    "list_extensions",
+    "load_manifest",
+    "main",
+    "uninstall_extension",
+]
 
 
 if __name__ == "__main__":

@@ -18,8 +18,8 @@ The 500 LOC Ceiling Law (`inv-500-loc-ceiling`) establishes that no source file 
 ```mermaid
 graph LR
     M20["v2.0.0<br/>Governance Baseline<br/>2 Graduated / 7 Active"] --> M21["v2.1.0<br/>Web UI Deconstruction<br/>2 Graduated / 5 Active"]
-    M21 --> M22["v2.2.0 (Current)<br/>Auditor Decoupling<br/>1 Graduated / 4 Active"]
-    M22 --> M23["v2.3.0<br/>Cogs & Common<br/>4 Graduated / 0 Active (100% Free)"]
+    M21 --> M22["v2.2.0<br/>Auditor Decoupling<br/>1 Graduated / 4 Active"]
+    M22 --> M23["v2.3.0 (Current)<br/>Cogs & Common Decoupling<br/>4 Graduated / 0 Active (100% Free)"]
 ```
 
 ### Milestone v2.0.0: Sovereign Governance & Invariant Hardening
@@ -40,7 +40,7 @@ graph LR
 
 ---
 
-### Milestone v2.2.0: Security Auditor & Widget Engine Decoupling (Current Milestone)
+### Milestone v2.2.0: Security Auditor & Widget Engine Decoupling
 * **Focus**: Decouple the monolithic security auditor and card rendering engine into pure computation and UI fragments.
 * **Target Graduations (Completed)**:
   1. `powercord/app/extensions/utilities/widget.py` (2,783 LOC $\rightarrow$ `<150 LOC` assembler, decomposed into `security_engine/`, `views/`, `widgets/`).
@@ -48,11 +48,11 @@ graph LR
 
 ---
 
-### Milestone v2.3.0: Cogs & Extension Loader Decoupling (100% Zero Debt)
+### Milestone v2.3.0: Cogs & Extension Loader Decoupling (Current Milestone — 100% Zero Debt)
 * **Focus**: Final cleanup of long Discord cogs and extension lifecycle managers.
-* **Target Graduations**:
-  1. `powercord/app/extensions/example/cog.py` (1,138 LOC): Modularize demo commands into sub-cogs.
-  2. `powercord/app/extensions/midi_library/cog.py` (748 LOC): Split into command handlers.
-  3. `powercord/app/extensions/midi_library/routes.py` (541 LOC): Modularize catalog routes.
-  4. `powercord/app/common/extension_manager.py` (524 LOC): Decouple migration generator from gadget inspector.
+* **Target Graduations (Completed)**:
+  1. `powercord/app/extensions/example/cog.py` (1,138 LOC $\rightarrow$ 313 LOC facade + sub-cogs/views).
+  2. `powercord/app/extensions/midi_library/cog.py` (748 LOC $\rightarrow$ 97 LOC facade + command handlers).
+  3. `powercord/app/extensions/midi_library/routes.py` (541 LOC $\rightarrow$ 55 LOC facade + catalog/telemetry views).
+  4. `powercord/app/common/extension_manager.py` (524 LOC $\rightarrow$ 426 LOC facade + manifest/alembic modules).
 * **Remaining Debt**: **0 files (100% Ratchet Graduation Achieved)**.
