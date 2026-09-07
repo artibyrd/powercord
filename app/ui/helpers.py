@@ -1,49 +1,82 @@
-import asyncio
+"""UI helper utilities, admin management, and re-exported modular helpers for Powercord.
+
+Governed by:
+- inv-500-loc-ceiling: 500 LOC module ceiling
+- inv-split-stack-isolation: FastHTML vs FastAPI runtime isolation
+"""
+
+from __future__ import annotations
+
 import functools
 import logging
 import os
 import sys
 from pathlib import Path
+from typing import Callable
 
 import httpx
-from fasthtml.common import FT, H3, A, Button, Dialog, Div, Form, I, P, Script, Span
+from fasthtml.common import FT
+from sqlmodel import Session, select
 
-# Add the project root directory to the Python path to ensure consistent imports
+# Add project root directory to sys.path
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))  # noqa: E402
 
-
-from typing import Any, Callable, cast
-
-from sqlmodel import Session, select
-
 from app.bot.internal_server import get_bot_api_url
 from app.common.alchemy import init_connection_engine
-from app.common.extension_loader import GadgetInspector
-from app.db.db_tools import get_or_create_internal_key
-from app.db.models import AdminUser, GuildExtensionSettings, WidgetSettings
-from app.ui.auth import get_bot_guild_ids, get_user_guilds
+from app.db.models import AdminUser
+from app.ui.guild_helpers import (
+    get_admin_guilds,
+    get_guild_cogs,
+    get_guild_sprockets,
+    get_guild_widgets,
+    get_internal_api_client,
+    get_widget_settings,
+    is_gadget_enabled,
+    restore_default_widget_settings,
+    seed_global_settings_if_empty,
+    update_guild_extension_setting,
+    update_widget_setting,
+)
+from app.ui.modal_helpers import get_extension_details_modal
+
+__all__ = [
+    "SCOPE_PUBLIC",
+    "SCOPE_ADMIN_DASHBOARD",
+    "get_internal_api_client",
+    "get_widget_name",
+    "get_dashboard_admins",
+    "is_dashboard_admin",
+    "add_dashboard_admin",
+    "remove_dashboard_admin",
+    "get_discord_username",
+    "seed_global_settings_if_empty",
+    "is_gadget_enabled",
+    "get_guild_cogs",
+    "get_guild_sprockets",
+    "get_guild_widgets",
+    "get_widget_settings",
+    "update_widget_setting",
+    "update_guild_extension_setting",
+    "get_admin_guilds",
+    "notify_api_of_config_change",
+    "notify_bot_of_config_change",
+    "get_extension_details_modal",
+    "restore_default_widget_settings",
+]
 
 SCOPE_PUBLIC = 0
 SCOPE_ADMIN_DASHBOARD = 1
 
 
-def get_internal_api_client() -> httpx.AsyncClient:
-    """Returns an httpx.AsyncClient configured with the internal API key."""
-    key = get_or_create_internal_key()
-    return httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"})
-
-
 def get_widget_name(widget: Callable | FT) -> str | None:
-    """
-    Safely gets the name of a widget, which can be a function,
-    a functools.partial, or a pre-rendered FT object.
+    """Safely gets the name of a widget (function, partial, or FT object).
+
     For FT objects, the 'id' attribute is used as the name.
     """
     if isinstance(widget, functools.partial):
         return widget.func.__name__
-    # FT objects do not have a __name__, but may have an id.
     if isinstance(widget, FT):
         return getattr(widget, "id", None)
     if hasattr(widget, "__name__"):
@@ -66,18 +99,18 @@ def is_dashboard_admin(user_id: int) -> bool:
         return user is not None
 
 
-def add_dashboard_admin(user_id: int, comment: str | None = None):
+def add_dashboard_admin(user_id: int, comment: str | None = None) -> None:
     """Adds a new dashboard admin."""
     engine = init_connection_engine()
     with Session(engine) as session:
         if session.get(AdminUser, user_id):
-            return  # Already exists
+            return
         admin = AdminUser(user_id=user_id, comment=comment)
         session.add(admin)
         session.commit()
 
 
-def remove_dashboard_admin(user_id: int):
+def remove_dashboard_admin(user_id: int) -> None:
     """Removes a dashboard admin."""
     engine = init_connection_engine()
     with Session(engine) as session:
@@ -110,410 +143,7 @@ async def get_discord_username(user_id: int) -> str:
         return "Error"
 
 
-def seed_global_settings_if_empty(session: Session):
-    """
-    Checks if there are any extension settings for guild_id=0. If empty,
-    provisions defaults for all cogs, widgets, sprockets.
-    """
-    existing = session.exec(select(GuildExtensionSettings).where(GuildExtensionSettings.guild_id == 0)).first()
-    if existing:
-        return
-
-    from app.common.extension_manager import EXTENSIONS_DIR, load_manifest
-
-    inspector = GadgetInspector()
-    all_extensions = inspector.inspect_extensions()
-
-    for ext_name, gadgets in all_extensions.items():
-        # Check if default_disabled: true in manifest
-        ext_path = EXTENSIONS_DIR / ext_name
-        default_disabled = False
-        if ext_path.exists():
-            try:
-                manifest = load_manifest(ext_path)
-                default_disabled = manifest.get("default_disabled", False)
-            except Exception as e:
-                logging.error(f"Error loading manifest for {ext_name} during seeding: {e}")
-
-        is_enabled = not default_disabled
-
-        # Add setting for each gadget type
-        for g_type in gadgets:
-            g_setting = GuildExtensionSettings(
-                guild_id=0,
-                extension_name=ext_name,
-                gadget_type=g_type,
-                is_enabled=is_enabled,
-            )
-            session.add(g_setting)
-
-            # Symmetrically provision default widgets in WidgetSettings if it's enabled
-            if g_type == "widget" and is_enabled:
-                if ext_path.exists():
-                    try:
-                        manifest = load_manifest(ext_path)
-                        default_widgets = manifest.get("default_widgets", [])
-                        for dw in default_widgets:
-                            widget_name = dw.get("widget_name")
-                            display_order = dw.get("display_order", 99)
-                            column_span = dw.get("column_span", 4)
-                            position_config = dw.get("position_config", None)
-
-                            w_stmt = select(WidgetSettings).where(
-                                WidgetSettings.guild_id == 0,
-                                WidgetSettings.extension_name == ext_name,
-                                WidgetSettings.widget_name == widget_name,
-                            )
-                            existing_widget = session.exec(w_stmt).first()
-                            if not existing_widget:
-                                new_widget = WidgetSettings(
-                                    guild_id=0,
-                                    extension_name=ext_name,
-                                    widget_name=widget_name,
-                                    is_enabled=True,
-                                    display_order=display_order,
-                                    column_span=column_span,
-                                    position_config=position_config,
-                                )
-                                session.add(new_widget)
-                    except Exception as e:
-                        logging.error(f"Error seeding default widgets for {ext_name}: {e}")
-
-    session.commit()
-
-
-def is_gadget_enabled(guild_id: int, extension_name: str, gadget_type: str) -> bool:
-    """
-    Checks if a gadget is enabled.
-    Hierarchy:
-    1. Global (guild_id=0) MUST be enabled.
-    2. If Global is enabled, check Local (guild_id) setting.
-       - If Local setting exists, use it.
-       - If Local setting does NOT exist, default to True (inherit Global).
-    """
-    engine = init_connection_engine()
-    try:
-        with Session(engine) as session:
-            seed_global_settings_if_empty(session)
-            # 1. Check Global Setting
-            global_stmt = select(GuildExtensionSettings).where(
-                GuildExtensionSettings.guild_id == 0,
-                GuildExtensionSettings.extension_name == extension_name,
-                GuildExtensionSettings.gadget_type == gadget_type,
-            )
-            global_setting = session.exec(global_stmt).first()
-
-            # If global setting is explicitly disabled or missing, return False
-            # (Default to Disabled for safety/cleanliness if no record exists)
-            if not global_setting or not global_setting.is_enabled:
-                return False
-
-            # If we are only checking global status (guild_id=0), we are done.
-            if guild_id == 0:
-                return True
-
-            # 2. Check Local Setting
-            local_stmt = select(GuildExtensionSettings).where(
-                GuildExtensionSettings.guild_id == guild_id,
-                GuildExtensionSettings.extension_name == extension_name,
-                GuildExtensionSettings.gadget_type == gadget_type,
-            )
-            local_setting = session.exec(local_stmt).first()
-
-            # If local setting exists, respect it (it can only toggle OFF, since we passed Global check)
-            if local_setting:
-                return local_setting.is_enabled
-
-            # If no local setting, default to True (since Global is Enabled)
-            return True
-
-    except Exception as e:
-        logging.error(f"Error checking enabled status for {extension_name} ({gadget_type}) in guild {guild_id}: {e}")
-        return False
-
-
-def _get_enabled_gadgets(guild_id: int, gadget_type: str) -> list[str]:
-    """
-    Helper to get enabled gadgets of a specific type for a guild.
-    Returns a list of extension names that are enabled effectively.
-    """
-    # This is a bit inefficient (N+1-ish) but safe for now.
-    # Can be optimized with a single complex query if performance becomes an issue.
-    # We need to know ALL potential extensions to check them.
-    # Alternatively, we can just query the DB for what IS enabled.
-
-    engine = init_connection_engine()
-    enabled_gadgets = []
-
-    # Get all globally enabled extensions of this type
-    try:
-        with Session(engine) as session:
-            seed_global_settings_if_empty(session)
-            global_stmt = select(GuildExtensionSettings).where(
-                GuildExtensionSettings.guild_id == 0,
-                GuildExtensionSettings.gadget_type == gadget_type,
-            )
-            all_global = session.exec(global_stmt).all()
-            # Explicitly access model properties for reliable behavior across DB dialects
-            globally_enabled = [row.extension_name for row in all_global if row.is_enabled]
-
-            if guild_id == 0:
-                return globally_enabled
-
-            # Filter by local settings
-            for ext_name in globally_enabled:
-                if is_gadget_enabled(guild_id, ext_name, gadget_type):
-                    enabled_gadgets.append(ext_name)
-
-    except Exception as e:
-        logging.error(f"Error fetching enabled {gadget_type}s for guild {guild_id}: {e}")
-
-    return enabled_gadgets
-
-
-def get_guild_cogs(guild_id: int) -> list[str]:
-    """Get enabled cogs for a guild from the database."""
-    return _get_enabled_gadgets(guild_id, "cog")
-
-
-def get_guild_sprockets(guild_id: int) -> list[str]:
-    """Get enabled sprockets for a guild from the database."""
-    return _get_enabled_gadgets(guild_id, "sprocket")
-
-
-def get_guild_widgets(guild_id: int) -> list[str]:
-    """Get enabled widgets for a guild from the database."""
-    return _get_enabled_gadgets(guild_id, "widget")
-
-
-def get_widget_settings(guild_id: int) -> dict[str, dict]:
-    """Get widget settings for a guild (or global: 0) from the database."""
-    engine = init_connection_engine()
-    settings = {}
-
-    try:
-        with Session(engine) as session:
-            seed_global_settings_if_empty(session)
-            statement = select(WidgetSettings).where(WidgetSettings.guild_id == guild_id)
-            results = session.exec(statement).all()
-
-            for row in results:
-                settings[row.widget_name] = {
-                    "is_enabled": row.is_enabled,
-                    "display_order": row.display_order,
-                    "column_span": row.column_span,
-                    "grid_x": row.grid_x,
-                    "grid_y": row.grid_y,
-                    "extension_name": row.extension_name,
-                    "position_config": row.position_config,
-                }
-    except Exception as e:
-        logging.error(f"Error fetching widget settings: {e}")
-
-    return settings
-
-
-def update_widget_setting(guild_id: int, extension_name: str, widget_name: str, setting: str, value: Any):
-    """Update a widget setting in the database."""
-    logging.info(f"DATABASE: Setting widget '{extension_name}.{widget_name}' for guild {guild_id}: {setting}={value}")
-
-    engine = init_connection_engine()
-    try:
-        with Session(engine) as session:
-            # Check if the record exists
-            statement = select(WidgetSettings).where(
-                WidgetSettings.guild_id == guild_id,
-                WidgetSettings.extension_name == extension_name,
-                WidgetSettings.widget_name == widget_name,
-            )
-            widget_setting = session.exec(statement).first()
-
-            if not widget_setting:
-                # Create new record with defaults
-                widget_setting = WidgetSettings(
-                    guild_id=guild_id,
-                    extension_name=extension_name,
-                    widget_name=widget_name,
-                )
-
-            # Update the specific setting
-            if hasattr(widget_setting, setting):
-                setattr(widget_setting, setting, value)
-                session.add(widget_setting)
-                session.commit()
-                session.refresh(widget_setting)
-                logging.info(f"Successfully updated {setting} to {value} for {widget_name}")
-            else:
-                logging.error(f"Invalid setting '{setting}' for WidgetSettings")
-
-    except Exception as e:
-        logging.error(f"Error updating widget setting: {e}")
-
-
-def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_type: str, is_enabled: bool):
-    """Update a guild extension setting (enable/disable) in the database."""
-    logging.info(f"DATABASE: Setting {gadget_type} '{extension_name}' for guild {guild_id}: enabled={is_enabled}")
-
-    engine = init_connection_engine()
-    try:
-        with Session(engine) as session:
-            # Check if the record exists
-            statement = select(GuildExtensionSettings).where(
-                GuildExtensionSettings.guild_id == guild_id,
-                GuildExtensionSettings.extension_name == extension_name,
-                GuildExtensionSettings.gadget_type == gadget_type,
-            )
-            extension_setting = session.exec(statement).first()
-
-            if not extension_setting:
-                # Create new record
-                extension_setting = GuildExtensionSettings(
-                    guild_id=guild_id, extension_name=extension_name, gadget_type=gadget_type, is_enabled=is_enabled
-                )
-                session.add(extension_setting)
-            else:
-                # Update existing record
-                extension_setting.is_enabled = is_enabled
-                session.add(extension_setting)
-
-            if gadget_type == "widget":
-                if is_enabled:
-                    from app.common.extension_manager import EXTENSIONS_DIR, load_manifest
-
-                    ext_path = EXTENSIONS_DIR / extension_name
-                    if ext_path.exists():
-                        try:
-                            manifest = load_manifest(ext_path)
-                            default_widgets = manifest.get("default_widgets", [])
-                            for dw in default_widgets:
-                                widget_name = dw.get("widget_name")
-                                display_order = dw.get("display_order", 99)
-                                column_span = dw.get("column_span", 4)
-
-                                w_stmt = select(WidgetSettings).where(
-                                    WidgetSettings.guild_id == guild_id,
-                                    WidgetSettings.extension_name == extension_name,
-                                    WidgetSettings.widget_name == widget_name,
-                                )
-                                existing_widget = session.exec(w_stmt).first()
-                                if not existing_widget:
-                                    position_config = dw.get("position_config", None)
-                                    new_widget = WidgetSettings(
-                                        guild_id=guild_id,
-                                        extension_name=extension_name,
-                                        widget_name=widget_name,
-                                        is_enabled=True,
-                                        display_order=display_order,
-                                        column_span=column_span,
-                                        position_config=position_config,  # Save position layout
-                                    )
-                                    session.add(new_widget)
-                        except Exception as e:
-                            logging.error(f"Error loading manifest or provisioning default widgets: {e}")
-                else:
-                    from sqlmodel import delete
-
-                    delete_stmt = delete(WidgetSettings).where(
-                        cast(Any, WidgetSettings.guild_id) == guild_id,
-                        cast(Any, WidgetSettings.extension_name) == extension_name,
-                    )
-                    session.exec(delete_stmt)
-
-            session.commit()
-            session.refresh(extension_setting)
-            logging.info(f"Successfully updated {gadget_type} '{extension_name}' enabled status to {is_enabled}")
-
-    except Exception as e:
-        logging.error(f"Error updating extension setting: {e}", exc_info=True)
-
-
-from cachetools import TTLCache  # type: ignore[import-untyped]
-
-_admin_guilds_cache: TTLCache = TTLCache(maxsize=1024, ttl=300)
-
-
-async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, dict]:
-    """Fetches guilds where the user is an admin or has a DashboardAccessRole and the bot is present."""
-    user_id = int(user_id)
-    if user_access_token != "dev-token":  # noqa: S105
-        if user_id in _admin_guilds_cache:
-            logging.info(f"Returning cached admin guilds for user {user_id}")
-            return cast(dict[str, dict], _admin_guilds_cache[user_id])
-
-    ADMIN_PERM = 1 << 3
-    bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
-    if not bot_token:
-        raise ValueError("DISCORD_TOKEN is not set.")
-
-    if user_access_token == "dev-token":  # noqa: S105
-        logging.info("Skipping Discord fetch for synthetic dev session.")
-        return {
-            "000000000000000000": {
-                "id": "000000000000000000",
-                "name": "Dev Synthetic Server",
-                "icon": None,
-                "permissions": str(ADMIN_PERM),
-            }
-        }
-
-    logging.info("Fetching admin guilds...")
-    try:
-        user_guilds, bot_guild_ids = await asyncio.gather(
-            get_user_guilds(user_access_token), get_bot_guild_ids(bot_token)
-        )
-        logging.info(f"Fetched {len(user_guilds)} user guilds and {len(bot_guild_ids)} bot guilds.")
-    except Exception as e:
-        logging.error(f"Error fetching guilds in get_admin_guilds: {e}", exc_info=True)
-        raise e
-
-    # Fetch dashboard access roles from DB
-    from app.db.models import DashboardAccessRole
-
-    engine = init_connection_engine()
-    with Session(engine) as session:
-        stmt = select(DashboardAccessRole)
-        roles = session.exec(stmt).all()
-
-    # Map guild_id -> list of allowed role_ids
-    allowed_roles_by_guild: dict[str, set[str]] = {}
-    for r in roles:
-        gid_str = str(r.guild_id)
-        if gid_str not in allowed_roles_by_guild:
-            allowed_roles_by_guild[gid_str] = set()
-        allowed_roles_by_guild[gid_str].add(str(r.role_id))
-
-    admin_guilds = {}
-    for g in user_guilds:
-        gid = g["id"]
-        if gid not in bot_guild_ids:
-            continue
-
-        has_access = False
-        # Check Admin perm
-        if int(g["permissions"]) & ADMIN_PERM:
-            has_access = True
-        elif gid in allowed_roles_by_guild:
-            # Check Bot API for user roles in this guild
-            try:
-                async with get_internal_api_client() as client:
-                    resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{gid}/roles"), timeout=2.0)
-                    if resp.status_code == 200:
-                        user_role_ids = {str(r) for r in resp.json().get("roles", [])}
-                        if allowed_roles_by_guild[gid].intersection(user_role_ids):
-                            has_access = True
-            except Exception as e:
-                logging.error(f"Failed to fetch roles for user {user_id} in guild {gid}: {e}")
-
-        if has_access:
-            admin_guilds[gid] = g
-
-    logging.info(f"Found {len(admin_guilds)} shared guilds with dashboard access.")
-    if user_access_token != "dev-token":  # noqa: S105
-        _admin_guilds_cache[user_id] = admin_guilds
-    return admin_guilds
-
-
-async def notify_api_of_config_change(guild_id: int):
+async def notify_api_of_config_change(guild_id: int) -> None:
     """Sends a notification to the API to reload its configuration for a specific guild."""
     api_reload_url = os.getenv("POWERCORD_API_RELOAD_URL")
     api_reload_key = os.getenv("POWERCORD_API_RELOAD_KEY")
@@ -533,7 +163,7 @@ async def notify_api_of_config_change(guild_id: int):
         logging.error(f"Failed to notify API for guild {guild_id}: {e}")
 
 
-async def notify_bot_of_config_change(guild_id: int):
+async def notify_bot_of_config_change(guild_id: int) -> None:
     """Sends a notification to the bot to reload its configuration for a specific guild."""
     bot_reload_url = os.getenv("POWERCORD_BOT_RELOAD_URL", get_bot_api_url("/config/reload"))
 
@@ -550,132 +180,3 @@ async def notify_bot_of_config_change(guild_id: int):
             logging.info(f"Successfully notified bot to reload config for guild {guild_id}.")
     except httpx.RequestError as e:
         logging.error(f"Failed to notify bot for guild {guild_id}: {e}")
-
-
-def get_extension_details_modal(extension_name: str, access_token: str | None = None) -> FT:
-    """Generates a modal containing the extension's README and functionality breakdown."""
-    inspector = GadgetInspector()
-    extensions_report = inspector.inspect_extensions()
-    gadgets = extensions_report.get(extension_name, [])
-
-    # Badges for functionality
-    badges = []
-    if "cog" in gadgets:
-        badges.append(Span("Cog", cls="badge badge-primary badge-sm font-bold shadow-md"))
-    if "sprocket" in gadgets:
-        badges.append(Span("Sprocket", cls="badge badge-secondary badge-sm font-bold shadow-md"))
-    if "widget" in gadgets:
-        badges.append(Span("Widget", cls="badge badge-accent badge-sm font-bold shadow-md"))
-
-    # Load README if it exists
-    readme_path = inspector.extensions_dir / extension_name / "README.md"
-    readme_content = ""
-    import json
-
-    if readme_path.is_file():
-        try:
-            readme_content = readme_path.read_text(encoding="utf-8")
-            # Escape newlines and quotes for JS injection
-            readme_content = json.dumps(readme_content)
-        except Exception as e:
-            logging.error(f"Failed to read README for {extension_name}: {e}")
-            readme_content = json.dumps("*Failed to load README.*")
-    else:
-        readme_content = json.dumps("*No README.md found for this extension.*")
-
-    modal_id = f"modal-{extension_name}-details"
-
-    close_button = Form(
-        Button(I(cls="fa-solid fa-xmark"), cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"),
-        method="dialog",
-    )
-
-    header_elements = [H3(f"{extension_name.capitalize()} Details", cls="font-bold text-2xl flex-grow")]
-
-    if "sprocket" in gadgets:
-        href_url = f"http://localhost:8000/docs#/{extension_name}"
-        if access_token:
-            href_url = f"http://localhost:8000/docs?token={access_token}#/{extension_name}"
-
-        docs_link = A(
-            I(cls="fa-solid fa-book"),
-            " API Docs",
-            href=href_url,
-            target="_blank",
-            cls="btn btn-ghost btn-outline btn-sm text-info ml-4",
-            title="API Docs",
-        )
-        header_elements.append(docs_link)
-
-    modal_content = Div(
-        close_button,
-        Div(*header_elements, cls="flex items-center w-full pr-8 mb-2"),
-        Div(*badges, cls="flex gap-2 mb-6")
-        if badges
-        else P("No explicit gadgets loaded.", cls="text-sm opacity-50 mb-6"),
-        Div(
-            Div(id=f"readme-{extension_name}", cls="prose prose-sm prose-invert max-w-none"),
-            cls="bg-base-300 p-4 rounded-lg border border-base-content/10 shadow-inner max-h-[60vh] overflow-y-auto",
-        ),
-        # Use marked.js to render the markdown
-        Script(f"document.getElementById('readme-{extension_name}').innerHTML = marked.parse({readme_content});"),
-        cls="modal-box w-11/12 max-w-3xl bg-base-100 shadow-2xl border border-secondary/20",
-    )
-
-    return Dialog(
-        modal_content,
-        Form(method="dialog", cls="modal-backdrop", children=[Button("close")]),
-        id=modal_id,
-        cls="modal modal-bottom sm:modal-middle",
-        # Auto-open when injected
-        open=True,
-    )
-
-
-def restore_default_widget_settings(guild_id: int):
-    """Restore default widget settings for a guild (or global: 0) from manifests."""
-    engine = init_connection_engine()
-    try:
-        with Session(engine) as session:
-            # 1. Delete all existing widget settings for this guild_id
-            from sqlmodel import delete
-
-            delete_stmt = delete(WidgetSettings).where(cast(Any, WidgetSettings.guild_id) == guild_id)
-            session.exec(delete_stmt)
-
-            # 2. Get all extensions
-            inspector = GadgetInspector()
-            all_extensions = inspector.inspect_extensions()
-
-            from app.common.extension_manager import EXTENSIONS_DIR, load_manifest
-
-            for ext_name in all_extensions.keys():
-                # Check if widget gadget is enabled for this guild
-                if is_gadget_enabled(guild_id, ext_name, "widget"):
-                    ext_path = EXTENSIONS_DIR / ext_name
-                    if ext_path.exists():
-                        try:
-                            manifest = load_manifest(ext_path)
-                            default_widgets = manifest.get("default_widgets", [])
-                            for dw in default_widgets:
-                                widget_name = dw.get("widget_name")
-                                display_order = dw.get("display_order", 99)
-                                column_span = dw.get("column_span", 4)
-                                position_config = dw.get("position_config", None)
-
-                                new_widget = WidgetSettings(
-                                    guild_id=guild_id,
-                                    extension_name=ext_name,
-                                    widget_name=widget_name,
-                                    is_enabled=True,
-                                    display_order=display_order,
-                                    column_span=column_span,
-                                    position_config=position_config,
-                                )
-                                session.add(new_widget)
-                        except Exception as e:
-                            logging.error(f"Error seeding default widgets for {ext_name} on restore: {e}")
-            session.commit()
-            logging.info(f"Successfully restored default widget settings for guild {guild_id}")
-    except Exception as e:
-        logging.error(f"Error restoring default widget settings for guild {guild_id}: {e}")
