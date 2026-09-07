@@ -8,7 +8,7 @@ from sqlmodel import Session
 from app.api.dependencies import api_scope_required
 from app.common.alchemy import get_session
 from app.db.models import DiscordAuditorConfig
-from app.extensions.utilities.widget import SecurityRuleEngine
+from app.extensions.utilities.security_engine import SecurityRuleEngine
 
 router = APIRouter()
 

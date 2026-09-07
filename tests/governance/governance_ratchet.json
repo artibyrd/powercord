@@ -3,11 +3,6 @@
   "ratchet_version": "1.0.0",
   "description": "Architectural Debt Ratchet tracking legacy files exceeding 500 LOC. Line counts must decrease monotonically upon modification.",
   "files": {
-    "app/extensions/utilities/widget.py": {
-      "max_loc": 2783,
-      "target_milestone": "v2.2.0",
-      "decomposition_strategy": "Decouple security rule engine into pure compute_* functions and split UI cards"
-    },
     "app/extensions/example/cog.py": {
       "max_loc": 1138,
       "target_milestone": "v2.3.0",
