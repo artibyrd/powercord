@@ -1,6 +1,6 @@
 {
     "name": "utilities",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Administrative tools for server analytics and security auditing.",
     "python_dependencies": [],
     "discord_permissions": [
