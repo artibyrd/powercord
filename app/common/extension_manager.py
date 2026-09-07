@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -60,10 +61,34 @@ def get_installed_extensions(extensions_dir: Path | None = None) -> list[dict[st
     return _manifest_get_installed_extensions(extensions_dir or EXTENSIONS_DIR)
 
 
+def _is_core_repository(repo_root: Path) -> bool:
+    """Return True if repo_root is the core upstream framework repository."""
+    if os.getenv("POWERCORD_ALLOW_CORE_EXT_INSTALL"):
+        return False
+    if (repo_root / ".downstream").exists() or (repo_root / ".powercord-downstream").exists():
+        return False
+    if repo_root.name == "powercord-downstream-server":
+        return False
+    try:
+        git_cmd = shutil.which("git") or "git"
+        res = subprocess.run(  # noqa: S603
+            [git_cmd, "remote", "get-url", "--push", "origin"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.stdout.strip() == "DISABLED":
+            return False
+    except Exception:  # noqa: S110
+        pass
+    return repo_root.name == "powercord"
+
+
 # ── Install ───────────────────────────────────────────────────────────
 
 
-def install_extension(source_path: str | Path) -> None:
+def install_extension(source_path: str | Path, *, allow_core: bool = False) -> None:
     """Install an extension from *source_path* into the extensions directory.
 
     Steps:
@@ -73,6 +98,15 @@ def install_extension(source_path: str | Path) -> None:
     4. Run ``alembic upgrade head`` if the extension declares migrations.
     5. Fire the ``on_install`` lifecycle hook if one is registered.
     """
+    if not allow_core and _is_core_repository(EXTENSIONS_DIR.parents[1]):
+        print(
+            "Error: Direct extension installation into the core 'powercord' repository is forbidden "
+            "(inv-source-isolation-no-ad-hoc-cp).\n"
+            "Install extensions strictly in 'powercord-downstream-server/' via:\n"
+            f"  cd ../powercord-downstream-server && just ext-install {source_path}"
+        )
+        sys.exit(1)
+
     source = Path(source_path).resolve()
     if not source.is_dir():
         print(f"Error: Source path '{source}' is not a directory.")

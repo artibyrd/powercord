@@ -48,7 +48,7 @@ install:
 dev-clean:
     @echo "Cleaning up..."
     find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -exec rm -rf {} +
-    rm -f .coverage
+    rm -f .coverage *.log app/logs/*.log test_*.sql
     [ -d .venv ] && rm -rf .venv || true
     @echo "Cleanup complete!"
 
@@ -382,21 +382,25 @@ db-backup: _ensure-db
 #                                 EXTENSIONS                                   #
 # ---------------------------------------------------------------------------- #
 
-# Import extension justfiles (optional, only loaded when present)
-import? 'app/extensions/midi_library/extension.just'
-import? 'app/extensions/honeypot/extension.just'
+# Import internal extension justfiles (optional, only loaded when present)
 import? 'app/extensions/example/extension.just'
 import? 'app/extensions/utilities/extension.just'
 
-# Install a Powercord extension from a local path. Usage: just ext-install <source_path>
+# Extension installation is forbidden in core (inv-source-isolation-no-ad-hoc-cp).
 [group: "extensions"]
 ext-install source_path:
-    poetry run python -m app.common.extension_manager install {{source_path}}
+    @echo "ERROR: Direct extension installation into powercord core is forbidden (inv-source-isolation-no-ad-hoc-cp)."
+    @echo "Install extensions strictly inside powercord-downstream-server/:"
+    @echo "  cd ../powercord-downstream-server && just ext-install {{source_path}}"
+    @exit 1
 
-# Uninstall a Powercord extension by name. Usage: just ext-uninstall <name>
+# Extension uninstallation is forbidden in core (inv-source-isolation-no-ad-hoc-cp).
 [group: "extensions"]
 ext-uninstall name:
-    poetry run python -m app.common.extension_manager uninstall {{name}}
+    @echo "ERROR: Direct extension uninstallation in powercord core is forbidden (inv-source-isolation-no-ad-hoc-cp)."
+    @echo "Manage extensions strictly inside powercord-downstream-server/:"
+    @echo "  cd ../powercord-downstream-server && just ext-uninstall {{name}}"
+    @exit 1
 
 # List all installed Powercord extensions
 [group: "extensions"]
