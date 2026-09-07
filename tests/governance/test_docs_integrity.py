@@ -3,6 +3,7 @@
 Governed by:
 - inv-4tier-knowledge: 4-Tier Knowledge Placement & AGENTS.md context economy (<800 tokens)
 - inv-living-canon: Dynamic Invariant Canon ("The Invariant Bible") with semantic slugs
+- inv-repo-bound-task-runners: Repository-Bound Task Runners & Zero Untracked Root Files
 """
 
 from __future__ import annotations
@@ -70,3 +71,18 @@ def test_dynamic_living_canon_invariant() -> None:
             pass
 
     assert not violations, f"Hardcoded invariant counter found (use dynamic Living Canon naming): {violations}"
+
+
+@pytest.mark.unit
+def test_workspace_root_cleanliness() -> None:
+    """Verify that workspace root contains zero untracked task runners, scripts, or Justfiles."""
+    forbidden_patterns = ["Justfile", "*.just", "*.py", "*.sh", "*.bash"]
+    violations = []
+    for pattern in forbidden_patterns:
+        for match in WORKSPACE_ROOT.glob(pattern):
+            if match.is_file():
+                violations.append(
+                    f"Forbidden root file found: {match.name} (task runners must live inside repositories)"
+                )
+
+    assert not violations, "\n".join(violations)
