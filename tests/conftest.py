@@ -86,26 +86,40 @@ def event_loop():
 
 
 @pytest.fixture(scope="session")
-def _create_test_db():
+def _create_test_db(request):
     """Auto-create the isolated test database and enable pg_trgm.
 
-    Runs once per test session before any other fixtures.  The database
+    Runs once per test session before any other fixtures. The database
     persists across sessions (it lives in the Docker volume) so subsequent
     runs are near-instant.
     """
+    # If only governance tests are being run, skip database setup completely
+    if hasattr(request.session, "items") and all(
+        "governance" in str(getattr(item, "fspath", "")) for item in request.session.items
+    ):
+        yield None
+        return
+
     from app.common.testing import ensure_test_database
 
     ensure_test_database()
+    yield
 
 
 @pytest.fixture(name="engine", scope="session", autouse=True)
-def fixture_engine(_create_test_db):
+def fixture_engine(request, _create_test_db):
     """Provide a SQLAlchemy engine pointed at the isolated test database.
 
     Drops and recreates all tables at the start of the test session so that
-    stale data from prior runs never bleeds into assertions.  The test DB is
+    stale data from prior runs never bleeds into assertions. The test DB is
     fully disposable — this is safe.
     """
+    # If only governance tests are being run, skip engine setup completely
+    if hasattr(request.session, "items") and all(
+        "governance" in str(getattr(item, "fspath", "")) for item in request.session.items
+    ):
+        yield None
+        return
     engine = _test_engine
     # Import all model classes to ensure SQLModel registers them before create_all
     from app.db.models import (  # noqa: F401

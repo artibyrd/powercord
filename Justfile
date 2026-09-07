@@ -169,15 +169,94 @@ alias lc := lint
 format fix="false":
     poetry run ruff format . {{ if fix == "false" { "--check" } else { "" } }}
 
-# Type Checking
+# Type Checking (Mypy)
 [group: "qa"]
-check:
+typecheck:
     just _run-with-status _check
-alias c := check
+alias mypy := typecheck
+alias tc := typecheck
 
 [private]
 _check:
     poetry run mypy .
+
+# Fast hermetic pre-commit QA gate (<3s: lint + format + test-gov, zero DB)
+[group: "qa"]
+check:
+    poetry run ruff check .
+    poetry run ruff format --check .
+    poetry run pytest tests/governance -q
+
+# Run shift-left governance tests (<3s, zero DB)
+[group: "qa"]
+test-gov:
+    poetry run pytest tests/governance -v
+
+# Prime IDE command permissions in fresh workspaces
+[group: "dev"]
+bootstrap-approvals:
+    @just check
+    @just typecheck
+    @git status -s
+
+# Single-command onboarding & health check
+[group: "dev"]
+ignite: install check
+    @echo "Powercord environment ignited successfully."
+
+# Create or switch to a feature branch (never work directly on main)
+[group: "vcs"]
+branch name:
+    git checkout -b {{name}} 2>/dev/null || git checkout {{name}}
+
+# Incremental commit on feature branch gated by pre-commit check
+[group: "vcs"]
+commit msg: check
+    #!/usr/bin/env bash
+    current=$(git symbolic-ref --short HEAD 2>/dev/null)
+    if [ "$current" = "main" ]; then
+        echo "ERROR: Direct commits to main prohibited by inv-branch-pr-review-gate. Use: just branch feat/<name>"
+        exit 1
+    fi
+    git add -A
+    git commit -m "{{msg}}"
+
+# Push feature branch and open a GitHub pull request
+[group: "vcs"]
+pr-create title="":
+    #!/usr/bin/env bash
+    current=$(git symbolic-ref --short HEAD 2>/dev/null)
+    if [ "$current" = "main" ]; then
+        echo "ERROR: Cannot open PR from main branch."
+        exit 1
+    fi
+    git push -u origin "$current"
+    if [ -n "{{title}}" ]; then
+        gh pr create --title "{{title}}" --fill
+    else
+        gh pr create --fill
+    fi
+
+# Check pull request status for the current branch
+[group: "vcs"]
+pr-status:
+    gh pr status
+
+# Release tag sequence (run on main after PR merge)
+[group: "vcs"]
+release version message: check
+    #!/usr/bin/env bash
+    current=$(git symbolic-ref --short HEAD 2>/dev/null)
+    if [ "$current" != "main" ]; then
+        echo "ERROR: Releases must be tagged on the main branch after PR merge."
+        exit 1
+    fi
+    poetry version {{version}}
+    git add pyproject.toml
+    git commit -m "chore(release): bump version to {{version}}"
+    git tag -a "v{{version}}" -m "{{message}}"
+    git push origin main "v{{version}}"
+    echo "Release v{{version}} tagged and pushed successfully."
 
 # Run tests. Usage: just test [--type unit|integration|all]
 [group: "qa"]

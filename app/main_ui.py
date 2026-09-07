@@ -49,49 +49,46 @@ gsecrets.load_env()
 
 
 def require_admin(f):
-    """Defense-in-depth decorator for /admin/* route handlers.
-
-    Verifies the session user is a dashboard admin before executing
-    the wrapped handler.  Complements the Beforeware check so that
-    a regression in auth_before cannot silently expose admin operations.
-
-    NOTE: The wrapper must preserve ``__signature__`` because FastHTML
-    inspects handler signatures for automatic parameter injection
-    (``req``, ``sess``, path params, etc.).
-    """
+    """Defense-in-depth decorator verifying dashboard admin session for /admin/* routes."""
+    original_sig = inspect.signature(f)
 
     @functools.wraps(f)
     async def wrapper(*args, **kwargs):
-        # FastHTML injects `sess` by name; grab it from kwargs.
         sess = kwargs.get("sess")
         if sess is None:
-            # If not in kwargs, it might be passed positionally. Find the position of 'sess' in f's signature.
-            sig = inspect.signature(f)
-            for idx, param_name in enumerate(sig.parameters):
-                if param_name == "sess" and idx < len(args):
+            if "sess" in original_sig.parameters:
+                idx = list(original_sig.parameters.keys()).index("sess")
+                if idx < len(args):
                     sess = args[idx]
+            elif len(args) > len(original_sig.parameters):
+                sess = args[-1]
+        if not sess:
+            for arg in args:
+                if hasattr(arg, "session"):
+                    sess = getattr(arg, "session", {})
                     break
-        if sess is None:
-            sess = {}
 
         from app.ui.helpers import is_dashboard_admin
 
-        auth = sess.get("auth", {}) if isinstance(sess, dict) else {}
+        auth = (sess or {}).get("auth", {}) if isinstance(sess, dict) else {}
         user_id = auth.get("id")
         is_admin = False
-        if user_id:
+        if user_id is not None:
             try:
                 is_admin = is_dashboard_admin(int(user_id))
             except (ValueError, TypeError):
                 pass
         if not is_admin:
             return P("Forbidden", cls="text-error")
-        return await f(*args, **kwargs)
 
-    # Preserve the original signature so FastHTML's parameter
-    # injector can still resolve `req`, `sess`, path params, etc.
-    original_sig = inspect.signature(f)
-    # Ensure `sess` is in the signature (some handlers didn't have it)
+        f_args = args[: len(original_sig.parameters)] if "sess" not in original_sig.parameters else args
+        f_kwargs = (
+            {k: v for k, v in kwargs.items() if k in original_sig.parameters}
+            if "sess" not in original_sig.parameters
+            else kwargs
+        )
+        return await f(*f_args, **f_kwargs)
+
     if "sess" not in original_sig.parameters:
         params = list(original_sig.parameters.values())
         params.append(inspect.Parameter("sess", inspect.Parameter.POSITIONAL_OR_KEYWORD))
