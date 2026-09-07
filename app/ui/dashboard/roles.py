@@ -1,14 +1,22 @@
 # mypy: ignore-errors
-from __future__ import annotations
-
 import logging
+import sys
+from typing import Any
 
+import sqlmodel
 from fasthtml.common import *
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from app.common.alchemy import init_connection_engine
 from app.db.models import ApiUserRole, DashboardAccessRole, DiscordRole
-from app.ui.helpers import get_admin_guilds, get_internal_api_client
+from app.ui.helpers import get_admin_guilds, get_internal_api_client, is_dashboard_admin
+
+
+def _dh(name: str, default: Any = None) -> Any:
+    m = sys.modules.get("app.ui.dashboard")
+    if m is not None and hasattr(m, name):
+        return getattr(m, name)
+    return default
 
 
 async def _check_guild_admin(guild_id: int, req) -> bool:
@@ -28,11 +36,10 @@ async def _check_guild_admin(guild_id: int, req) -> bool:
         return False
     try:
         user_id = int(user_id_str)
-        from app.ui.helpers import is_dashboard_admin
-
-        if is_dashboard_admin(user_id):
+        is_admin_fn = _dh("is_dashboard_admin", is_dashboard_admin)
+        if is_admin_fn(user_id):
             return True
-        admin_guilds = await get_admin_guilds(user_access_token, user_id)
+        admin_guilds = await _dh("get_admin_guilds", get_admin_guilds)(user_access_token, user_id)
         guild = admin_guilds.get(str(guild_id), {})
         return guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
     except Exception:
@@ -40,18 +47,14 @@ async def _check_guild_admin(guild_id: int, req) -> bool:
 
 
 async def _get_guild_roles(guild_id: int) -> tuple[list[dict], bool]:
-    """Fetch roles for a guild.
-
-    First queries the Bot Internal API. If unavailable or empty, falls back
-    to cached DiscordRole records in the database.
-    Returns (roles_list, is_live_from_bot).
-    """
+    """Fetch roles for a guild."""
     from app.bot.internal_server import get_bot_api_url
 
     guild_roles = []
     is_live = False
     try:
-        async with get_internal_api_client() as client:
+        api_client_fn = _dh("get_internal_api_client", get_internal_api_client)
+        async with api_client_fn() as client:
             resp = await client.get(get_bot_api_url(f"/guilds/{guild_id}/roles"), timeout=2.0)
             if resp.status_code == 200:
                 fetched = resp.json().get("roles", [])
@@ -62,8 +65,8 @@ async def _get_guild_roles(guild_id: int) -> tuple[list[dict], bool]:
         logging.debug(f"Failed to fetch live guild roles for {guild_id}: {e}")
 
     if not guild_roles:
-        engine = init_connection_engine()
-        with Session(engine) as session:
+        engine = _dh("init_connection_engine", init_connection_engine)()
+        with sqlmodel.Session(engine) as session:
             db_roles = session.exec(
                 select(DiscordRole).where(DiscordRole.guild_id == guild_id).order_by(DiscordRole.position.desc())
             ).all()
@@ -74,10 +77,11 @@ async def _get_guild_roles(guild_id: int) -> tuple[list[dict], bool]:
 
 
 async def _render_access_roles(guild_id: int) -> FT:
-    guild_roles, is_live = await _get_guild_roles(guild_id)
+    get_roles_fn = _dh("_get_guild_roles", _get_guild_roles)
+    guild_roles, is_live = await get_roles_fn(guild_id)
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _dh("init_connection_engine", init_connection_engine)()
+    with sqlmodel.Session(engine) as session:
         stmt = select(DashboardAccessRole).where(DashboardAccessRole.guild_id == guild_id)
         saved_roles = session.exec(stmt).all()
         saved_role_ids = {str(r.role_id) for r in saved_roles}
@@ -166,7 +170,8 @@ async def _render_access_roles(guild_id: int) -> FT:
 
 
 async def add_access_role(guild_id: int, req, sess):
-    if not await _check_guild_admin(guild_id, req):
+    check_admin = _dh("_check_guild_admin", _check_guild_admin)
+    if not await check_admin(guild_id, req):
         return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
     auth = sess.get("auth", {})
@@ -179,19 +184,21 @@ async def add_access_role(guild_id: int, req, sess):
     if role_id_str and str(role_id_str).strip():
         try:
             role_id = int(str(role_id_str).strip())
-            engine = init_connection_engine()
-            with Session(engine) as session:
+            engine = _dh("init_connection_engine", init_connection_engine)()
+            with sqlmodel.Session(engine) as session:
                 new_role = DashboardAccessRole(guild_id=guild_id, role_id=role_id)
                 session.add(new_role)
                 session.commit()
         except ValueError:
             pass
 
-    return await _render_access_roles(guild_id)
+    render_access = _dh("_render_access_roles", _render_access_roles)
+    return await render_access(guild_id)
 
 
 async def remove_access_role(guild_id: int, req, sess):
-    if not await _check_guild_admin(guild_id, req):
+    check_admin = _dh("_check_guild_admin", _check_guild_admin)
+    if not await check_admin(guild_id, req):
         return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
     auth = sess.get("auth", {})
@@ -204,8 +211,8 @@ async def remove_access_role(guild_id: int, req, sess):
     if role_id_str:
         try:
             role_id = int(role_id_str)
-            engine = init_connection_engine()
-            with Session(engine) as session:
+            engine = _dh("init_connection_engine", init_connection_engine)()
+            with sqlmodel.Session(engine) as session:
                 stmt = select(DashboardAccessRole).where(
                     DashboardAccessRole.guild_id == guild_id, DashboardAccessRole.role_id == role_id
                 )
@@ -216,14 +223,16 @@ async def remove_access_role(guild_id: int, req, sess):
         except ValueError:
             pass
 
-    return await _render_access_roles(guild_id)
+    render_access = _dh("_render_access_roles", _render_access_roles)
+    return await render_access(guild_id)
 
 
 async def _render_api_user_role(guild_id: int) -> FT:
-    guild_roles, is_live = await _get_guild_roles(guild_id)
+    get_roles_fn = _dh("_get_guild_roles", _get_guild_roles)
+    guild_roles, is_live = await get_roles_fn(guild_id)
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _dh("init_connection_engine", init_connection_engine)()
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
         api_user_role = session.exec(stmt).first()
 
@@ -294,7 +303,8 @@ async def _render_api_user_role(guild_id: int) -> FT:
 
 
 async def set_api_role(guild_id: int, req, sess):
-    if not await _check_guild_admin(guild_id, req):
+    check_admin = _dh("_check_guild_admin", _check_guild_admin)
+    if not await check_admin(guild_id, req):
         return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
     auth = sess.get("auth", {})
@@ -307,8 +317,8 @@ async def set_api_role(guild_id: int, req, sess):
     if role_id_str:
         try:
             role_id = int(role_id_str)
-            engine = init_connection_engine()
-            with Session(engine) as session:
+            engine = _dh("init_connection_engine", init_connection_engine)()
+            with sqlmodel.Session(engine) as session:
                 stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
                 existing = session.exec(stmt).first()
                 if existing:
@@ -321,11 +331,13 @@ async def set_api_role(guild_id: int, req, sess):
         except ValueError:
             pass
 
-    return await _render_api_user_role(guild_id)
+    render_api = _dh("_render_api_user_role", _render_api_user_role)
+    return await render_api(guild_id)
 
 
 async def remove_api_role(guild_id: int, req, sess):
-    if not await _check_guild_admin(guild_id, req):
+    check_admin = _dh("_check_guild_admin", _check_guild_admin)
+    if not await check_admin(guild_id, req):
         return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
     auth = sess.get("auth", {})
@@ -333,12 +345,13 @@ async def remove_api_role(guild_id: int, req, sess):
     if not user_access_token:
         return P("Unauthorized", cls="text-error")
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _dh("init_connection_engine", init_connection_engine)()
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
         role = session.exec(stmt).first()
         if role:
             session.delete(role)
             session.commit()
 
-    return await _render_api_user_role(guild_id)
+    render_api = _dh("_render_api_user_role", _render_api_user_role)
+    return await render_api(guild_id)

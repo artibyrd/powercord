@@ -2,22 +2,33 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from fasthtml.common import *
 from sqlmodel import Session, select
 
+import app.ui.helpers as helpers
 from app.common.alchemy import init_connection_engine
 from app.db.models import ApiKey
-from app.ui.helpers import get_dashboard_admins, get_discord_username
+
+
+def _init_engine():
+    mod_alchemy = sys.modules.get("app.common.alchemy")
+    if mod_alchemy and hasattr(mod_alchemy, "init_connection_engine"):
+        return mod_alchemy.init_connection_engine()
+    mod_helpers = sys.modules.get("app.ui.helpers")
+    if mod_helpers and hasattr(mod_helpers, "init_connection_engine"):
+        return mod_helpers.init_connection_engine()
+    return init_connection_engine()
 
 
 async def _render_admin_list(sess: dict) -> FT:
     auth = sess.get("auth", {})
-    admins = get_dashboard_admins()
+    admins = helpers.get_dashboard_admins()
 
     admin_rows = []
     for admin in admins:
-        username = await get_discord_username(admin.user_id)
+        username = await helpers.get_discord_username(admin.user_id)
         admin_rows.append(
             Tr(
                 Td(str(admin.user_id)),
@@ -51,7 +62,7 @@ async def _render_admin_list(sess: dict) -> FT:
 
 
 async def _render_admin_api_keys(sess: dict) -> FT:
-    engine = init_connection_engine()
+    engine = _init_engine()
     with Session(engine) as session:
         stmt = select(ApiKey).order_by(ApiKey.created_at.desc())
         keys = session.exec(stmt).all()

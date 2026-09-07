@@ -5,12 +5,42 @@ import hashlib
 import json
 import logging
 import secrets
+import sys
 
 import httpx
+import sqlmodel
 from fasthtml.common import *
 from fasthtml.core import APIRouter
-from sqlmodel import Session, select
+from sqlmodel import select
 from starlette.responses import RedirectResponse
+
+
+def _ph(name: str, default: Any = None) -> Any:
+    m = sys.modules.get("app.main_ui")
+    if m is not None and hasattr(m, name):
+        return getattr(m, name)
+    return default
+
+
+def _init_engine():
+    mod_alchemy = sys.modules.get("app.common.alchemy")
+    if mod_alchemy and hasattr(mod_alchemy, "init_connection_engine"):
+        return mod_alchemy.init_connection_engine()
+    mod_helpers = sys.modules.get("app.ui.helpers")
+    if mod_helpers and hasattr(mod_helpers, "init_connection_engine"):
+        return mod_helpers.init_connection_engine()
+    return init_connection_engine()
+
+
+def _is_admin(user_id: int) -> bool:
+    mod_helpers = sys.modules.get("app.ui.helpers")
+    if mod_helpers and hasattr(mod_helpers, "is_dashboard_admin"):
+        return mod_helpers.is_dashboard_admin(user_id)
+    mod_main = sys.modules.get("app.main_ui")
+    if mod_main and hasattr(mod_main, "is_dashboard_admin"):
+        return mod_main.is_dashboard_admin(user_id)
+    return is_dashboard_admin(user_id)
+
 
 from app.common.alchemy import init_connection_engine
 from app.common.extension_loader import GadgetInspector
@@ -29,25 +59,27 @@ public_router = APIRouter()
 
 
 def guild_card(guild: dict) -> FT:
+    """Renders a card representing a server the user has admin access to."""
+    guild_id = guild.get("id")
+    icon_hash = guild.get("icon")
     icon_url = (
-        f"https://cdn.discordapp.com/icons/{guild['id']}/{guild['icon']}.png"
-        if guild.get("icon")
+        f"https://cdn.discordapp.com/icons/{guild_id}/{icon_hash}.png"
+        if icon_hash
         else "https://cdn.discordapp.com/embed/avatars/0.png"
     )
+
     return Div(
         Div(
             Div(
-                Img(src=icon_url, width=48, height=48, cls="rounded-full flex-shrink-0"),
+                Img(src=icon_url, cls="w-12 h-12 rounded-full flex-shrink-0"),
                 Div(
-                    H3(guild.get("name", "Server"), cls="font-bold text-lg line-clamp-2"),
+                    H3(guild.get("name", "Unknown Server"), cls="font-bold text-lg line-clamp-2"),
+                    Span(f"ID: {guild_id}", cls="text-xs opacity-60 font-mono"),
+                    cls="flex-grow min-w-0",
                 ),
                 cls="flex items-center gap-3 flex-grow min-w-0",
             ),
-            A(
-                "Configure",
-                href=f"/dashboard/{guild['id']}",
-                cls="btn btn-outline btn-primary btn-sm flex-shrink-0",
-            ),
+            A("Configure", href=f"/dashboard/{guild_id}", cls="btn btn-outline btn-primary btn-sm flex-shrink-0"),
             cls="flex items-center justify-between gap-4 p-4",
         ),
         cls="card bg-base-300 shadow-sm border border-base-content/20 rounded-xl",
@@ -62,7 +94,7 @@ async def _render_client_keys(sess: dict) -> FT:
 
     is_admin = False
     try:
-        is_admin = is_dashboard_admin(int(user_id))
+        is_admin = _is_admin(int(user_id))
     except (ValueError, TypeError):
         pass
 
@@ -78,9 +110,9 @@ async def _render_client_keys(sess: dict) -> FT:
         )
 
     prefix = f"client_{user_id}_"
-    engine = init_connection_engine()
+    engine = _init_engine()
 
-    with Session(engine) as session:
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active)
         active_keys = session.exec(stmt).all()
 
@@ -203,14 +235,15 @@ async def _render_client_keys(sess: dict) -> FT:
 async def generate_client_key_route(req, sess):
     auth = sess.get("auth", {})
     user_id = auth.get("id")
+    render_keys_fn = _ph("_render_client_keys", _render_client_keys)
     if user_id:
         try:
-            is_admin = is_dashboard_admin(int(user_id))
+            is_admin = _is_admin(int(user_id))
         except (ValueError, TypeError):
             is_admin = False
 
         if not is_admin:
-            return await _render_client_keys(sess)
+            return await render_keys_fn(sess)
 
         form = await req.form()
         if hasattr(form, "getlist"):
@@ -229,8 +262,8 @@ async def generate_client_key_route(req, sess):
         new_key = f"pc_{secrets.token_urlsafe(32)}"
         new_key_hash = hashlib.sha256(new_key.encode("utf-8")).hexdigest()
 
-        engine = init_connection_engine()
-        with Session(engine) as session:
+        engine = _init_engine()
+        with sqlmodel.Session(engine) as session:
             api_key = ApiKey(
                 key_hash=new_key_hash,
                 name=name,
@@ -248,23 +281,24 @@ async def generate_client_key_route(req, sess):
             dismiss=True,
         )
 
-    return await _render_client_keys(sess)
+    return await render_keys_fn(sess)
 
 
 @public_router("/profile/client-key/revoke", methods=["POST"])
 async def revoke_client_key_route(req, sess):
     auth = sess.get("auth", {})
     user_id = auth.get("id")
+    render_keys_fn = _ph("_render_client_keys", _render_client_keys)
     if not user_id:
-        return await _render_client_keys(sess)
+        return await render_keys_fn(sess)
 
     try:
-        is_admin = is_dashboard_admin(int(user_id))
+        is_admin = _is_admin(int(user_id))
     except (ValueError, TypeError):
         is_admin = False
 
     if not is_admin:
-        return await _render_client_keys(sess)
+        return await render_keys_fn(sess)
 
     form = await req.form()
     key_id_str = form.get("key_id")
@@ -272,8 +306,8 @@ async def revoke_client_key_route(req, sess):
     if key_id_str:
         try:
             key_id = int(key_id_str)
-            engine = init_connection_engine()
-            with Session(engine) as session:
+            engine = _init_engine()
+            with sqlmodel.Session(engine) as session:
                 api_key = session.get(ApiKey, key_id)
                 if api_key and api_key.name.startswith(f"client_{user_id}_"):
                     api_key.is_active = False
@@ -283,7 +317,7 @@ async def revoke_client_key_route(req, sess):
         except ValueError:
             pass
 
-    return await _render_client_keys(sess)
+    return await render_keys_fn(sess)
 
 
 @public_router("/profile")
@@ -299,7 +333,8 @@ async def profile_page(sess):
     if user_access_token:
         try:
             user_id = int(auth.get("id"))
-            admin_guilds = await get_admin_guilds(user_access_token, user_id)
+            admin_guilds_fn = _ph("get_admin_guilds", get_admin_guilds)
+            admin_guilds = await admin_guilds_fn(user_access_token, user_id)
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 add_toast(sess, "Discord session expired. Please log in again.", "error")
@@ -364,7 +399,8 @@ async def profile_page(sess):
         cls="mb-8",
     )
 
-    client_keys_section = await _render_client_keys(sess)
+    render_keys_fn = _ph("_render_client_keys", _render_client_keys)
+    client_keys_section = await render_keys_fn(sess)
 
     return DashboardPage(
         "Profile",
@@ -379,22 +415,22 @@ async def profile_page(sess):
 @public_router("/")
 def public_home(sess: dict):
     """The main public-facing page, composed of widgets."""
-    inspector = GadgetInspector()
+    inspector = _ph("GadgetInspector", GadgetInspector)()
     all_widgets_by_ext = inspector.inspect_widgets()
 
     auth = sess.get("auth")
 
     # For the public page, we use the global layout settings (guild_id=0)
-    settings = get_widget_settings(0)
+    settings = _ph("get_widget_settings", get_widget_settings)(0)
 
     # Flatten all widget functions and pair with their settings.
     widget_configs = []
     for ext_name, widget_funcs in all_widgets_by_ext.items():
-        if not is_gadget_enabled(0, ext_name, "widget"):
+        if not _ph("is_gadget_enabled", is_gadget_enabled)(0, ext_name, "widget"):
             continue
 
         for func in widget_funcs:
-            widget_name = get_widget_name(func)
+            widget_name = _ph("get_widget_name", get_widget_name)(func)
             if not widget_name:
                 continue
 

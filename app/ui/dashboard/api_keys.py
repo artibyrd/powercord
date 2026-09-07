@@ -1,20 +1,28 @@
 # mypy: ignore-errors
-from __future__ import annotations
-
 import hashlib
 import json
 import logging
 import re
 import secrets
+import sys
+from typing import Any
 
+import sqlmodel
 from fasthtml.common import *
-from sqlmodel import Session, select
+from sqlmodel import select
 
 from app.bot.internal_server import get_bot_api_url
 from app.common.alchemy import init_connection_engine
 from app.common.extension_loader import GadgetInspector
 from app.db.models import ApiKey, ApiUserRole
 from app.ui.helpers import get_admin_guilds, get_internal_api_client, is_dashboard_admin
+
+
+def _dh(name: str, default: Any = None) -> Any:
+    m = sys.modules.get("app.ui.dashboard")
+    if m is not None and hasattr(m, name):
+        return getattr(m, name)
+    return default
 
 
 async def _render_self_service_keys(guild_id: int, user_id: int, sess: dict) -> FT:
@@ -25,20 +33,20 @@ async def _render_self_service_keys(guild_id: int, user_id: int, sess: dict) -> 
     )
     if user_access_token:
         try:
-            admin_guilds = await get_admin_guilds(user_access_token, user_id)
+            admin_guilds = await _dh("get_admin_guilds", get_admin_guilds)(user_access_token, user_id)
             guild = admin_guilds.get(str(guild_id), {})
             is_guild_admin = (
                 guild.get("owner", False)
                 or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
-                or is_dashboard_admin(user_id)
+                or _dh("is_dashboard_admin", is_dashboard_admin)(user_id)
             )
         except Exception:
             is_guild_admin = False
 
     prefix = f"guild_{guild_id}_{user_id}_"
-    engine = init_connection_engine()
+    engine = _dh("init_connection_engine", init_connection_engine)()
 
-    with Session(engine) as session:
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active)
         active_keys = session.exec(stmt).all()
 
@@ -175,7 +183,8 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
 
     user_roles = set()
     try:
-        async with get_internal_api_client() as client:
+        api_client_fn = _dh("get_internal_api_client", get_internal_api_client)
+        async with api_client_fn() as client:
             resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{guild_id}/roles"), timeout=2.0)
             if resp.status_code == 200:
                 user_roles = {int(r) for r in resp.json().get("roles", [])}
@@ -186,18 +195,18 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
     is_guild_admin = False
     if user_access_token and user_id:
         try:
-            admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+            admin_guilds = await _dh("get_admin_guilds", get_admin_guilds)(user_access_token, int(user_id))
             guild = admin_guilds.get(str(guild_id), {})
             is_guild_admin = (
                 guild.get("owner", False)
                 or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
-                or is_dashboard_admin(int(user_id))
+                or _dh("is_dashboard_admin", is_dashboard_admin)(int(user_id))
             )
         except Exception:
             is_guild_admin = False
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _dh("init_connection_engine", init_connection_engine)()
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
         api_user_role = session.exec(stmt).first()
 
@@ -217,7 +226,7 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
         return P("Error: Invalid Key Label.", cls="text-error")
 
     prefix = f"guild_{guild_id}_{user_id}_"
-    with Session(engine) as session:
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiKey).where(ApiKey.name.startswith(prefix)).where(ApiKey.is_active)
         active_keys = session.exec(stmt).all()
         if len(active_keys) >= 5:
@@ -227,7 +236,8 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
                 "error",
                 dismiss=True,
             )
-            return await _render_self_service_keys(guild_id, int(user_id), sess)
+            render_keys_fn = _dh("_render_self_service_keys", _render_self_service_keys)
+            return await render_keys_fn(guild_id, int(user_id), sess)
 
     if hasattr(form, "getlist"):
         selected_scopes = form.getlist("scopes")
@@ -243,7 +253,7 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
         is_guild_admin = False
         if user_access_token and user_id:
             try:
-                admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+                admin_guilds = await _dh("get_admin_guilds", get_admin_guilds)(user_access_token, int(user_id))
                 guild = admin_guilds.get(str(guild_id), {})
                 is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
             except Exception:
@@ -263,7 +273,7 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
     new_key_hash = hashlib.sha256(new_key.encode("utf-8")).hexdigest()
     full_name = f"{prefix}{label}_{secrets.token_hex(4)}"
 
-    with Session(engine) as session:
+    with sqlmodel.Session(engine) as session:
         api_key = ApiKey(
             key_hash=new_key_hash,
             name=full_name,
@@ -282,7 +292,8 @@ async def generate_guild_api_key_route(guild_id: int, req, sess):
         dismiss=True,
     )
 
-    return await _render_self_service_keys(guild_id, int(user_id), sess)
+    render_keys_fn = _dh("_render_self_service_keys", _render_self_service_keys)
+    return await render_keys_fn(guild_id, int(user_id), sess)
 
 
 async def revoke_guild_api_key_route(guild_id: int, req, sess):
@@ -294,7 +305,8 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
 
     user_roles = set()
     try:
-        async with get_internal_api_client() as client:
+        api_client_fn = _dh("get_internal_api_client", get_internal_api_client)
+        async with api_client_fn() as client:
             resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{guild_id}/roles"), timeout=2.0)
             if resp.status_code == 200:
                 user_roles = {int(r) for r in resp.json().get("roles", [])}
@@ -305,18 +317,18 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
     is_guild_admin = False
     if user_access_token and user_id:
         try:
-            admin_guilds = await get_admin_guilds(user_access_token, int(user_id))
+            admin_guilds = await _dh("get_admin_guilds", get_admin_guilds)(user_access_token, int(user_id))
             guild = admin_guilds.get(str(guild_id), {})
             is_guild_admin = (
                 guild.get("owner", False)
                 or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
-                or is_dashboard_admin(int(user_id))
+                or _dh("is_dashboard_admin", is_dashboard_admin)(int(user_id))
             )
         except Exception:
             is_guild_admin = False
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _dh("init_connection_engine", init_connection_engine)()
+    with sqlmodel.Session(engine) as session:
         stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
         api_user_role = session.exec(stmt).first()
 
@@ -332,8 +344,7 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
     if key_id_str:
         try:
             key_id = int(key_id_str)
-            engine = init_connection_engine()
-            with Session(engine) as session:
+            with sqlmodel.Session(engine) as session:
                 api_key = session.get(ApiKey, key_id)
                 prefix = f"guild_{guild_id}_{user_id}_"
                 if api_key and api_key.name.startswith(prefix):
@@ -344,4 +355,5 @@ async def revoke_guild_api_key_route(guild_id: int, req, sess):
         except ValueError:
             pass
 
-    return await _render_self_service_keys(guild_id, int(user_id), sess)
+    render_keys_fn = _dh("_render_self_service_keys", _render_self_service_keys)
+    return await render_keys_fn(guild_id, int(user_id), sess)

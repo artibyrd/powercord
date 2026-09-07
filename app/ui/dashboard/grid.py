@@ -1,5 +1,6 @@
 # mypy: ignore-errors
-from __future__ import annotations
+import sys
+from typing import Any
 
 from fasthtml.common import *
 
@@ -15,6 +16,13 @@ from app.ui.helpers import (
 )
 
 
+def _dh(name: str, default: Any) -> Any:
+    mod = sys.modules.get("app.ui.dashboard")
+    if mod is not None and hasattr(mod, name):
+        return getattr(mod, name)
+    return default
+
+
 def format_extension_title(extension_name: str) -> str:
     """Format an extension identifier into a clean, human-readable title."""
     if extension_name.lower() in ("midi_library", "midilibrary"):
@@ -24,7 +32,8 @@ def format_extension_title(extension_name: str) -> str:
 
 def _humanize_widget_name(ext_name: str, raw_name: str) -> str:
     """Convert an internal widget function name to a human-readable label."""
-    inspector = GadgetInspector()
+    inspector_cls = _dh("GadgetInspector", GadgetInspector)
+    inspector = inspector_cls()
     all_widgets = inspector.inspect_widgets()
     for func in all_widgets.get(ext_name, []):
         if getattr(func, "__name__", None) == raw_name:
@@ -40,17 +49,20 @@ def _humanize_widget_name(ext_name: str, raw_name: str) -> str:
 
 def _get_ordered_widgets(scope_id: int) -> list[dict]:
     """Build a sorted list of all widgets with their current settings."""
-    inspector = GadgetInspector()
+    inspector_cls = _dh("GadgetInspector", GadgetInspector)
+    inspector = inspector_cls()
     all_widgets_by_ext = inspector.inspect_widgets()
-    settings = get_widget_settings(scope_id)
+    settings = _dh("get_widget_settings", get_widget_settings)(scope_id)
+    is_enabled_fn = _dh("is_gadget_enabled", is_gadget_enabled)
+    get_name_fn = _dh("get_widget_name", get_widget_name)
 
     widgets = []
     for ext_name, widget_funcs in all_widgets_by_ext.items():
-        if not is_gadget_enabled(0, ext_name, "widget"):
+        if not is_enabled_fn(0, ext_name, "widget"):
             continue
 
         for func in widget_funcs:
-            wname = get_widget_name(func)
+            wname = get_name_fn(func)
             if not wname:
                 continue
 

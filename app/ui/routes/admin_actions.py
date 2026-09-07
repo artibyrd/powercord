@@ -5,17 +5,18 @@ import asyncio
 import logging
 import os
 import signal
+import sys
 
 import httpx
+import sqlmodel
 from fasthtml.common import *
 from fasthtml.core import APIRouter
-from sqlmodel import Session
 
+import app.ui.helpers as helpers
 from app.common.alchemy import init_connection_engine
 from app.common.extension_loader import GadgetInspector
 from app.db.models import ApiKey
 from app.ui.helpers import (
-    add_dashboard_admin,
     get_extension_details_modal,
     get_guild_cogs,
     get_guild_sprockets,
@@ -23,14 +24,36 @@ from app.ui.helpers import (
     get_internal_api_client,
     is_dashboard_admin,
     notify_api_of_config_change,
-    remove_dashboard_admin,
     update_guild_extension_setting,
 )
+from app.ui.routes.admin_guard import require_admin
+
+
+def _init_engine():
+    mod_alchemy = sys.modules.get("app.common.alchemy")
+    if mod_alchemy and hasattr(mod_alchemy, "init_connection_engine"):
+        return mod_alchemy.init_connection_engine()
+    mod_helpers = sys.modules.get("app.ui.helpers")
+    if mod_helpers and hasattr(mod_helpers, "init_connection_engine"):
+        return mod_helpers.init_connection_engine()
+    return init_connection_engine()
+
+
+def _is_admin(user_id: int) -> bool:
+    mod_helpers = sys.modules.get("app.ui.helpers")
+    if mod_helpers and hasattr(mod_helpers, "is_dashboard_admin"):
+        return mod_helpers.is_dashboard_admin(user_id)
+    mod_main = sys.modules.get("app.main_ui")
+    if mod_main and hasattr(mod_main, "is_dashboard_admin"):
+        return mod_main.is_dashboard_admin(user_id)
+    return is_dashboard_admin(user_id)
+
 
 admin_actions_router = APIRouter()
 
 
 @admin_actions_router("/admin/examples/counters/start", methods=["POST"])
+@require_admin
 async def start_counters_route(req):
     """Starts the example counters via Bot API."""
     try:
@@ -45,6 +68,7 @@ async def start_counters_route(req):
 
 
 @admin_actions_router("/admin/examples/counters/stop", methods=["POST"])
+@require_admin
 async def stop_counters_route(req):
     """Stops the example counters via Bot API."""
     try:
@@ -59,6 +83,7 @@ async def stop_counters_route(req):
 
 
 @admin_actions_router("/admin/manage/add", methods=["POST"])
+@require_admin
 async def add_admin_route(req, sess):
     from app.ui.routes.admin import _render_admin_list
 
@@ -66,28 +91,32 @@ async def add_admin_route(req, sess):
     try:
         user_id = int(form.get("user_id"))
         comment = form.get("comment")
-        add_dashboard_admin(user_id, comment)
+        helpers.add_dashboard_admin(user_id, comment)
     except ValueError:
         pass
 
-    return await _render_admin_list(sess)
+    render_func = getattr(sys.modules.get("app.main_ui"), "_render_admin_list", _render_admin_list)
+    return await render_func(sess)
 
 
 @admin_actions_router("/admin/manage/remove", methods=["POST"])
+@require_admin
 async def remove_admin_route(req, sess):
     from app.ui.routes.admin import _render_admin_list
 
     form = await req.form()
     try:
         user_id = int(form.get("user_id"))
-        remove_dashboard_admin(user_id)
+        helpers.remove_dashboard_admin(user_id)
     except ValueError:
         pass
 
-    return await _render_admin_list(sess)
+    render_func = getattr(sys.modules.get("app.main_ui"), "_render_admin_list", _render_admin_list)
+    return await render_func(sess)
 
 
 @admin_actions_router("/admin/api-key/toggle", methods=["POST"])
+@require_admin
 async def toggle_api_key_route(req, sess):
     from app.ui.routes.admin import _render_admin_api_keys
 
@@ -97,7 +126,7 @@ async def toggle_api_key_route(req, sess):
         return P("Unauthorized", cls="text-error")
 
     try:
-        is_admin = is_dashboard_admin(int(user_id))
+        is_admin = _is_admin(int(user_id))
     except (ValueError, TypeError):
         is_admin = False
 
@@ -111,8 +140,8 @@ async def toggle_api_key_route(req, sess):
     if key_id_str and action in ("revoke", "reactivate"):
         try:
             key_id = int(key_id_str)
-            engine = init_connection_engine()
-            with Session(engine) as session:
+            engine = _init_engine()
+            with sqlmodel.Session(engine) as session:
                 api_key = session.get(ApiKey, key_id)
                 if api_key:
                     api_key.is_active = action == "reactivate"
@@ -131,6 +160,7 @@ async def toggle_api_key_route(req, sess):
 
 
 @admin_actions_router("/admin/extensions/reload", methods=["POST"])
+@require_admin
 async def reload_extension_action(req):
     """Handles reloading a specific extension (Global)."""
     form_data = await req.form()
@@ -148,6 +178,7 @@ async def reload_extension_action(req):
 
 
 @admin_actions_router("/admin/extensions/toggle", methods=["POST"])
+@require_admin
 async def toggle_gadget_route(req):
     """Handles toggling an extension on/off globally (guild_id=0)."""
     from app.ui.routes.admin import extension_card
@@ -211,6 +242,7 @@ async def toggle_gadget_route(req):
 
 
 @admin_actions_router("/admin/bot/restart", methods=["POST"])
+@require_admin
 async def restart_bot_action(req):
     """Sends a restart request to the bot's internal API."""
     try:
@@ -227,6 +259,7 @@ async def restart_bot_action(req):
 
 
 @admin_actions_router("/admin/api/restart", methods=["POST"])
+@require_admin
 async def restart_api_action(req):
     """Sends a restart request to the backend API."""
     try:
@@ -243,6 +276,7 @@ async def restart_api_action(req):
 
 
 @admin_actions_router("/admin/ui/restart", methods=["POST"])
+@require_admin
 async def restart_ui_action(req):
     """Restarts the UI process gracefully."""
     logging.info("UI: Received restart request. Exiting...")
@@ -256,6 +290,7 @@ async def restart_ui_action(req):
 
 
 @admin_actions_router("/admin/system/restart", methods=["POST"])
+@require_admin
 async def restart_system_action(req):
     """Restarts Bot, API, and UI."""
     msgs = []
@@ -285,6 +320,7 @@ async def restart_system_action(req):
 
 
 @admin_actions_router("/admin/extensions/{extension_name}/details", methods=["GET"])
+@require_admin
 async def extension_details_route(extension_name: str, req):
     """Returns a modal with the extension details (Global admin)."""
     auth_data = req.session.get("auth", {})

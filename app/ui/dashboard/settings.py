@@ -2,14 +2,38 @@
 from __future__ import annotations
 
 import json
+import sys
 
+import sqlmodel
 from fasthtml.common import *
 from fasthtml.core import APIRouter
-from sqlmodel import Session, select
+from sqlmodel import select
 from starlette.responses import Response
 
 from app.common.alchemy import init_connection_engine
 from app.db.models import DiscordAuditorConfig, SecurityAlertOverride, UserSetting
+
+
+def _get_engine():
+    mod_d = sys.modules.get("app.ui.dashboard")
+    if mod_d and hasattr(mod_d, "init_connection_engine"):
+        return mod_d.init_connection_engine()
+    mod_a = sys.modules.get("app.common.alchemy")
+    if mod_a and hasattr(mod_a, "init_connection_engine"):
+        return mod_a.init_connection_engine()
+    return init_connection_engine()
+
+
+def _get_session():
+    mod_d = sys.modules.get("app.ui.dashboard")
+    if mod_d and hasattr(mod_d, "Session"):
+        return mod_d.Session
+    mod_s = sys.modules.get("sqlmodel")
+    if mod_s and hasattr(mod_s, "Session"):
+        return mod_s.Session
+    return sqlmodel.Session
+
+
 from app.ui.dashboard.api_keys import (
     _render_self_service_keys,
     generate_guild_api_key_route,
@@ -78,8 +102,8 @@ async def toggle_nav_route(guild_id: int, req, sess):
     except Exception:  # noqa: S110
         pass
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _get_engine()
+    with _get_session()(engine) as session:
         user_setting = session.get(UserSetting, user_id)
         if not user_setting:
             user_setting = UserSetting(user_id=user_id)
@@ -140,8 +164,8 @@ async def post_auditor_settings(guild_id: int, req):
                 except ValueError:
                     pass
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _get_engine()
+    with _get_session()(engine) as session:
         config = session.exec(select(DiscordAuditorConfig).where(DiscordAuditorConfig.guild_id == guild_id)).first()
         if not config:
             config = DiscordAuditorConfig(guild_id=guild_id)
@@ -176,8 +200,8 @@ async def post_alert_override(guild_id: int, req):
     if not alert_hash:
         return Response(content="Missing alert hash", status_code=400)
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _get_engine()
+    with _get_session()(engine) as session:
         existing = session.exec(
             select(SecurityAlertOverride).where(
                 SecurityAlertOverride.guild_id == guild_id, SecurityAlertOverride.alert_hash == alert_hash
@@ -210,8 +234,8 @@ async def post_alert_override_remove(guild_id: int, req):
     if not alert_hash:
         return Response(content="Missing alert hash", status_code=400)
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _get_engine()
+    with _get_session()(engine) as session:
         override = session.exec(
             select(SecurityAlertOverride).where(
                 SecurityAlertOverride.guild_id == guild_id, SecurityAlertOverride.alert_hash == alert_hash

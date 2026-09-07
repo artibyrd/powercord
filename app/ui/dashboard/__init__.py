@@ -5,6 +5,7 @@ from fasthtml.core import APIRouter
 
 # Re-export helper functions frequently patched in tests on app.ui.dashboard
 from app.common.extension_loader import GadgetInspector
+from app.common.extension_manager import get_installed_extensions
 from app.ui.dashboard.api_keys import (
     _render_self_service_keys,
     generate_guild_api_key_route,
@@ -140,4 +141,5 @@ __all__ = [
     "get_guild_widgets",
     "get_widget_name",
     "is_dashboard_admin",
+    "get_installed_extensions",
 ]

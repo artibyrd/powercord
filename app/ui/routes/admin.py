@@ -1,12 +1,20 @@
 # mypy: ignore-errors
 from __future__ import annotations
 
-import functools
 import inspect
 import logging
+import sys
 
 from fasthtml.common import *
 from fasthtml.core import APIRouter
+
+
+def _h(name: str, default: Any = None) -> Any:
+    m = sys.modules.get("app.main_ui")
+    if m is not None and hasattr(m, name):
+        return getattr(m, name)
+    return default
+
 
 from app.common.extension_loader import GadgetInspector
 from app.ui.components import Card
@@ -18,7 +26,6 @@ from app.ui.helpers import (
     get_internal_api_client,
     get_widget_name,
     get_widget_settings,
-    is_dashboard_admin,
     is_gadget_enabled,
 )
 from app.ui.page import DashboardPage
@@ -37,57 +44,10 @@ from app.ui.routes.admin_actions import (
     toggle_api_key_route,
     toggle_gadget_route,
 )
+from app.ui.routes.admin_guard import require_admin
 
 admin_router = APIRouter()
 admin_router.routes.extend(admin_actions_router.routes)
-
-
-def require_admin(f):
-    """Defense-in-depth decorator verifying dashboard admin session for /admin/* routes."""
-    original_sig = inspect.signature(f)
-
-    @functools.wraps(f)
-    async def wrapper(*args, **kwargs):
-        sess = kwargs.get("sess")
-        if sess is None:
-            if "sess" in original_sig.parameters:
-                idx = list(original_sig.parameters.keys()).index("sess")
-                if idx < len(args):
-                    sess = args[idx]
-            elif len(args) > len(original_sig.parameters):
-                sess = args[-1]
-        if not sess:
-            for arg in args:
-                if hasattr(arg, "session"):
-                    sess = getattr(arg, "session", {})
-                    break
-
-        auth = (sess or {}).get("auth", {}) if isinstance(sess, dict) else {}
-        user_id = auth.get("id")
-        is_admin = False
-        if user_id is not None:
-            try:
-                is_admin = is_dashboard_admin(int(user_id))
-            except (ValueError, TypeError):
-                pass
-        if not is_admin:
-            return P("Forbidden", cls="text-error")
-
-        f_args = args[: len(original_sig.parameters)] if "sess" not in original_sig.parameters else args
-        f_kwargs = (
-            {k: v for k, v in kwargs.items() if k in original_sig.parameters}
-            if "sess" not in original_sig.parameters
-            else kwargs
-        )
-        return await f(*f_args, **f_kwargs)
-
-    if "sess" not in original_sig.parameters:
-        params = list(original_sig.parameters.values())
-        params.append(inspect.Parameter("sess", inspect.Parameter.POSITIONAL_OR_KEYWORD))
-        wrapper.__signature__ = original_sig.replace(parameters=params)
-    else:
-        wrapper.__signature__ = original_sig
-    return wrapper
 
 
 def extension_card(
@@ -165,7 +125,7 @@ async def admin_home(sess):
 
     stats = {}
     try:
-        async with get_internal_api_client() as client:
+        async with _h("get_internal_api_client", get_internal_api_client)() as client:
             resp = await client.get("http://127.0.0.1:8001/stats", timeout=2.0)
             if resp.status_code == 200:
                 stats = resp.json()
@@ -222,7 +182,7 @@ async def admin_home(sess):
 
     logs = []
     try:
-        async with get_internal_api_client() as client:
+        async with _h("get_internal_api_client", get_internal_api_client)() as client:
             resp = await client.get("http://127.0.0.1:8001/logs?limit=20", timeout=2.0)
             if resp.status_code == 200:
                 logs = resp.json().get("logs", [])
@@ -257,7 +217,7 @@ async def admin_home(sess):
         cls="mb-8 w-full",
     )
 
-    manage_admins_list = await _render_admin_list(sess)
+    manage_admins_list = await _h("_render_admin_list", _render_admin_list)(sess)
 
     manage_admins = Div(
         H2("Manage Admins", cls="text-2xl font-bold mb-4"),
@@ -290,15 +250,15 @@ async def admin_home(sess):
         cls="mb-8",
     )
 
-    inspector = GadgetInspector()
+    inspector = _h("GadgetInspector", GadgetInspector)()
     all_extensions = inspector.inspect_extensions()
 
     if "powerloader" in all_extensions:
         del all_extensions["powerloader"]
 
-    enabled_cogs = get_guild_cogs(0)
-    enabled_sprockets = get_guild_sprockets(0)
-    enabled_widgets = get_guild_widgets(0)
+    enabled_cogs = _h("get_guild_cogs", get_guild_cogs)(0)
+    enabled_sprockets = _h("get_guild_sprockets", get_guild_sprockets)(0)
+    enabled_widgets = _h("get_guild_widgets", get_guild_widgets)(0)
 
     extension_section = Div(
         H2("Manage Extensions (Global)", cls="text-2xl font-bold mb-4"),
@@ -317,15 +277,15 @@ async def admin_home(sess):
     )
 
     all_widgets = inspector.inspect_widgets()
-    settings = get_widget_settings(SCOPE_ADMIN_DASHBOARD)
+    settings = _h("get_widget_settings", get_widget_settings)(SCOPE_ADMIN_DASHBOARD)
     admin_widget_configs = []
 
     for ext_name, widget_funcs in all_widgets.items():
-        if not is_gadget_enabled(0, ext_name, "widget"):
+        if not _h("is_gadget_enabled", is_gadget_enabled)(0, ext_name, "widget"):
             continue
 
         for func in widget_funcs:
-            w_name = get_widget_name(func)
+            w_name = _h("get_widget_name", get_widget_name)(func)
             if not w_name or not w_name.startswith("admin_"):
                 continue
 

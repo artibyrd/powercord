@@ -1,23 +1,19 @@
 # mypy: ignore-errors
-from __future__ import annotations
+import sys
+from typing import Any
 
 from fasthtml.common import *
 from fasthtml.core import APIRouter
 
 from app.common.extension_loader import GadgetInspector
+from app.ui.components import Card
 from app.ui.dashboard.grid import _get_ordered_widgets, _humanize_widget_name
-from app.ui.dashboard.placement import (
-    VALID_FIXED_POSITIONS,
-    VALID_FLOATING_POSITIONS,
-    normalize_position_config,
-)
 from app.ui.dashboard.roles import _check_guild_admin
 from app.ui.helpers import (
     SCOPE_ADMIN_DASHBOARD,
     SCOPE_PUBLIC,
     get_admin_guilds,
     get_widget_name,
-    is_dashboard_admin,
     restore_default_widget_settings,
     update_widget_setting,
 )
@@ -26,14 +22,33 @@ from app.ui.page import DashboardPage
 layout_router = APIRouter()
 
 
+POS_NAMES = {
+    "left": "Left Sidebar",
+    "right": "Right Sidebar",
+    "bottom-right": "Bottom Right",
+    "bottom-left": "Bottom Left",
+    "top-right": "Top Right",
+    "top-left": "Top Left",
+}
+
+
+def _dh(name: str, default: Any) -> Any:
+    mod = sys.modules.get("app.ui.dashboard")
+    if mod is not None and hasattr(mod, name):
+        return getattr(mod, name)
+    return default
+
+
 def _render_layout_editor(widgets: list[dict], scope_id: int):
     """Render the layout editor table + live preview as an HTMX fragment."""
-    inspector = GadgetInspector()
+    inspector_cls = _dh("GadgetInspector", GadgetInspector)
+    inspector = inspector_cls()
     all_widgets_by_ext = inspector.inspect_widgets()
     widget_defaults = {}
+    get_name_fn = _dh("get_widget_name", get_widget_name)
     for _ext_name, widget_funcs in all_widgets_by_ext.items():
         for func in widget_funcs:
-            wname = get_widget_name(func)
+            wname = get_name_fn(func)
             if wname:
                 widget_defaults[wname] = getattr(func, "default_pos", None) or getattr(func, "position_config", None)
 
@@ -41,406 +56,408 @@ def _render_layout_editor(widgets: list[dict], scope_id: int):
     for w in widgets:
         if w.get("enabled"):
             wname = w["widget"]
-            default_pos = w.get("default_pos")
-            if default_pos is None:
-                default_pos = widget_defaults.get(wname)
-            if default_pos in VALID_FIXED_POSITIONS or default_pos in VALID_FLOATING_POSITIONS:
-                norm_pos = normalize_position_config(w.get("position_config"), default_pos)
-                active_positions[norm_pos] = wname
+            default_pos = w.get("default_pos") or widget_defaults.get(wname) or w.get("position_config")
+            pos_cfg = w.get("position_config")
+            if default_pos in ("left", "right"):
+                pos_cfg = "right" if pos_cfg == "right" else "left"
+            elif default_pos in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                if pos_cfg not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                    pos_cfg = "bottom-right"
+            else:
+                pos_cfg = None
+            if pos_cfg:
+                active_positions[pos_cfg] = active_positions.get(pos_cfg, 0) + 1
 
+    collisions = [pos for pos, count in active_positions.items() if count > 1]
+    warning_banner = None
+    if collisions:
+        collision_labels = [POS_NAMES.get(pos, pos) for pos in collisions]
+        warning_banner = Div(
+            Span(
+                f"⚠️ Position Conflict: Multiple widgets are active in: {', '.join(collision_labels)}. They may overlap.",
+                cls="font-semibold",
+            ),
+            cls="alert alert-warning mb-4",
+        )
+
+    humanize_fn = _dh("_humanize_widget_name", _humanize_widget_name)
     rows = []
     for idx, w in enumerate(widgets):
+        label = f"{w['ext'].replace('_', ' ').title()}: {humanize_fn(w['ext'], w['widget'])}"
         wname = w["widget"]
-        human_name = _humanize_widget_name(w["ext"], wname)
-        enabled = w["enabled"]
-        span = w["span"]
-        default_pos = w.get("default_pos")
-        if default_pos is None:
-            default_pos = widget_defaults.get(wname)
+        default_pos = w.get("default_pos") or widget_defaults.get(wname) or w.get("position_config")
         pos_cfg = w.get("position_config")
 
-        is_fixed = default_pos in VALID_FIXED_POSITIONS
-        is_floating = default_pos in VALID_FLOATING_POSITIONS
-
-        if is_fixed:
-            norm_pos = normalize_position_config(pos_cfg, default_pos)
-            pos_label = f"Fixed Sidebar: {norm_pos.title()}"
-        elif is_floating:
-            norm_pos = normalize_position_config(pos_cfg, default_pos)
-            pos_label = f"Floating: {norm_pos.replace('-', ' ').title()}"
-        else:
-            pos_label = "Grid"
-
-        up_btn = (
-            Button(
-                I(cls="fa-solid fa-arrow-up"),
-                cls="btn btn-ghost btn-xs text-base-content/70 hover:text-base-content",
-                hx_post="/admin/layout/move",
-                hx_vals=f'{{"widget": "{wname}", "ext": "{w["ext"]}", "direction": "up", "scope_id": {scope_id}}}',
-                hx_target="#layout-editor-container",
-                hx_swap="innerHTML",
-            )
-            if idx > 0
-            else Button(
-                I(cls="fa-solid fa-arrow-up"), cls="btn btn-ghost btn-xs opacity-20 cursor-not-allowed", disabled=True
-            )
-        )
-
-        down_btn = (
-            Button(
-                I(cls="fa-solid fa-arrow-down"),
-                cls="btn btn-ghost btn-xs text-base-content/70 hover:text-base-content",
-                hx_post="/admin/layout/move",
-                hx_vals=f'{{"widget": "{wname}", "ext": "{w["ext"]}", "direction": "down", "scope_id": {scope_id}}}',
-                hx_target="#layout-editor-container",
-                hx_swap="innerHTML",
-            )
-            if idx < len(widgets) - 1
-            else Button(
-                I(cls="fa-solid fa-arrow-down"), cls="btn btn-ghost btn-xs opacity-20 cursor-not-allowed", disabled=True
-            )
-        )
-
-        toggle_input = Input(
-            type="checkbox",
-            name="enabled",
-            checked=enabled,
-            cls="toggle toggle-primary toggle-sm",
-            hx_post="/admin/layout/update",
-            hx_vals=f'{{"widget": "{wname}", "ext": "{w["ext"]}", "scope_id": {scope_id}}}',
-            hx_target="#layout-editor-container",
-            hx_swap="innerHTML",
-        )
-
-        span_options = [
-            Option("3 Cols (1/4)", value="3", selected=(span == 3)),
-            Option("4 Cols (1/3)", value="4", selected=(span == 4)),
-            Option("6 Cols (1/2)", value="6", selected=(span == 6)),
-            Option("8 Cols (2/3)", value="8", selected=(span == 8)),
-            Option("12 Cols (Full)", value="12", selected=(span == 12)),
-        ]
-        span_select = Select(
-            *span_options,
-            name="span",
-            cls="select select-bordered select-xs w-full max-w-[140px]",
-            hx_post="/admin/layout/update",
-            hx_vals=f'{{"widget": "{wname}", "ext": "{w["ext"]}", "scope_id": {scope_id}}}',
-            hx_target="#layout-editor-container",
-            hx_swap="innerHTML",
-        )
-
-        if is_fixed:
-            norm_pos = normalize_position_config(pos_cfg, default_pos)
-            pos_options = [
-                Option("Left Sidebar", value="left", selected=(norm_pos == "left")),
-                Option("Right Sidebar", value="right", selected=(norm_pos == "right")),
-            ]
-            config_control = Select(
-                *pos_options,
-                name="position_config",
-                cls="select select-bordered select-xs w-full max-w-[140px]",
-                hx_post="/admin/layout/update",
-                hx_vals=f'{{"widget": "{wname}", "ext": "{w["ext"]}", "scope_id": {scope_id}}}',
-                hx_target="#layout-editor-container",
-                hx_swap="innerHTML",
-            )
-        elif is_floating:
-            norm_pos = normalize_position_config(pos_cfg, default_pos)
-            pos_options = [
-                Option("Bottom Right", value="bottom-right", selected=(norm_pos == "bottom-right")),
-                Option("Bottom Left", value="bottom-left", selected=(norm_pos == "bottom-left")),
-                Option("Top Right", value="top-right", selected=(norm_pos == "top-right")),
-                Option("Top Left", value="top-left", selected=(norm_pos == "top-left")),
-            ]
-            config_control = Select(
-                *pos_options,
-                name="position_config",
-                cls="select select-bordered select-xs w-full max-w-[140px]",
-                hx_post="/admin/layout/update",
-                hx_vals=f'{{"widget": "{wname}", "ext": "{w["ext"]}", "scope_id": {scope_id}}}',
-                hx_target="#layout-editor-container",
-                hx_swap="innerHTML",
-            )
-        else:
-            config_control = span_select
-
-        warning_badge = ""
-        if enabled and (is_fixed or is_floating):
-            norm_pos = normalize_position_config(pos_cfg, default_pos)
-            if active_positions.get(norm_pos) != wname:
-                warning_badge = Div(
-                    I(cls="fa-solid fa-triangle-exclamation mr-1"),
-                    f"Position '{norm_pos}' collides with '{active_positions.get(norm_pos)}'",
-                    cls="text-error text-xs mt-1",
+        # Classify each widget and normalize/default pos_cfg
+        if default_pos in ("left", "right"):
+            pos_cfg = "right" if pos_cfg == "right" else "left"
+            widget_type = "Sidebar"
+            config_td = Td(
+                Form(
+                    Select(
+                        Option("Left Sidebar", value="left", selected=(pos_cfg == "left")),
+                        Option("Right Sidebar", value="right", selected=(pos_cfg == "right")),
+                        name="value",
+                        cls="select select-sm select-bordered",
+                    ),
+                    Hidden(name="ext", value=w["ext"]),
+                    Hidden(name="widget", value=w["widget"]),
+                    Hidden(name="field", value="position_config"),
+                    Hidden(name="scope_id", value=str(scope_id)),
+                    hx_post="/admin/layout/update",
+                    hx_trigger="change",
+                    hx_target="#layout-editor",
+                    hx_swap="innerHTML",
                 )
+            )
+        elif default_pos in ("bottom-right", "bottom-left", "top-right", "top-left"):
+            if pos_cfg not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+                pos_cfg = "bottom-right"
+            widget_type = "Floating"
+            config_td = Td(
+                Form(
+                    Select(
+                        Option("Bottom Right", value="bottom-right", selected=(pos_cfg == "bottom-right")),
+                        Option("Bottom Left", value="bottom-left", selected=(pos_cfg == "bottom-left")),
+                        Option("Top Right", value="top-right", selected=(pos_cfg == "top-right")),
+                        Option("Top Left", value="top-left", selected=(pos_cfg == "top-left")),
+                        name="value",
+                        cls="select select-sm select-bordered",
+                    ),
+                    Hidden(name="ext", value=w["ext"]),
+                    Hidden(name="widget", value=w["widget"]),
+                    Hidden(name="field", value="position_config"),
+                    Hidden(name="scope_id", value=str(scope_id)),
+                    hx_post="/admin/layout/update",
+                    hx_trigger="change",
+                    hx_target="#layout-editor",
+                    hx_swap="innerHTML",
+                )
+            )
+        else:
+            widget_type = "Grid"
+            config_td = Td(
+                Form(
+                    Select(
+                        *[Option(f"{n} Columns", value=str(n), selected=(n == w["span"])) for n in range(1, 13)],
+                        name="value",
+                        cls="select select-sm select-bordered",
+                    ),
+                    Hidden(name="ext", value=w["ext"]),
+                    Hidden(name="widget", value=w["widget"]),
+                    Hidden(name="field", value="column_span"),
+                    Hidden(name="scope_id", value=str(scope_id)),
+                    hx_post="/admin/layout/update",
+                    hx_trigger="change",
+                    hx_target="#layout-editor",
+                    hx_swap="innerHTML",
+                )
+            )
 
-        row_cls = "hover:bg-base-200/50" if enabled else "opacity-50 hover:bg-base-200/30"
+        type_td = Td(widget_type)
+        is_fixed_or_floating = default_pos in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left")
 
         rows.append(
             Tr(
-                Td(Div(up_btn, down_btn, cls="flex gap-1 items-center")),
+                # Widget name
+                Td(label, cls="font-semibold"),
+                # Enabled toggle
                 Td(
-                    Div(
-                        Span(human_name, cls="font-semibold text-base-content"),
-                        Span(f" ({w['ext']})", cls="text-xs text-base-content/50"),
-                        warning_badge,
+                    Form(
+                        Input(
+                            type="checkbox",
+                            name="enabled",
+                            value="on",
+                            checked=w["enabled"],
+                            cls="checkbox checkbox-sm checkbox-primary",
+                        ),
+                        Hidden(name="ext", value=w["ext"]),
+                        Hidden(name="widget", value=w["widget"]),
+                        Hidden(name="field", value="is_enabled"),
+                        Hidden(name="scope_id", value=str(scope_id)),
+                        hx_post="/admin/layout/update",
+                        hx_trigger="change",
+                        hx_target="#layout-editor",
+                        hx_swap="innerHTML",
                     )
                 ),
-                Td(Span(pos_label, cls="badge badge-sm badge-ghost")),
-                Td(toggle_input),
-                Td(config_control),
-                cls=row_cls,
+                # Widget Type
+                type_td,
+                # Widget Config
+                config_td,
+                # Reorder buttons
+                Td(
+                    ""
+                    if is_fixed_or_floating
+                    else Div(
+                        Form(
+                            Hidden(name="ext", value=w["ext"]),
+                            Hidden(name="widget", value=w["widget"]),
+                            Hidden(name="direction", value="up"),
+                            Hidden(name="scope_id", value=str(scope_id)),
+                            Button(I(cls="fa-solid fa-arrow-up"), cls="btn btn-ghost btn-xs", disabled=(idx == 0)),
+                            hx_post="/admin/layout/move",
+                            hx_target="#layout-editor",
+                            hx_swap="innerHTML",
+                        ),
+                        Form(
+                            Hidden(name="ext", value=w["ext"]),
+                            Hidden(name="widget", value=w["widget"]),
+                            Hidden(name="direction", value="down"),
+                            Hidden(name="scope_id", value=str(scope_id)),
+                            Button(
+                                I(cls="fa-solid fa-arrow-down"),
+                                cls="btn btn-ghost btn-xs",
+                                disabled=(idx == len(widgets) - 1),
+                            ),
+                            hx_post="/admin/layout/move",
+                            hx_target="#layout-editor",
+                            hx_swap="innerHTML",
+                        ),
+                        cls="flex gap-1",
+                    )
+                ),
             )
         )
 
-    table = Table(
-        Thead(
-            Tr(
-                Th("Order", cls="w-20"),
-                Th("Widget Name"),
-                Th("Position Type", cls="w-36"),
-                Th("Enabled", cls="w-24"),
-                Th("Width / Position", cls="w-48"),
-            )
+    table_content = Div(
+        Table(
+            Thead(Tr(Th("Widget"), Th("Enabled"), Th("Widget Type"), Th("Widget Config"), Th("Order"))),
+            Tbody(*rows),
+            cls="table table-zebra w-full",
         ),
-        Tbody(*rows),
-        cls="table w-full",
+        cls="overflow-x-auto",
     )
 
+    if scope_id > 1:
+        restore_form = Form(
+            Hidden(name="scope_id", value=str(scope_id)),
+            Button(
+                I(cls="fa-solid fa-rotate-left mr-1"),
+                "Restore Default Layout",
+                cls="btn btn-outline btn-warning btn-xs",
+                hx_confirm="Are you sure you want to restore the default layout? All custom positioning and sizing changes will be lost.",
+            ),
+            hx_post="/admin/layout/restore",
+            hx_target="#layout-editor",
+            hx_swap="innerHTML",
+        )
+        card_title = Div(
+            H3("Widget Configuration", cls="card-title"),
+            restore_form,
+            cls="flex justify-between items-center w-full",
+        )
+    else:
+        card_title = "Widget Configuration"
+
+    table_card = Card(
+        card_title,
+        table_content,
+    )
+
+    # Live preview: shows widgets in a 12-column CSS grid
     preview_items = []
     for w in widgets:
-        if w["enabled"]:
-            wname = w["widget"]
-            human_name = _humanize_widget_name(w["ext"], wname)
-            default_pos = w.get("default_pos")
-            if default_pos is None:
-                default_pos = widget_defaults.get(wname)
-            is_fixed = default_pos in VALID_FIXED_POSITIONS
-            is_floating = default_pos in VALID_FLOATING_POSITIONS
-
-            if is_fixed:
-                norm_pos = normalize_position_config(w.get("position_config"), default_pos)
-                preview_items.append(
-                    Div(
-                        Span(f"📌 {human_name}", cls="font-medium text-xs truncate"),
-                        Span(f"Fixed ({norm_pos.title()})", cls="badge badge-xs badge-outline opacity-60 ml-auto"),
-                        cls="bg-base-300/80 border border-primary/40 rounded p-2 flex items-center gap-2",
-                        style="grid-column: span 12;",
-                    )
-                )
-            elif is_floating:
-                norm_pos = normalize_position_config(w.get("position_config"), default_pos)
-                preview_items.append(
-                    Div(
-                        Span(f"🎈 {human_name}", cls="font-medium text-xs truncate"),
-                        Span(f"Floating ({norm_pos})", cls="badge badge-xs badge-outline opacity-60 ml-auto"),
-                        cls="bg-base-300/80 border border-secondary/40 rounded p-2 flex items-center gap-2",
-                        style="grid-column: span 12;",
-                    )
-                )
-            else:
-                span = w["span"]
-                preview_items.append(
-                    Div(
-                        Span(human_name, cls="font-medium text-xs truncate"),
-                        Span(f"{span}/12", cls="badge badge-xs badge-ghost opacity-60 ml-auto"),
-                        cls="bg-base-300/60 border border-base-content/20 rounded p-2 flex items-center gap-2",
-                        style=f"grid-column: span {span};",
-                    )
-                )
-
-    preview_grid = (
-        Div(
-            Div(*preview_items, cls="grid grid-cols-12 gap-2 p-4 bg-base-100 rounded-lg border border-base-content/10"),
-            cls="mt-6",
+        wname = w["widget"]
+        default_pos = w.get("default_pos") or widget_defaults.get(wname) or w.get("position_config")
+        if default_pos in ("left", "right", "bottom-right", "bottom-left", "top-right", "top-left"):
+            continue  # Exclude from main grid live preview
+        opacity = "opacity-100" if w["enabled"] else "opacity-30"
+        # Styling widget boxes as mini-cards
+        preview_items.append(
+            Div(
+                Div(
+                    H5(w["ext"].replace("_", " ").title(), cls="font-bold text-xs opacity-70"),
+                    Div(humanize_fn(w["ext"], w["widget"]), cls="text-sm font-semibold truncate"),
+                    cls="card-body p-3 text-center",
+                ),
+                cls=f"card bg-base-100 shadow-sm border border-base-content/20 {opacity}",
+                style=f"grid-column: span {w['span']};",
+            )
         )
-        if preview_items
-        else P("No widgets currently enabled in this layout.", cls="italic opacity-60 mt-4 text-center")
+
+    preview_section = Div(
+        H3("Live Preview", cls="text-lg font-bold mb-4 ml-1 opacity-80"),
+        Div(
+            *preview_items,
+            cls="grid grid-cols-12 gap-4",
+        ),
+        cls="mt-8",
     )
 
-    return Div(
-        table,
-        Div(
-            H3("Live Layout Preview", cls="text-sm font-semibold opacity-70 mb-2"),
-            preview_grid,
-            cls="mt-6 border-t border-base-content/10 pt-4",
-        ),
-        id="layout-editor-container",
-    )
+    children = []
+    if warning_banner:
+        children.append(warning_banner)
+    children.extend([table_card, preview_section])
+    return Div(*children)
 
 
 @layout_router("/admin/layout")
 def layout_editor(sess):
-    """Layout editor page for Public Page (scope_id=0)."""
-    widgets = _get_ordered_widgets(SCOPE_PUBLIC)
-    editor = _render_layout_editor(widgets, SCOPE_PUBLIC)
+    """Page for editing the PUBLIC homepage widget layout."""
+    auth = sess.get("auth", {})
+    get_ordered = _dh("_get_ordered_widgets", _get_ordered_widgets)
+    render_layout = _dh("_render_layout_editor", _render_layout_editor)
+    widgets = get_ordered(SCOPE_PUBLIC)
 
-    restore_btn = Button(
-        I(cls="fa-solid fa-rotate-left mr-2"),
-        "Restore Default Layout",
-        cls="btn btn-outline btn-warning btn-sm",
-        hx_post="/admin/layout/restore",
-        hx_vals=f'{{"scope_id": {SCOPE_PUBLIC}}}',
-        hx_target="#layout-editor-container",
-        hx_swap="innerHTML",
-        hx_confirm="Reset public widget layout to default positions and column spans?",
-    )
-
-    content = Div(
+    return DashboardPage(
+        "Edit Public Layout",
         Div(
-            H1("Public Page Layout Editor", cls="text-2xl font-bold"),
-            restore_btn,
-            cls="flex justify-between items-center mb-6",
+            H1("Edit Public Layout", cls="text-3xl font-extrabold mb-6"),
+            P(
+                "Configure which widgets appear on the public homepage, their width, and display order.",
+                cls="mb-8 opacity-80",
+            ),
+            Div(
+                render_layout(widgets, SCOPE_PUBLIC),
+                id="layout-editor",
+            ),
         ),
-        Div(editor, cls="card bg-base-100 shadow-sm border border-base-content/20 p-4"),
+        auth=auth,
+        guild_id=None,
+        guild_name=None,
+        fixed_widgets=None,
+        floating_widgets=None,
     )
-
-    return DashboardPage("Public Layout Editor", content, auth=sess.get("auth"))
 
 
 @layout_router("/admin/layout/admin")
 def admin_layout_editor(sess):
-    """Layout editor page for Admin Dashboard (scope_id=1)."""
+    """Page for editing the ADMIN dashboard widget layout."""
     auth = sess.get("auth", {})
-    user_id = auth.get("id")
-    is_admin = False
-    if user_id:
-        try:
-            is_admin = is_dashboard_admin(int(user_id))
-        except (ValueError, TypeError):
-            pass
+    get_ordered = _dh("_get_ordered_widgets", _get_ordered_widgets)
+    render_layout = _dh("_render_layout_editor", _render_layout_editor)
+    widgets = get_ordered(SCOPE_ADMIN_DASHBOARD)
 
-    if not is_admin:
-        return DashboardPage("Access Denied", P("Forbidden", cls="text-error"), auth=auth)
-
-    widgets = _get_ordered_widgets(SCOPE_ADMIN_DASHBOARD)
-    editor = _render_layout_editor(widgets, SCOPE_ADMIN_DASHBOARD)
-
-    restore_btn = Button(
-        I(cls="fa-solid fa-rotate-left mr-2"),
-        "Restore Default Layout",
-        cls="btn btn-outline btn-warning btn-sm",
-        hx_post="/admin/layout/restore",
-        hx_vals=f'{{"scope_id": {SCOPE_ADMIN_DASHBOARD}}}',
-        hx_target="#layout-editor-container",
-        hx_swap="innerHTML",
-        hx_confirm="Reset admin widget layout to defaults?",
-    )
-
-    content = Div(
+    return DashboardPage(
+        "Edit Admin Layout",
         Div(
-            H1("Admin Dashboard Layout Editor", cls="text-2xl font-bold"),
-            restore_btn,
-            cls="flex justify-between items-center mb-6",
+            H1("Edit Admin Layout", cls="text-3xl font-extrabold mb-6"),
+            P(
+                "Configure which widgets appear on the Admin Dashboard, their width, and display order.",
+                cls="mb-8 opacity-80",
+            ),
+            Div(
+                render_layout(widgets, SCOPE_ADMIN_DASHBOARD),
+                id="layout-editor",
+            ),
         ),
-        Div(editor, cls="card bg-base-100 shadow-sm border border-base-content/20 p-4"),
+        auth=auth,
+        guild_id=None,
+        guild_name=None,
+        fixed_widgets=None,
+        floating_widgets=None,
     )
-
-    return DashboardPage("Admin Layout Editor", content, auth=auth)
 
 
 @layout_router("/dashboard/{guild_id:int}/layout")
-async def guild_layout_editor(guild_id: int, sess, req):
-    """Layout editor page for Server Dashboard."""
-    if not await _check_guild_admin(guild_id, req):
-        return DashboardPage(
-            "Access Denied",
-            P("Forbidden: Guild Administrator permissions required.", cls="text-error"),
-            auth=sess.get("auth"),
-        )
-
+async def guild_layout_editor(guild_id: int, sess):
+    """Page for editing a GUILD dashboard widget layout."""
     auth = sess.get("auth", {})
-    guild_name = "Server"
     user_access_token = auth.get("token_data", {}).get("access_token")
-    if user_access_token:
-        try:
-            admin_guilds = await get_admin_guilds(user_access_token, int(auth.get("id")))
-            guild_name = admin_guilds.get(str(guild_id), {}).get("name", "Server")
-        except Exception:  # noqa: S110
-            pass
+    if not user_access_token:
+        return Titled("Error", P("Could not retrieve necessary tokens."))
 
-    widgets = _get_ordered_widgets(guild_id)
-    editor = _render_layout_editor(widgets, guild_id)
+    try:
+        user_id = int(auth.get("id"))
+        admin_guilds = await get_admin_guilds(user_access_token, user_id)
+        guild = admin_guilds.get(str(guild_id), {"name": "Unknown Server"})
+    except Exception as e:
+        return Titled("Error", P(f"Failed to fetch guild information: {e}"))
 
-    restore_btn = Button(
-        I(cls="fa-solid fa-rotate-left mr-2"),
-        "Restore Default Layout",
-        cls="btn btn-outline btn-warning btn-sm",
-        hx_post="/admin/layout/restore",
-        hx_vals=f'{{"scope_id": {guild_id}}}',
-        hx_target="#layout-editor-container",
-        hx_swap="innerHTML",
-        hx_confirm=f"Reset widget layout for '{guild_name}' to defaults?",
-    )
+    is_guild_admin = (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+    if not is_guild_admin:
+        return Titled("Error", P("Forbidden: Guild Administrator permissions required."))
 
-    back_link = A(
-        I(cls="fa-solid fa-arrow-left mr-2"),
-        f"Back to {guild_name}",
-        href=f"/dashboard/{guild_id}",
-        cls="btn btn-ghost btn-sm mr-2",
-    )
+    get_ordered = _dh("_get_ordered_widgets", _get_ordered_widgets)
+    render_layout = _dh("_render_layout_editor", _render_layout_editor)
+    widgets = get_ordered(guild_id)
 
-    content = Div(
+    return DashboardPage(
+        f"Edit Layout: {guild['name']}",
         Div(
-            Div(back_link, H1(f"Layout Editor: {guild_name}", cls="text-2xl font-bold"), cls="flex items-center"),
-            restore_btn,
-            cls="flex justify-between items-center mb-6",
+            H1(f"Edit Layout: {guild['name']}", cls="text-3xl font-extrabold mb-6"),
+            P(
+                "Configure which widgets appear on this Guild Dashboard, their width, and display order.",
+                cls="mb-8 opacity-80",
+            ),
+            Div(
+                render_layout(widgets, guild_id),
+                id="layout-editor",
+            ),
+            A("Back to Dashboard", href=f"/dashboard/{guild_id}", role="button", cls="secondary mt-8 inline-block"),
         ),
-        Div(editor, cls="card bg-base-100 shadow-sm border border-base-content/20 p-4"),
+        auth=auth,
+        guild_id=guild_id,
+        guild_name=guild["name"],
+        guild_icon=guild.get("icon"),
+        fixed_widgets=None,
+        floating_widgets=None,
     )
-
-    return DashboardPage(f"Layout Editor: {guild_name}", content, auth=auth, guild_id=guild_id, guild_name=guild_name)
 
 
 @layout_router("/admin/layout/update", methods=["POST"])
 async def layout_update(req):
-    """Handles enabling/disabling widgets or changing column spans/position configs."""
+    """Handles updating a single widget setting (enabled or column_span)."""
     form = await req.form()
-    widget_name = form.get("widget")
-    ext_name = form.get("ext")
+    ext = form.get("ext")
+    widget = form.get("widget")
+    field = form.get("field")
     raw_scope = form.get("scope_id", "")
     scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
 
+    check_admin_fn = _dh("_check_guild_admin", _check_guild_admin)
     if scope_id > 0:
-        if not await _check_guild_admin(scope_id, req):
+        if not await check_admin_fn(scope_id, req):
             return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
-    if "enabled" in form:
-        is_enabled = form.get("enabled") == "on"
-        update_widget_setting(scope_id, ext_name, widget_name, "is_enabled", is_enabled)
+    if field == "is_enabled":
+        value = form.get("enabled") == "on"
+    elif field == "column_span":
+        value = int(form.get("value", 4))
+    elif field == "position_config":
+        value = form.get("value")
+    else:
+        return P("Unknown field", cls="text-error")
 
-    if "span" in form:
-        try:
-            span = int(form.get("span"))
-            update_widget_setting(scope_id, ext_name, widget_name, "column_span", span)
-        except ValueError:
-            pass
+    update_fn = _dh("update_widget_setting", update_widget_setting)
+    update_fn(scope_id, ext, widget, field, value)
 
-    if "position_config" in form:
-        pos_cfg = form.get("position_config")
-        update_widget_setting(scope_id, ext_name, widget_name, "position_config", pos_cfg)
+    get_ordered = _dh("_get_ordered_widgets", _get_ordered_widgets)
+    render_layout = _dh("_render_layout_editor", _render_layout_editor)
 
-    widgets = _get_ordered_widgets(scope_id)
-    return _render_layout_editor(widgets, scope_id)
+    widgets = get_ordered(scope_id)
+    if field == "is_enabled":
+        for new_order, w in enumerate(widgets):
+            update_fn(scope_id, w["ext"], w["widget"], "display_order", new_order)
+        widgets = get_ordered(scope_id)
+    return render_layout(widgets, scope_id)
 
 
 @layout_router("/admin/layout/move", methods=["POST"])
 async def layout_move(req):
-    """Handles reordering widgets (moving up or down)."""
+    """Handles reordering a widget up or down."""
     form = await req.form()
+    ext = form.get("ext")
     widget_name = form.get("widget")
     direction = form.get("direction")
     raw_scope = form.get("scope_id", "")
     scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
 
+    check_admin_fn = _dh("_check_guild_admin", _check_guild_admin)
     if scope_id > 0:
-        if not await _check_guild_admin(scope_id, req):
+        if not await check_admin_fn(scope_id, req):
             return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
-    widgets = _get_ordered_widgets(scope_id)
-    idx = next((i for i, w in enumerate(widgets) if w["widget"] == widget_name), -1)
-    if idx == -1:
-        return _render_layout_editor(widgets, scope_id)
+    get_ordered = _dh("_get_ordered_widgets", _get_ordered_widgets)
+    render_layout = _dh("_render_layout_editor", _render_layout_editor)
+    update_fn = _dh("update_widget_setting", update_widget_setting)
+
+    widgets = get_ordered(scope_id)
+
+    idx = next((i for i, w in enumerate(widgets) if w["ext"] == ext and w["widget"] == widget_name), None)
+    if idx is None:
+        return render_layout(widgets, scope_id)
 
     if direction == "up" and idx > 0:
         widgets[idx], widgets[idx - 1] = widgets[idx - 1], widgets[idx]
@@ -448,10 +465,10 @@ async def layout_move(req):
         widgets[idx], widgets[idx + 1] = widgets[idx + 1], widgets[idx]
 
     for new_order, w in enumerate(widgets):
-        update_widget_setting(scope_id, w["ext"], w["widget"], "display_order", new_order)
+        update_fn(scope_id, w["ext"], w["widget"], "display_order", new_order)
 
-    widgets = _get_ordered_widgets(scope_id)
-    return _render_layout_editor(widgets, scope_id)
+    widgets = get_ordered(scope_id)
+    return render_layout(widgets, scope_id)
 
 
 @layout_router("/admin/layout/restore", methods=["POST"])
@@ -461,11 +478,17 @@ async def layout_restore(req):
     raw_scope = form.get("scope_id", "")
     scope_id = int(raw_scope) if raw_scope else SCOPE_PUBLIC
 
+    check_admin_fn = _dh("_check_guild_admin", _check_guild_admin)
     if scope_id > 0:
-        if not await _check_guild_admin(scope_id, req):
+        if not await check_admin_fn(scope_id, req):
             return P("Forbidden: Guild Administrator permissions required.", cls="text-error")
 
-    restore_default_widget_settings(scope_id)
+    helpers_mod = sys.modules.get("app.ui.helpers")
+    restore_fn = getattr(helpers_mod, "restore_default_widget_settings", restore_default_widget_settings)
+    restore_fn(scope_id)
 
-    widgets = _get_ordered_widgets(scope_id)
-    return _render_layout_editor(widgets, scope_id)
+    get_ordered = _dh("_get_ordered_widgets", _get_ordered_widgets)
+    render_layout = _dh("_render_layout_editor", _render_layout_editor)
+
+    widgets = get_ordered(scope_id)
+    return render_layout(widgets, scope_id)

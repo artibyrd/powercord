@@ -43,8 +43,30 @@ from app.ui.routes.admin import (
     extension_card,
     require_admin,
 )
+from app.ui.routes.admin_actions import (
+    add_admin_route,
+    extension_details_route,
+    reload_extension_action,
+    remove_admin_route,
+    restart_api_action,
+    restart_bot_action,
+    restart_system_action,
+    restart_ui_action,
+    start_counters_route,
+    stop_counters_route,
+    toggle_api_key_route,
+    toggle_gadget_route,
+)
+from app.ui.routes.admin_components import _render_admin_api_keys
 from app.ui.routes.guild import guild_router
-from app.ui.routes.public import public_home, public_router
+from app.ui.routes.public import (
+    _render_client_keys,
+    generate_client_key_route,
+    profile_page,
+    public_home,
+    public_router,
+    revoke_client_key_route,
+)
 
 gsecrets.load_env()
 
@@ -130,6 +152,23 @@ __all__ = [
     "notify_api_of_config_change",
     "update_guild_extension_setting",
     "GadgetInspector",
+    "add_admin_route",
+    "remove_admin_route",
+    "restart_ui_action",
+    "restart_bot_action",
+    "restart_api_action",
+    "restart_system_action",
+    "toggle_gadget_route",
+    "start_counters_route",
+    "stop_counters_route",
+    "reload_extension_action",
+    "extension_details_route",
+    "_render_admin_api_keys",
+    "_render_client_keys",
+    "generate_client_key_route",
+    "revoke_client_key_route",
+    "toggle_api_key_route",
+    "profile_page",
 ]
 
 if __name__ == "__main__":

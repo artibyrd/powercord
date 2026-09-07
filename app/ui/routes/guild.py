@@ -2,10 +2,19 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 from fasthtml.common import *
 from fasthtml.core import APIRouter
 from starlette.responses import Response
+
+
+def _dh(name: str, default: Any = None) -> Any:
+    m = sys.modules.get("app.ui.dashboard")
+    if m is not None and hasattr(m, name):
+        return getattr(m, name)
+    return default
+
 
 from app.bot.internal_server import get_bot_api_url
 from app.common.extension_hooks import run_hook, supports_delete_data
@@ -174,30 +183,34 @@ async def dashboard(guild_id: int, sess):
 
     try:
         user_id = int(auth.get("id"))
-        admin_guilds = await get_admin_guilds(user_access_token, user_id)
+        admin_guilds = await _dh("get_admin_guilds", get_admin_guilds)(user_access_token, user_id)
         guild = admin_guilds.get(str(guild_id), {"name": "Unknown Server"})
     except Exception as e:
         return Titled("Error", P(f"Failed to fetch guild information: {e}"))
 
     is_guild_admin = (
-        guild.get("owner", False) or (int(guild.get("permissions", 0)) & (1 << 3)) != 0 or is_dashboard_admin(user_id)
+        guild.get("owner", False)
+        or (int(guild.get("permissions", 0)) & (1 << 3)) != 0
+        or _dh("is_dashboard_admin", is_dashboard_admin)(user_id)
     )
 
-    inspector = GadgetInspector()
+    inspector = _dh("GadgetInspector", GadgetInspector)()
     all_extensions = inspector.inspect_extensions()
 
     if "powerloader" in all_extensions:
         del all_extensions["powerloader"]
 
-    global_only_extensions = {ext["name"] for ext in get_installed_extensions() if ext.get("global_only")}
+    global_only_extensions = {
+        ext["name"] for ext in _dh("get_installed_extensions", get_installed_extensions)() if ext.get("global_only")
+    }
 
-    enabled_cogs = get_guild_cogs(guild_id)
-    enabled_sprockets = get_guild_sprockets(guild_id)
-    enabled_widgets = get_guild_widgets(guild_id)
+    enabled_cogs = _dh("get_guild_cogs", get_guild_cogs)(guild_id)
+    enabled_sprockets = _dh("get_guild_sprockets", get_guild_sprockets)(guild_id)
+    enabled_widgets = _dh("get_guild_widgets", get_guild_widgets)(guild_id)
 
-    global_cogs = get_guild_cogs(0)
-    global_sprockets = get_guild_sprockets(0)
-    global_widgets = get_guild_widgets(0)
+    global_cogs = _dh("get_guild_cogs", get_guild_cogs)(0)
+    global_sprockets = _dh("get_guild_sprockets", get_guild_sprockets)(0)
+    global_widgets = _dh("get_guild_widgets", get_guild_widgets)(0)
 
     server_extension_cards = []
     for name, gadgets in all_extensions.items():
@@ -238,22 +251,22 @@ async def dashboard(guild_id: int, sess):
     )
 
     all_widgets = inspector.inspect_widgets()
-    settings = get_widget_settings(guild_id)
+    settings = _dh("get_widget_settings", get_widget_settings)(guild_id)
     if not settings:
         for ext_name in global_widgets:
             update_guild_extension_setting(guild_id, ext_name, "widget", True)
-        settings = get_widget_settings(guild_id)
+        settings = _dh("get_widget_settings", get_widget_settings)(guild_id)
 
     fixed_widgets = []
     floating_widgets = []
     grid_widgets = []
 
     for ext_name, widget_funcs in all_widgets.items():
-        if not is_gadget_enabled(guild_id, ext_name, "widget"):
+        if not _dh("is_gadget_enabled", is_gadget_enabled)(guild_id, ext_name, "widget"):
             continue
 
         for func in widget_funcs:
-            w_name = get_widget_name(func)
+            w_name = _dh("get_widget_name", get_widget_name)(func)
             if not w_name or not w_name.startswith("guild_admin_"):
                 continue
 
@@ -319,7 +332,9 @@ async def dashboard(guild_id: int, sess):
         cls="mb-8 mt-8",
     )
 
-    access_roles_section = await _render_access_roles(guild_id) if is_guild_admin else Div()
+    access_roles_section = (
+        await _dh("_render_access_roles", _render_access_roles)(guild_id) if is_guild_admin else Div()
+    )
     api_user_role_section = await _render_api_user_role(guild_id) if is_guild_admin else Div()
 
     roles_grid = (
@@ -330,19 +345,21 @@ async def dashboard(guild_id: int, sess):
 
     has_api_user_role = False
     try:
-        from sqlmodel import Session, select
+        import sqlmodel
+        from sqlmodel import select
 
         from app.common.alchemy import init_connection_engine
         from app.db.models import ApiUserRole
 
-        engine = init_connection_engine()
-        with Session(engine) as session:
+        engine = _dh("init_connection_engine", init_connection_engine)()
+        with sqlmodel.Session(engine) as session:
             stmt = select(ApiUserRole).where(ApiUserRole.guild_id == guild_id)
             api_user_role = session.exec(stmt).first()
 
         if api_user_role:
             user_roles = set()
-            async with get_internal_api_client() as client:
+            api_client_fn = _dh("get_internal_api_client", get_internal_api_client)
+            async with api_client_fn() as client:
                 resp = await client.get(get_bot_api_url(f"/user/{user_id}/guilds/{guild_id}/roles"), timeout=2.0)
                 if resp.status_code == 200:
                     user_role_ids = resp.json().get("roles", [])
@@ -353,7 +370,8 @@ async def dashboard(guild_id: int, sess):
         logging.error(f"Failed to check API user role for guild {guild_id}: {e}")
 
     show_api_keys = is_guild_admin or has_api_user_role
-    api_keys_section = await _render_self_service_keys(guild_id, user_id, sess) if show_api_keys else Div()
+    render_keys = _dh("_render_self_service_keys", _render_self_service_keys)
+    api_keys_section = await render_keys(guild_id, user_id, sess) if show_api_keys else Div()
 
     server_extensions_section = server_extensions if is_guild_admin else Div()
 
@@ -386,7 +404,8 @@ async def lockdown_route(guild_id: int):
 async def dashboard_scan_guild(guild_id: int):
     url = get_bot_api_url(f"/guilds/{guild_id}/scan")
     try:
-        async with get_internal_api_client() as client:
+        api_client_fn = _dh("get_internal_api_client", get_internal_api_client)
+        async with api_client_fn() as client:
             resp = await client.post(url)
             if resp.status_code != 200:
                 logging.error(f"Failed to scan guild {guild_id}: Bot returned status {resp.status_code}")
@@ -406,7 +425,8 @@ async def dashboard_ping_bot(guild_id: int):
     status_text = "🔴 Disconnected"
     cls_color = "badge-error text-error-content"
     try:
-        async with get_internal_api_client() as client:
+        api_client_fn = _dh("get_internal_api_client", get_internal_api_client)
+        async with api_client_fn() as client:
             resp = await client.get(url, timeout=2.0)
             if resp.status_code == 200:
                 stats = resp.json()
