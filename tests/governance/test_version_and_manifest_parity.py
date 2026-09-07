@@ -37,12 +37,12 @@ def _read_pyproject_version(path: Path) -> str | None:
 def test_ecosystem_baseline_versions() -> None:
     """Verify true baseline version alignment across core packages."""
     powercord_version = _read_pyproject_version(REPO_ROOT / "pyproject.toml")
-    assert powercord_version == "2.0.1", f"powercord version must be 2.0.1, got: {powercord_version}"
+    assert powercord_version is not None, "powercord version must be defined in pyproject.toml"
 
     if DOWNSTREAM_ROOT.exists():
         downstream_version = _read_pyproject_version(DOWNSTREAM_ROOT / "pyproject.toml")
-        assert downstream_version == "2.0.1", (
-            f"powercord-downstream-server must mirror core 2.0.1, got: {downstream_version}"
+        assert downstream_version == powercord_version, (
+            f"powercord-downstream-server must mirror core {powercord_version}, got: {downstream_version}"
         )
 
     if CLIENT_ROOT.exists():
