@@ -2,26 +2,5 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "ratchet_version": "1.0.0",
   "description": "Architectural Debt Ratchet tracking legacy files exceeding 500 LOC. Line counts must decrease monotonically upon modification.",
-  "files": {
-    "app/extensions/example/cog.py": {
-      "max_loc": 1138,
-      "target_milestone": "v2.3.0",
-      "decomposition_strategy": "Modularize demo commands into sub-cogs"
-    },
-    "app/extensions/midi_library/cog.py": {
-      "max_loc": 748,
-      "target_milestone": "v2.3.0",
-      "decomposition_strategy": "Split into command handlers"
-    },
-    "app/extensions/midi_library/routes.py": {
-      "max_loc": 541,
-      "target_milestone": "v2.3.0",
-      "decomposition_strategy": "Modularize catalog routes"
-    },
-    "app/common/extension_manager.py": {
-      "max_loc": 524,
-      "target_milestone": "v2.3.0",
-      "decomposition_strategy": "Decouple migration generator from gadget inspector"
-    }
-  }
+  "files": {}
 }

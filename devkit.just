@@ -31,3 +31,18 @@ _ensure-db:
 _teardown-dev-db:
     #!/usr/bin/env bash
     docker rm -f powercord-pg-dev 2>/dev/null || true
+
+# Prune dangling Docker images and build cache
+[group: "dev"]
+docker-clean all="false":
+    #!/usr/bin/env bash
+    echo "Pruning dangling Docker images..."
+    docker image prune -f
+    if [ "{{all}}" = "true" ] || [ "{{all}}" = "all=true" ]; then
+        echo "Pruning all Docker build cache..."
+        docker builder prune -a -f
+    else
+        echo "Pruning Docker build cache older than 24 hours..."
+        docker builder prune -f --filter "until=24h"
+    fi
+    echo "Docker hygiene complete."

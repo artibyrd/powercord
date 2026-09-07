@@ -4,6 +4,7 @@ Governed by:
 - inv-500-loc-ceiling: 500 LOC Module Ceiling Law with Ratchet
 - inv-compute-ontology: Pure Function Ontology (compute_*)
 - inv-client-server-decoupling: Client-Server Runtime Isolation
+- inv-source-isolation-no-ad-hoc-cp: Core Extension Directory Isolation
 """
 
 from __future__ import annotations
@@ -120,3 +121,25 @@ def test_client_server_runtime_isolation() -> None:
             pass
 
     assert not violations, f"Client importing backend server modules: {violations}"
+
+
+@pytest.mark.unit
+def test_core_extensions_directory_isolation() -> None:
+    """Verify that core powercord repository contains ONLY internal extensions (inv-source-isolation-no-ad-hoc-cp)."""
+    from app.common.extension_manager import _is_core_repository
+
+    if not _is_core_repository(REPO_ROOT):
+        pytest.skip("Extension directory isolation is enforced on core powercord repo only.")
+
+    extensions_dir = SRC_ROOT / "extensions"
+    assert extensions_dir.exists(), f"Missing extensions directory at {extensions_dir}"
+
+    allowed_internal_extensions = {"custom_content", "example", "utilities"}
+    found_extensions = {d.name for d in extensions_dir.iterdir() if d.is_dir() and not d.name.startswith((".", "__"))}
+
+    external_extensions = found_extensions - allowed_internal_extensions
+    assert not external_extensions, (
+        f"External extension(s) found in core framework repository: {external_extensions}.\n"
+        "Per inv-source-isolation-no-ad-hoc-cp, external extensions must NOT be installed into the "
+        "powercord core repository. Install extensions exclusively in powercord-downstream-server/."
+    )

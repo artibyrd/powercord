@@ -155,6 +155,17 @@ class TestGetInstalledExtensions:
 class TestInstallExtension:
     """Tests for install_extension()."""
 
+    @pytest.fixture(autouse=True)
+    def allow_core_for_install_tests(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("POWERCORD_ALLOW_CORE_EXT_INSTALL", "1")
+
+    def test_install_in_core_repository_blocked(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Direct installation in core powercord repository is blocked."""
+        monkeypatch.delenv("POWERCORD_ALLOW_CORE_EXT_INSTALL", raising=False)
+        with patch("app.common.extension_manager._is_core_repository", return_value=True):
+            with pytest.raises(SystemExit):
+                install_extension(tmp_path)
+
     def test_install_from_nonexistent_path_exits(self) -> None:
         """Installing from a missing directory should sys.exit."""
         with pytest.raises(SystemExit):
