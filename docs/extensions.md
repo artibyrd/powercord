@@ -28,9 +28,30 @@ See the [example extension](../app/extensions/example/) for working samples of e
 > [!NOTE]
 > For a deep dive into how Powercord discovers and loads extension gadgets at startup, see [Extension Discovery Framework](discovery.md).
 
-## Extension Manifest (`extension.json`)
+## Extension Manifest (`pyproject.toml` or `extension.json`)
 
-Each extension includes an `extension.json` file declaring its metadata:
+Each extension declares its metadata using either a standard `pyproject.toml` (recommended for independent repositories) or an `extension.json` file.
+
+### `pyproject.toml` Format (Recommended)
+
+```toml
+[tool.poetry]
+name = "my_extension"
+version = "1.0.0"
+description = "What this extension does"
+
+[tool.poetry.dependencies]
+some-pkg = ">=1.0"
+
+[tool.powercord]
+discord_permissions = ["manage_channels"]
+has_migrations = true
+latest_migration_version = "honey0001"
+internal = false
+global_only = false
+```
+
+### Legacy `extension.json` Format
 
 ```json
 {
@@ -40,7 +61,7 @@ Each extension includes an `extension.json` file declaring its metadata:
     "python_dependencies": ["some-pkg>=1.0"],
     "discord_permissions": ["manage_channels"],
     "has_migrations": true,
-    "latest_migration_version": "1c7fc4ef8015",
+    "latest_migration_version": "honey0001",
     "internal": false,
     "global_only": false
 }
@@ -60,37 +81,43 @@ Each extension includes an `extension.json` file declaring its metadata:
 | `internal` | `bool` | Marks the extension as shipped with the framework — the Extension Manager will prevent uninstallation. |
 | `global_only` | `bool` | Hides the extension from individual Server (Guild) Dashboards, making its widgets configurable only from the Global Admin Dashboard. |
 
-## Extension Management
+## Extension Management & Sovereign Isolation (`inv-source-isolation-no-ad-hoc-cp`)
 
-Powercord extensions can be maintained in their own repositories and installed or uninstalled via the Extension Manager CLI. Internal extensions (`example`, `utilities`) ship with the framework; external extensions (e.g. `honeypot`, `midi_library`) live in separate repositories.
+Powercord enforces strict separation between the core framework and external extensions:
+* **Source of Truth**: External extensions (`honeypot`, `midi_library`) reside strictly within their own independent git repositories (e.g. `powercord-extensions/`).
+* **Zero Direct Installs in Core**: External extensions must **never** be installed into the core `powercord` repository. The core framework enforces an automatic safety guard (`_is_core_repository`) that aborts direct `just ext-install` commands to prevent dependency pollution and source contamination.
+* **Downstream Integration Sandbox (`inv-downstream-integration-testbed`)**: All extension installations, multi-head Alembic migrations, and full-stack integrations are executed inside `powercord-downstream-server/`.
 
-### Installing an Extension
+### Installing an Extension Downstream
 
 ```bash
-just ext-install /path/to/extension
+cd powercord-downstream-server
+just ext-install ../powercord-extensions/midi_library
 ```
 
-This copies the extension files into `app/extensions/<name>/`, installs any declared Python dependencies via Poetry, runs database migrations if needed, and reports required Discord permissions.
+This copies the extension files into downstream's `app/extensions/<name>/`, installs declared Python dependencies via Poetry, runs database migrations if declared, and reports required Discord permissions.
 
 **Graceful Reinstalls for Development:**
-During development, you can repeatedly run `just ext-install /path/to/extension` on an already-installed extension to cleanly overwrite it with your newest code. The CLI will safely wipe the existing installation directory and intelligently check the manifests. If your `python_dependencies` and `latest_migration_version` haven't changed, it will completely skip the lengthy `poetry add` and `alembic upgrade head` phases, deploying your updates instantly.
+During development, you can repeatedly run `just ext-install /path/to/extension` on an already-installed extension in downstream to cleanly overwrite it with your newest code. The CLI will safely wipe the existing downstream installation directory and intelligently check the manifests. If your `python_dependencies` and `latest_migration_version` haven't changed, it will completely skip the lengthy `poetry add` and `alembic upgrade head` phases, deploying your updates instantly.
 
-### Uninstalling an Extension
+### Uninstalling an Extension Downstream
 
 ```bash
+cd powercord-downstream-server
 just ext-uninstall <name>
 ```
 
-Removes the extension directory and any unique Python dependencies. Warns about orphaned database tables that may need manual cleanup.
+Removes the extension directory and any unique Python dependencies from downstream. Warns about orphaned database tables that may need manual cleanup.
 
 ### Listing Installed Extensions
 
 ```bash
+cd powercord-downstream-server
 just ext-list
 ```
 
 > [!NOTE]
-> Installing or uninstalling extensions that add Python packages or database tables requires rebuilding the Docker image and redeploying for production use.
+> Installing or uninstalling extensions in downstream that add Python packages or database tables requires rebuilding the local container (`docker compose up -d --build`) and verifying on `http://localhost:5001/` before submitting pull requests.
 
 ## Extension Documentation
 

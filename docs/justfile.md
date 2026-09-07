@@ -49,18 +49,22 @@ primary entry point. It imports shared recipes and extension recipes:
 
 ```just
 import 'devkit.just'                              # shared dev recipes
-import? 'app/extensions/honeypot/extension.just'  # extension recipes (optional)
-import? 'app/extensions/midi_library/extension.just'
+import? 'app/extensions/example/extension.just'   # internal extension recipes (optional)
+import? 'app/extensions/utilities/extension.just'
 ```
+
+> [!NOTE]
+> In `powercord-downstream-server/Justfile`, recipes from installed external extensions (`midi_library`, `honeypot`) are imported into the downstream environment.
 
 Recipes are organized into groups:
 
 | Group | Examples | Purpose |
 |-------|----------|---------|
-| `dev` | `install`, `dev`, `bot`, `api`, `ui` | Day-to-day development |
+| `dev` | `install`, `dev`, `bot`, `api`, `ui`, `docker-clean` | Day-to-day development |
 | `qa` | `lint`, `format`, `check`, `test`, `qa` | Code quality |
+| `vcs` | `branch`, `commit`, `pr-create`, `status-all` | Version control & multi-repo status |
 | `db` | `db-upgrade`, `db-revision`, `db-export` | Database management |
-| `extensions` | `ext-install`, `ext-uninstall`, `ext-list` | Extension lifecycle |
+| `extensions` | `ext-install`, `ext-uninstall`, `ext-list` | Extension lifecycle (run downstream) |
 | `deploy` | `tf-init`, `tf-plan`, `gcp-build` | Infrastructure / CI |
 
 ### Shared Dev Kit (`powercord/devkit.just`)
@@ -70,6 +74,8 @@ Contains recipes shared across the framework and extensions:
 - **`_ensure-db`** — Starts a local PostgreSQL Docker container on port
   5433 if one isn't already running.
 - **`_teardown-dev-db`** — Stops and removes the dev database container.
+- **`docker-clean [all="false"]`** — Prunes dangling Docker images and build cache
+  to prevent build bloat on the sovereign VM (`inv-single-vm-cost-ceiling`).
 
 Extensions import this file to reuse database provisioning without
 duplicating logic.
@@ -78,10 +84,10 @@ duplicating logic.
 
 Each extension has two justfile layers:
 
-1. **`extension.just`** — Recipes that get imported into the main
-   `powercord/Justfile` when the extension is installed (e.g.,
+1. **`extension.just`** — Recipes that get imported into the downstream
+   `powercord-downstream-server/Justfile` when the extension is installed (e.g.,
    `midi-migrate`, `midi-rescore`). These run in the context of the
-   framework.
+   assembled server.
 
 2. **`justfile`** (standalone) — A self-contained justfile for
    independent development within the extension's own repository. It
@@ -102,8 +108,12 @@ just test             # Run unit tests only
 just test --type all  # Run all tests (unit + integration)
 just db-upgrade       # Apply database migrations
 just install          # Install Python dependencies
-just ext-install <p>  # Install an extension from a local path
+just docker-clean     # Prune dangling Docker images and build cache (>24h)
+just status-all       # Inspect git status across all 7 ecosystem repositories
 ```
+
+> [!NOTE]
+> To install or manage external extensions, run `just ext-install <path>` inside `powercord-downstream-server/`. Direct installation into core `powercord/` is guarded and forbidden (`inv-source-isolation-no-ad-hoc-cp`).
 
 Run `just --list` in any project directory to see all available recipes
 and their descriptions.

@@ -1,58 +1,40 @@
 # Powercord Architecture & Governance Roadmap
 
-This document outlines the phased roadmap for Powercord architectural modernization, modularization, and total graduation from the 500 LOC Architectural Debt Ratchet (`governance_ratchet.json`).
+This document outlines upcoming architectural horizons, modernization goals, and sovereign governance initiatives for the Powercord ecosystem. Historical details of completed milestones and ratchet graduations are maintained in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-## 1. Architectural Debt Ratchet Overview
+## 1. Architectural Debt Ratchet Status
 
-The 500 LOC Ceiling Law (`inv-500-loc-ceiling`) establishes that no source file shall exceed 500 lines of code. Legacy files exceeding 500 LOC are quarantined in `powercord/tests/governance/governance_ratchet.json`:
-* **Zero tolerance for new code**: Any new file must strictly be $\le 500$ LOC.
-* **Monotonic ratchet**: Line counts on quarantined files may only decrease.
-* **Phased graduation**: Each quarantined file is assigned a concrete target release milestone below.
+The 500 LOC Ceiling Law (`inv-500-loc-ceiling`) establishes that no source file shall exceed 500 lines of code.
+
+* **Status**: **100% Graduated (Zero Architectural Debt)**
+* **Quarantined Files**: **0** (see [`tests/governance/governance_ratchet.json`](tests/governance/governance_ratchet.json))
+* **Policy**: Zero tolerance for new debt. All new modules and refactored code across the core framework, extensions, and downstream server must strictly satisfy $\le 500$ LOC, verified hermetically by `just check`.
 
 ---
 
-## 2. Release Milestones
+## 2. Upcoming Milestones
 
 ```mermaid
 graph LR
-    M20["v2.0.0<br/>Governance Baseline<br/>2 Graduated / 7 Active"] --> M21["v2.1.0<br/>Web UI Deconstruction<br/>2 Graduated / 5 Active"]
-    M21 --> M22["v2.2.0<br/>Auditor Decoupling<br/>1 Graduated / 4 Active"]
-    M22 --> M23["v2.3.0 (Current)<br/>Cogs & Common Decoupling<br/>4 Graduated / 0 Active (100% Free)"]
+    V23["v2.3.0 (Completed)<br/>100% Zero Debt Ratchet Graduation"] --> V24["v2.4.0 (Next)<br/>Production Hardening & Client Harmonization"]
+    V24 --> V30["v3.0.0 (Horizon)<br/>Full Ecosystem Release & Legacy Decommissioning"]
 ```
 
-### Milestone v2.0.0: Sovereign Governance & Invariant Hardening
-* **Focus**: Establish Tier 0–2 Sovereign Invariant hierarchy, automated Pytest governance gates, universal `Justfile` task taxonomy, and ratchet initialization.
-* **Target Graduations**:
-  1. `powercord/app/ui/helpers.py` (681 LOC $\rightarrow$ `<350 LOC` split across `modal_helpers.py` and `guild_helpers.py`).
-  2. `powercord/app/extensions/honeypot/cog.py` (534 LOC $\rightarrow$ `<380 LOC` split across `cog_views.py`).
-* **Remaining Debt**: 7 files (~8,400 LOC).
+### Milestone v2.4.0: Production Hardening & Client Harmonization
+* **Focus**: Solidifying downstream production workflows, desktop client integration, and continuous repository hygiene.
+* **Key Initiatives**:
+  1. **Downstream Production Synchronization**: Validate production Cloud Build submission exclusively from locked downstream assembly (`inv-downstream-deploy-origin`) with pre-deploy QA gating (`inv-pre-deploy-qa-and-backup-gate`).
+  2. **Desktop Companion Client Harmonization**: Refine async RPC and REST integration between `powercord-client` (Flet) and the server framework, enforcing strict client-server decoupling (`inv-client-server-decoupling`).
+  3. **Automated Container & Cache Hygiene**: Integrate build cache pruning checks into development cycles to permanently eliminate dangling layer accumulation (`inv-single-vm-cost-ceiling`).
+  4. **Dynamic Living Canon Evolution**: Expand progressive skills (`.agents/skills/`) to capture operational learnings while keeping root `AGENTS.md` context-efficient (<800 tokens).
 
 ---
 
-### Milestone v2.1.0: Web UI & Dashboard Deconstruction
-* **Focus**: Deconstruct top-level monolithic FastHTML routing and dashboard rendering into cohesive subpackages.
-* **Target Graduations (Completed)**:
-  1. `powercord/app/main_ui.py` (1,398 LOC $\rightarrow$ `<150 LOC` assembler, decomposed into `app/ui/routes/`).
-  2. `powercord/app/ui/dashboard.py` (2,084 LOC $\rightarrow$ modular `app/ui/dashboard/` subpackage).
-* **Remaining Debt**: 5 files (~4,900 LOC).
-
----
-
-### Milestone v2.2.0: Security Auditor & Widget Engine Decoupling
-* **Focus**: Decouple the monolithic security auditor and card rendering engine into pure computation and UI fragments.
-* **Target Graduations (Completed)**:
-  1. `powercord/app/extensions/utilities/widget.py` (2,783 LOC $\rightarrow$ `<150 LOC` assembler, decomposed into `security_engine/`, `views/`, `widgets/`).
-* **Remaining Debt**: 4 files (~2,100 LOC).
-
----
-
-### Milestone v2.3.0: Cogs & Extension Loader Decoupling (Current Milestone — 100% Zero Debt)
-* **Focus**: Final cleanup of long Discord cogs and extension lifecycle managers.
-* **Target Graduations (Completed)**:
-  1. `powercord/app/extensions/example/cog.py` (1,138 LOC $\rightarrow$ 313 LOC facade + sub-cogs/views).
-  2. `powercord/app/extensions/midi_library/cog.py` (748 LOC $\rightarrow$ 97 LOC facade + command handlers).
-  3. `powercord/app/extensions/midi_library/routes.py` (541 LOC $\rightarrow$ 55 LOC facade + catalog/telemetry views).
-  4. `powercord/app/common/extension_manager.py` (524 LOC $\rightarrow$ 426 LOC facade + manifest/alembic modules).
-* **Remaining Debt**: **0 files (100% Ratchet Graduation Achieved)**.
+### Milestone v3.0.0: Full Ecosystem General Availability & Legacy Decommissioning
+* **Focus**: First general availability (`1.0.0`) release of external extensions, external client migration completion, and final removal of legacy migration shims.
+* **Key Initiatives**:
+  1. **Legacy v2 Migration Decommissioning**: Once external client maintainers (LuteBot) migrate to the v3 REST API, delete legacy compatibility artifacts (`app/main_api.py`, `nginx.conf`, `app/db/db_tools.py` `--migration` flag) as scheduled in [`docs/LEGACY_V2_MIGRATION.md`](docs/LEGACY_V2_MIGRATION.md).
+  2. **Decoupled Extension GA**: Independent versioning and distribution for external extensions (`honeypot`, `midi_library`) hitting their initial `1.0.0` stable releases (`inv-manifest-version-parity`).
+  3. **Multi-Platform Desktop Distribution**: Automated cross-platform packaging and binary distribution for `powercord-client`.

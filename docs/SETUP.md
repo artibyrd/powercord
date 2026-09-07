@@ -100,13 +100,17 @@ just add-admin <YOUR_DISCORD_USER_ID> --comment "Initial Admin"
 
 ---
 
-## 6. Install Extensions
+## 6. Install Extensions (Downstream Server)
 
-Use `just ext-install` to install each external extension. This copies the
-extension files into the framework, installs its Python dependencies, and
-runs any database migrations it declares.
+Per `inv-source-isolation-no-ad-hoc-cp`, external extensions are **never** installed directly into the core `powercord/` framework repository. Instead, initialize a downstream deployment target (or use `powercord-downstream-server/`) as your pre-commit integration testbed:
 
 ```bash
+# Initialize a downstream destination (or cd into existing downstream directory)
+just init-target ../powercord-downstream-server
+
+# Move to the downstream server
+cd ../powercord-downstream-server
+
 # Install the Honeypot extension
 just ext-install ../powercord-extensions/honeypot
 
@@ -114,7 +118,7 @@ just ext-install ../powercord-extensions/honeypot
 just ext-install ../powercord-extensions/midi_library
 ```
 
-Verify they're installed:
+Verify they're installed in downstream:
 ```bash
 just ext-list
 ```
@@ -130,9 +134,7 @@ utilities            1.0.0      internal   Administrative tools for server analy
 ```
 
 > [!TIP]
-> After installing extensions with Python dependencies (like `midi_library`),
-> the poetry lock file in the framework is updated. Commit this if you want
-> the dependency set to be reproducible.
+> After installing extensions in downstream, rebuild the local container with `docker compose up -d --build` and verify your full-stack changes on `http://localhost:5001/`.
 
 ---
 
