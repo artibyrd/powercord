@@ -25,11 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reconciled `poetry.lock`, eliminating 1,889 lines of heavy transitive scientific and audio processing libraries (`scipy`, `numba`, `llvmlite`, `soundfile`, `soxr`) from the core framework.
 * **Docker Hygiene & Disk Space Reclaim (`inv-single-vm-cost-ceiling`)**:
   - Added shared `docker-clean` recipe to `devkit.just` across core and downstream for pruning dangling images and build cache (`just docker-clean all=true`).
-  - Reclaimed 7.76 GB of accumulated build cache.
 * **Local Artifact Cleanliness**:
-  - Pruned redundant root `.sql` dumps from `powercord/` (`bgml-data.sql`, `powercord-export.sql`, `bgml.dump`, `test_export.sql`), preserving the canonical versions in `/backup/`.
+  - Pruned redundant root `.sql` dumps from `powercord/` (`bgml-data.sql`, `powercord-export.sql`, `bgml.dump`, `test_export.sql`), preserving canonical versions in `/backup/`.
   - Enhanced `just dev-clean` to automatically purge temporary `*.log` and `.sql` test dumps.
   - Pruned stale tracking directories from the ecosystem root.
+* **Retrospective Governance & Skill Parity (`inv-changelog-session-parity`)**:
+  - Established Operational Heuristic 5 and invariant `inv-changelog-session-parity` mandating changelog updates in the active session and strict forward-looking roadmap deduplication.
+  - Formally codified extension isolation rules in `.agents/skills/powercord-extension-authoring/` (`powercord-extensions/<ext>` as sole source of truth, zero core installs, downstream-only staging).
+  - Documented Docker hygiene lifecycle (`just docker-clean`) in `.agents/skills/powercord-deployment/` and `.agents/skills/powercord-ecosystem/`.
+  - Maintained exact parity between `/AGENTS.md` and `/powercord-agent/AGENTS.md` while honoring the <800-token context budget.
 
 ---
 
