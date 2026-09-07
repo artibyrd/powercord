@@ -17,8 +17,8 @@ The 500 LOC Ceiling Law (`inv-500-loc-ceiling`) establishes that no source file 
 
 ```mermaid
 graph LR
-    M20["v2.0.0<br/>Governance Baseline<br/>2 Graduated / 7 Active"] --> M21["v2.1.0 (Current)<br/>Web UI Deconstruction<br/>2 Graduated / 5 Active"]
-    M21 --> M22["v2.2.0<br/>Auditor Decoupling<br/>1 Graduated / 4 Active"]
+    M20["v2.0.0<br/>Governance Baseline<br/>2 Graduated / 7 Active"] --> M21["v2.1.0<br/>Web UI Deconstruction<br/>2 Graduated / 5 Active"]
+    M21 --> M22["v2.2.0 (Current)<br/>Auditor Decoupling<br/>1 Graduated / 4 Active"]
     M22 --> M23["v2.3.0<br/>Cogs & Common<br/>4 Graduated / 0 Active (100% Free)"]
 ```
 
@@ -31,7 +31,7 @@ graph LR
 
 ---
 
-### Milestone v2.1.0: Web UI & Dashboard Deconstruction (Current Milestone)
+### Milestone v2.1.0: Web UI & Dashboard Deconstruction
 * **Focus**: Deconstruct top-level monolithic FastHTML routing and dashboard rendering into cohesive subpackages.
 * **Target Graduations (Completed)**:
   1. `powercord/app/main_ui.py` (1,398 LOC $\rightarrow$ `<150 LOC` assembler, decomposed into `app/ui/routes/`).
@@ -40,13 +40,10 @@ graph LR
 
 ---
 
-### Milestone v2.2.0: Security Auditor & Widget Engine Decoupling
+### Milestone v2.2.0: Security Auditor & Widget Engine Decoupling (Current Milestone)
 * **Focus**: Decouple the monolithic security auditor and card rendering engine into pure computation and UI fragments.
-* **Target Graduations**:
-  1. `powercord/app/extensions/utilities/widget.py` (2,783 LOC):
-     - Extract pure bitmask and security rules into `security_engine/` using pure `compute_*` functions.
-     - Extract card component renderers into `widgets/`.
-     - Extract HTMX dialogs into `views/`.
+* **Target Graduations (Completed)**:
+  1. `powercord/app/extensions/utilities/widget.py` (2,783 LOC $\rightarrow$ `<150 LOC` assembler, decomposed into `security_engine/`, `views/`, `widgets/`).
 * **Remaining Debt**: 4 files (~2,100 LOC).
 
 ---
