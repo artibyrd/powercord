@@ -265,7 +265,7 @@ release version message: check
     fi
     poetry version {{version}}
     git add Justfile pyproject.toml tests/governance/test_version_and_manifest_parity.py
-    git commit -m "chore(release): bump version to {{version}}"
+    git commit --allow-empty -m "chore(release): bump version to {{version}}"
     git tag -a "v{{version}}" -m "{{message}}"
     git push origin main "v{{version}}"
     echo "Release v{{version}} tagged and pushed successfully."
