@@ -8,16 +8,6 @@
       "target_milestone": "v2.2.0",
       "decomposition_strategy": "Decouple security rule engine into pure compute_* functions and split UI cards"
     },
-    "app/ui/dashboard.py": {
-      "max_loc": 2084,
-      "target_milestone": "v2.1.0",
-      "decomposition_strategy": "Extract guild admin components into app/ui/dashboard/ subpackage"
-    },
-    "app/main_ui.py": {
-      "max_loc": 1398,
-      "target_milestone": "v2.1.0",
-      "decomposition_strategy": "Decompose into modular FastHTML route blueprints (admin, guild, public)"
-    },
     "app/extensions/example/cog.py": {
       "max_loc": 1138,
       "target_milestone": "v2.3.0",

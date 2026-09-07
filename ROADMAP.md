@@ -17,12 +17,12 @@ The 500 LOC Ceiling Law (`inv-500-loc-ceiling`) establishes that no source file 
 
 ```mermaid
 graph LR
-    M20["v2.0.0 (Current)<br/>Governance Baseline<br/>2 Graduated / 7 Active"] --> M21["v2.1.0<br/>Web UI Deconstruction<br/>2 Graduated / 5 Active"]
+    M20["v2.0.0<br/>Governance Baseline<br/>2 Graduated / 7 Active"] --> M21["v2.1.0 (Current)<br/>Web UI Deconstruction<br/>2 Graduated / 5 Active"]
     M21 --> M22["v2.2.0<br/>Auditor Decoupling<br/>1 Graduated / 4 Active"]
     M22 --> M23["v2.3.0<br/>Cogs & Common<br/>4 Graduated / 0 Active (100% Free)"]
 ```
 
-### Milestone v2.0.0: Sovereign Governance & Invariant Hardening (Current Release)
+### Milestone v2.0.0: Sovereign Governance & Invariant Hardening
 * **Focus**: Establish Tier 0–2 Sovereign Invariant hierarchy, automated Pytest governance gates, universal `Justfile` task taxonomy, and ratchet initialization.
 * **Target Graduations**:
   1. `powercord/app/ui/helpers.py` (681 LOC $\rightarrow$ `<350 LOC` split across `modal_helpers.py` and `guild_helpers.py`).
@@ -31,14 +31,11 @@ graph LR
 
 ---
 
-### Milestone v2.1.0: Web UI & Dashboard Deconstruction
+### Milestone v2.1.0: Web UI & Dashboard Deconstruction (Current Milestone)
 * **Focus**: Deconstruct top-level monolithic FastHTML routing and dashboard rendering into cohesive subpackages.
-* **Target Graduations**:
-  1. `powercord/app/main_ui.py` (1,398 LOC):
-     - Extract route blueprints into `app/ui/routes/admin.py`, `guild.py`, and `public.py`.
-     - Reduce `main_ui.py` to lean application assembler (`<250 LOC`).
-  2. `powercord/app/ui/dashboard.py` (2,084 LOC):
-     - Modularize into `app/ui/dashboard/` subpackage: `layout.py`, `grid.py`, `settings.py`, and `placement.py`.
+* **Target Graduations (Completed)**:
+  1. `powercord/app/main_ui.py` (1,398 LOC $\rightarrow$ `<150 LOC` assembler, decomposed into `app/ui/routes/`).
+  2. `powercord/app/ui/dashboard.py` (2,084 LOC $\rightarrow$ modular `app/ui/dashboard/` subpackage).
 * **Remaining Debt**: 5 files (~4,900 LOC).
 
 ---
