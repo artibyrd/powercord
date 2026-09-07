@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 from typing import Any, cast
 
 import httpx
@@ -26,6 +27,27 @@ from app.db.models import DashboardAccessRole, GuildExtensionSettings, WidgetSet
 from app.ui.auth import get_bot_guild_ids, get_user_guilds
 
 _admin_guilds_cache: TTLCache = TTLCache(maxsize=1024, ttl=300)
+
+
+def _get_engine():
+    mod_h = sys.modules.get("app.ui.helpers")
+    if mod_h and hasattr(mod_h, "init_connection_engine"):
+        return mod_h.init_connection_engine()
+    return init_connection_engine()
+
+
+def _get_session():
+    mod_h = sys.modules.get("app.ui.helpers")
+    if mod_h and hasattr(mod_h, "Session"):
+        return mod_h.Session
+    return Session
+
+
+def _gh(name: str, default: Any = None) -> Any:
+    mod_h = sys.modules.get("app.ui.helpers")
+    if mod_h and hasattr(mod_h, name):
+        return getattr(mod_h, name)
+    return default
 
 
 def get_internal_api_client() -> httpx.AsyncClient:
@@ -264,9 +286,9 @@ def update_guild_extension_setting(guild_id: int, extension_name: str, gadget_ty
     """Update a guild extension setting (enable/disable) in the database."""
     logging.info(f"DATABASE: Setting {gadget_type} '{extension_name}' for guild {guild_id}: enabled={is_enabled}")
 
-    engine = init_connection_engine()
+    engine = _get_engine()
     try:
-        with Session(engine) as session:
+        with _get_session()(engine) as session:
             statement = select(GuildExtensionSettings).where(
                 GuildExtensionSettings.guild_id == guild_id,
                 GuildExtensionSettings.extension_name == extension_name,
@@ -339,7 +361,8 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
             return cast(dict[str, dict], _admin_guilds_cache[user_id])
 
     ADMIN_PERM = 1 << 3
-    bot_token = os.getenv("POWERCORD_DISCORD_TOKEN")
+    get_env_fn = _gh("os", os).getenv
+    bot_token = get_env_fn("POWERCORD_DISCORD_TOKEN")
     if not bot_token:
         raise ValueError("DISCORD_TOKEN is not set.")
 
@@ -356,16 +379,18 @@ async def get_admin_guilds(user_access_token: str, user_id: int) -> dict[str, di
 
     logging.info("Fetching admin guilds...")
     try:
+        _get_user_guilds = _gh("get_user_guilds", get_user_guilds)
+        _get_bot_guild_ids = _gh("get_bot_guild_ids", get_bot_guild_ids)
         user_guilds, bot_guild_ids = await asyncio.gather(
-            get_user_guilds(user_access_token), get_bot_guild_ids(bot_token)
+            _get_user_guilds(user_access_token), _get_bot_guild_ids(bot_token)
         )
         logging.info(f"Fetched {len(user_guilds)} user guilds and {len(bot_guild_ids)} bot guilds.")
     except Exception as e:
         logging.error(f"Error fetching guilds in get_admin_guilds: {e}", exc_info=True)
         raise e
 
-    engine = init_connection_engine()
-    with Session(engine) as session:
+    engine = _get_engine()
+    with _get_session()(engine) as session:
         stmt = select(DashboardAccessRole)
         roles = session.exec(stmt).all()
 

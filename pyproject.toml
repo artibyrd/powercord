@@ -96,6 +96,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "app/ui/*.py" = ["F403", "F405"]
+"app/ui/**/*.py" = ["F403", "F405"]
 "app/main_ui.py" = ["F403", "F405"]
 "app/**/*.py" = ["E402"]
 "tests/**/*.py" = ["S"]

@@ -26,7 +26,9 @@ if str(project_root) not in sys.path:
 from app.bot.internal_server import get_bot_api_url
 from app.common.alchemy import init_connection_engine
 from app.db.models import AdminUser
+from app.ui.auth import get_bot_guild_ids, get_user_guilds
 from app.ui.guild_helpers import (
+    _admin_guilds_cache,
     get_admin_guilds,
     get_guild_cogs,
     get_guild_sprockets,
@@ -64,6 +66,9 @@ __all__ = [
     "notify_bot_of_config_change",
     "get_extension_details_modal",
     "restore_default_widget_settings",
+    "_admin_guilds_cache",
+    "get_bot_guild_ids",
+    "get_user_guilds",
 ]
 
 SCOPE_PUBLIC = 0
