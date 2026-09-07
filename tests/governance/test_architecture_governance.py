@@ -126,6 +126,11 @@ def test_client_server_runtime_isolation() -> None:
 @pytest.mark.unit
 def test_core_extensions_directory_isolation() -> None:
     """Verify that core powercord repository contains ONLY internal extensions (inv-source-isolation-no-ad-hoc-cp)."""
+    from app.common.extension_manager import _is_core_repository
+
+    if not _is_core_repository(REPO_ROOT):
+        pytest.skip("Extension directory isolation is enforced on core powercord repo only.")
+
     extensions_dir = SRC_ROOT / "extensions"
     assert extensions_dir.exists(), f"Missing extensions directory at {extensions_dir}"
 
