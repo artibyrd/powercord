@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "powercord"
-version = "2.0.0"
+version = "2.0.1"
 description = "A server framework for advanced Discord bot functionality"
 authors = ["Arthur Davis <arthur@hiphidelity.com>"]
 license = "The MIT License"

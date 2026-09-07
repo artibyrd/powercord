@@ -204,6 +204,18 @@ bootstrap-approvals:
 ignite: install check
     @echo "Powercord environment ignited successfully."
 
+# Inspect git status across all ecosystem repositories
+[group: "vcs"]
+status-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for r in . ../powercord-client ../powercord-agent ../powercord-extensions/* ../powercord-client-extensions/* ../powercord-downstream-server; do
+        if [ -d "$r/.git" ]; then
+            echo "=== Git Status: $(basename "$(cd "$r" && pwd)") ==="
+            (cd "$r" && git status -s)
+        fi
+    done
+
 # Create or switch to a feature branch (never work directly on main)
 [group: "vcs"]
 branch name:
