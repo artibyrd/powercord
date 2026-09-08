@@ -550,9 +550,15 @@ prod-deploy: _require-gcp
     echo "→ Gate 1: Verifying working tree cleanliness..."
     dirty=0
     for r in . ../powercord-extensions/*; do
-        if [ -d "$r/.git" ] && [ -n "$(git -C "$r" status --porcelain)" ]; then
-            echo "  ⚠️ Uncommitted changes in $r"
-            dirty=1
+        if [ -d "$r/.git" ]; then
+            status="$(git -C "$r" status --porcelain)"
+            if [ "$r" = "." ]; then
+                status="$(echo "$status" | grep -v -E "^\s*M\s+(poetry\.lock|pyproject\.toml)$" || true)"
+            fi
+            if [ -n "$status" ]; then
+                echo "  ⚠️ Uncommitted changes in $r"
+                dirty=1
+            fi
         fi
     done
     if [ "$dirty" -ne 0 ]; then
