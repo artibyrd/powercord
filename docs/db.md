@@ -201,18 +201,29 @@ This runs the same `create_daily_backup()` logic used by the scheduler.
 
 ## Usage in Code
 
-To interact with the database, inject the session dependency:
+### In FastAPI Sprocket Routes
+Inject the session dependency via FastAPI's `Depends`:
 
 ```python
+from fastapi import Depends
+from sqlmodel import Session, select
 from app.common.alchemy import get_session
 from app.db.models import MyModel
-from sqlmodel import select
 
-# In a function or route
-session_gen = get_session()
-session = next(session_gen)
-try:
+@router.get("/items")
+async def get_items(session: Session = Depends(get_session)):
+    return session.exec(select(MyModel)).all()
+```
+
+### In Discord Cogs, Background Jobs, and Standalone Functions
+Use the hermetic RAII context manager with `init_connection_engine()`:
+
+```python
+from sqlmodel import Session, select
+from app.common.alchemy import init_connection_engine
+from app.db.models import MyModel
+
+engine = init_connection_engine()
+with Session(engine) as session:
     results = session.exec(select(MyModel)).all()
-finally:
-    session.close()
 ```

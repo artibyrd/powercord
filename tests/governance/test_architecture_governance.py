@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -142,4 +143,217 @@ def test_core_extensions_directory_isolation() -> None:
         f"External extension(s) found in core framework repository: {external_extensions}.\n"
         "Per inv-source-isolation-no-ad-hoc-cp, external extensions must NOT be installed into the "
         "powercord core repository. Install extensions exclusively in powercord-downstream-server/."
+    )
+
+
+@pytest.mark.unit
+def test_no_raw_generator_session_leak_invariant() -> None:
+    """Verify that get_session() generator is never manually invoked via direct call in application code.
+
+    Calling get_session() directly creates an unmanaged generator that leaks database sessions
+    and exhausts connection pools when early returning or failing.
+    - In FastAPI routes, use dependency injection: 'session: Session = Depends(get_session)'
+    - In Discord cogs, jobs, and standalone code, use RAII: 'with Session(engine) as session:'
+    """
+    violations = []
+    roots_to_scan = [SRC_ROOT]
+    extensions_root = REPO_ROOT.parent / "powercord-extensions"
+    if extensions_root.exists():
+        roots_to_scan.append(extensions_root)
+
+    for root in roots_to_scan:
+        for py_file in root.rglob("*.py"):
+            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
+                continue
+            if py_file.name == "alchemy.py":
+                continue
+
+            try:
+                tree = ast.parse(py_file.read_text(encoding="utf-8", errors="ignore"), filename=str(py_file))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "get_session":
+                        rel_path = (
+                            str(py_file.relative_to(REPO_ROOT))
+                            if REPO_ROOT in py_file.parents
+                            else str(py_file.relative_to(REPO_ROOT.parent))
+                        )
+                        violations.append((rel_path, node.lineno))
+            except Exception:
+                pass
+
+    assert not violations, (
+        f"Raw generator session leak detected: direct call to get_session() at {violations}.\n"
+        "Directly invoking get_session() creates an unmanaged generator. "
+        "In FastAPI routes, pass Depends(get_session). In standalone code/cogs, use 'with Session(engine) as session:'."
+    )
+
+
+# ==============================================================================
+# Invariant: Headless Matplotlib in Multi-Threaded Workers
+# ==============================================================================
+
+
+@pytest.mark.unit
+def test_matplotlib_headless_backend_invariant() -> None:
+    """Verify that any file importing matplotlib.pyplot configures headless Agg backend.
+
+    Matplotlib defaults to Tkinter GUI on Linux if unconfigured, causing fatal SIGABRT /
+    'Tcl_AsyncDelete: async handler deleted by the wrong thread' crashes when run in
+    ThreadPoolExecutor or asyncio worker threads. Files importing pyplot must configure
+    matplotlib.use("Agg") prior to import.
+    """
+    violations = []
+    roots_to_scan = [SRC_ROOT]
+    ext_root = REPO_ROOT.parent / "powercord-extensions"
+    if ext_root.exists():
+        roots_to_scan.append(ext_root)
+
+    for root in roots_to_scan:
+        for py_file in root.rglob("*.py"):
+            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
+                continue
+
+            content = py_file.read_text(encoding="utf-8", errors="ignore")
+            if "pyplot" in content:
+                tree = ast.parse(content, filename=str(py_file))
+                has_pyplot = False
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if "pyplot" in alias.name:
+                                has_pyplot = True
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module and "matplotlib" in node.module:
+                            for alias in node.names:
+                                if alias.name == "pyplot":
+                                    has_pyplot = True
+
+                if has_pyplot:
+                    if 'matplotlib.use("Agg")' not in content and "matplotlib.use('Agg')" not in content:
+                        rel_path = (
+                            str(py_file.relative_to(REPO_ROOT))
+                            if REPO_ROOT in py_file.parents
+                            else str(py_file.relative_to(REPO_ROOT.parent))
+                        )
+                        violations.append(rel_path)
+
+    assert not violations, (
+        f"Files importing matplotlib.pyplot without configuring headless 'Agg' backend: {violations}.\n"
+        "Configure matplotlib.use('Agg') before importing pyplot to prevent Tkinter multi-threading crashes."
+    )
+
+
+# ==============================================================================
+# Invariant: Physical Storage Authority (No Derived Asset DB Columns)
+# ==============================================================================
+
+FORBIDDEN_ASSET_COLUMN_RE = re.compile(
+    r"^has_(png|jpg|jpeg|image|file|audio|midi|asset|cache|thumbnail)$|^is_cached$",
+    re.IGNORECASE,
+)
+
+
+@pytest.mark.unit
+def test_no_derived_asset_columns_in_database_models() -> None:
+    """Verify that SQLModel schemas never declare derived file/cache existence columns.
+
+    Per inv-omission-over-fallback-galleries, physical storage is the single source of truth.
+    Storing 'has_png' or 'is_cached' in database schemas introduces split authority and desync
+    when files are deleted or moved out-of-band. Derived assets must be detected at runtime
+    and repaired via background queues.
+    """
+    violations = []
+    roots_to_scan = [SRC_ROOT]
+    ext_root = REPO_ROOT.parent / "powercord-extensions"
+    if ext_root.exists():
+        roots_to_scan.append(ext_root)
+
+    for root in roots_to_scan:
+        for py_file in root.rglob("*.py"):
+            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
+                continue
+            if py_file.name not in ("models.py", "blueprint.py"):
+                continue
+
+            content = py_file.read_text(encoding="utf-8", errors="ignore")
+            tree = ast.parse(content, filename=str(py_file))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for item in node.body:
+                        field_name = None
+                        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                            field_name = item.target.id
+                        elif isinstance(item, ast.Assign):
+                            for target in item.targets:
+                                if isinstance(target, ast.Name):
+                                    field_name = target.id
+
+                        if field_name and FORBIDDEN_ASSET_COLUMN_RE.match(field_name):
+                            rel_path = (
+                                str(py_file.relative_to(REPO_ROOT))
+                                if REPO_ROOT in py_file.parents
+                                else str(py_file.relative_to(REPO_ROOT.parent))
+                            )
+                            violations.append((rel_path, node.name, field_name, getattr(item, "lineno", 0)))
+
+    assert not violations, (
+        f"Derived asset existence columns detected in database models: {violations}.\n"
+        "Per inv-omission-over-fallback-galleries, physical storage is the authority. "
+        "Do not store asset flags (has_png, is_cached) in database schemas; handle via runtime detection and repair queues."
+    )
+
+
+# ==============================================================================
+# Invariant: Discord Status Edit Component Dismissal Sentinel
+# ==============================================================================
+
+
+@pytest.mark.unit
+def test_discord_status_edit_component_sentinel_invariant() -> None:
+    """Verify that Discord status editing helpers do not drop view=None via 'if view is not None'.
+
+    In Nextcord / Discord API, omitting the view parameter leaves existing message components intact.
+    Status edit helpers must distinguish between an unset view (sentinel default) and explicitly
+    clearing components (view=None). Checking 'if view is not None: kwargs['view'] = view' prevents
+    button dismissal upon job completion.
+    """
+    violations = []
+    roots_to_scan = [SRC_ROOT]
+    ext_root = REPO_ROOT.parent / "powercord-extensions"
+    if ext_root.exists():
+        roots_to_scan.append(ext_root)
+
+    for root in roots_to_scan:
+        for py_file in root.rglob("*.py"):
+            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
+                continue
+
+            content = py_file.read_text(encoding="utf-8", errors="ignore")
+            if "status_edit" not in content:
+                continue
+
+            tree = ast.parse(content, filename=str(py_file))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and "status_edit" in node.name:
+                    for sub in ast.walk(node):
+                        if isinstance(sub, ast.If) and isinstance(sub.test, ast.Compare):
+                            test = sub.test
+                            if isinstance(test.left, ast.Name) and test.left.id == "view":
+                                for op, comp in zip(test.ops, test.comparators, strict=False):
+                                    if (
+                                        isinstance(op, ast.IsNot)
+                                        and isinstance(comp, ast.Constant)
+                                        and comp.value is None
+                                    ):
+                                        rel_path = (
+                                            str(py_file.relative_to(REPO_ROOT))
+                                            if REPO_ROOT in py_file.parents
+                                            else str(py_file.relative_to(REPO_ROOT.parent))
+                                        )
+                                        violations.append((rel_path, node.name, sub.lineno))
+
+    assert not violations, (
+        f"Status edit helper discarding explicit view=None at {violations}.\n"
+        "Use a sentinel default (e.g. _VIEW_UNSET = object()) and check 'if view is not _VIEW_UNSET:' "
+        "so that explicitly passing view=None forwards view=None to Discord to clear interactive buttons."
     )

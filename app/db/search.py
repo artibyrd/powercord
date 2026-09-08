@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlmodel.sql.expression import SelectOfScalar
 
 # Default trigram similarity threshold — the PostgreSQL default is 0.3.
@@ -38,9 +38,10 @@ def build_trigram_query(
     """Apply trigram fuzzy search filters and similarity-based ordering.
 
     Filters rows where **any** of the provided ``columns`` has a trigram
-    similarity to ``search_term`` that meets or exceeds ``threshold``.
-    Results are ordered by the highest similarity score across all
-    columns (best match first).
+    similarity or word similarity to ``search_term`` meeting or exceeding
+    ``threshold``, or contains ``search_term`` as a case-insensitive substring.
+    Results are ordered by the highest similarity score across all columns
+    (best match first).
 
     Args:
         stmt: An existing ``select()`` statement to augment.
@@ -60,11 +61,19 @@ def build_trigram_query(
     if not columns:
         raise ValueError("At least one column must be provided for trigram search.")
 
-    # Build per-column similarity expressions
-    similarities = [func.similarity(col, search_term) for col in columns]
+    # Build per-column similarity expressions incorporating word_similarity, full similarity, and substring matches
+    similarities = []
+    conditions = []
+    for col in columns:
+        word_sim = func.word_similarity(search_term, col)
+        full_sim = func.similarity(col, search_term)
+        substr_score = case((col.ilike(f"%{search_term}%"), 1.0), else_=0.0)
+        best_col_sim = func.greatest(word_sim, full_sim, substr_score)
+        similarities.append(best_col_sim)
+        conditions.append(col.ilike(f"%{search_term}%"))
+        conditions.append(best_col_sim >= threshold)
 
-    # Filter: at least one column must meet the threshold
-    conditions = [sim >= threshold for sim in similarities]
+    # Filter: at least one column must meet the threshold or match substring
     stmt = stmt.where(or_(*conditions))
 
     # Order by the best similarity across all columns (descending)

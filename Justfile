@@ -442,9 +442,9 @@ tf-destroy docker_image=gcp_default_image: _require-gcp
 # Build the Powercord Docker image and trigger the CI deployment pipeline
 [group: "deploy"]
 gcp-build: _require-gcp
-    gcloud builds submit --config cloudbuild.yaml .
+    gcloud builds submit --config cloudbuild.yaml . --project={{gcp_project}}
     @echo "Resetting the VM instance to pull the new image..."
-    gcloud compute instances reset powercord-instance --zone us-central1-a
+    gcloud compute instances reset powercord-instance --zone us-central1-a --project={{gcp_project}}
 
 
 
