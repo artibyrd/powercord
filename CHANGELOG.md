@@ -76,10 +76,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Tier 1 Progressive Skills & Knowledge Persistence (`.agents/skills/`)**:
   - Updated [`failure-patterns.md`](powercord-agent/.agents/skills/powercord-ecosystem/references/failure-patterns.md) with Failure Patterns 7–12 (stale UI components, Matplotlib worker aborts, derived asset DB desynchronization, trigram word-similarity on compound strings, unison note duplicate false positives, and download directory isolation).
   - Updated [`gadget-specs.md`](powercord-agent/.agents/skills/powercord-extension-authoring/references/gadget-specs.md) with Section 2 documenting Discord bot status lifecycle, card stabilization, and high-throughput channel sweep best practices.
+* **Production Deployment & Safe Lifecycle Pipeline (`Justfile` & Downstream)**:
+  - Deployed `v2.4.0` live to Google Cloud Platform (`powercord-instance` on GCE, `bards-guild-midi-project`).
+  - Added push-button canonical production lifecycle recipes in `Justfile`: `prod-status`, `prod-logs`, `prod-backup`, `prod-deploy`, `prod-rollback`, and `prod-db-restore`.
+  - Built automated 5-gate deployment pipeline: 1) working tree clean check, 2) hermetic QA gates (`just check`), 3) mandatory pre-deploy database snapshot to GCS with `gzip -t` verification, 4) Cloud Build & VM reset, 5) 180s health poll.
+  - Executed live database backup (`18.2 MB`) to `gs://powercord-db-backups-bards-guild-midi-project/` and recorded rollback manifest in `backups/last_known_good.json`.
+  - Applied Alembic migration `midi0004` (contributor entity table) in production container with zero downtime.
+  - Verified live Web UI at `http://35.238.121.109/` (`200 OK`) and custom domain `http://midi.gallery`. Nextcord bot authenticated and active.
+* **Production Rollout Governance & Shift-Left Invariants (`tests/governance/`)**:
+  - Refined `inv-branch-pr-review-gate`: Mandated zero AI self-merges across Tier 0 (`AGENTS.md`) and Tier 1 (`powercord-deployment` skill). All PR merges strictly require Human Mk1 review.
+  - Added shift-left test `test_no_automated_pr_merges_in_scripts_or_recipes` asserting task runners and scripts never automate `gh pr merge`.
+  - Added shift-left test `test_container_isolated_path_guards` ensuring tests accessing workspace paths include container skip guards (`pytest.skip`), preventing isolated container builds (Cloud Build `/workspace`) from failing on multi-repo assumptions.
+  - Added shift-left test `test_prod_deploy_health_poll_timeout` asserting `prod-deploy` health polling allows at least 180s for cold container boot.
+  - Added `environment=PYTHONUNBUFFERED="1"` to supervisor configuration for immediate standard I/O container log streaming.
 * **Architecture & Database Slate Reset**:
   - Extracted attachment upload handling to [`upload_handler.py`](upload_handler.py) (293 LOC) and spectrogram generation to [`spectrogram_worker.py`](spectrogram_worker.py) (259 LOC), keeping all source files strictly under the 500 LOC ceiling (`inv-500-loc-ceiling`).
   - Wiped local test database (`TRUNCATE CASCADE` across all 6 MIDI tables) and purged scan cursors for clean operator re-testing.
-  - 113 automated tests passing in `tests/extensions/midi_library`. All governance gates green (17 core, 16 downstream).
+  - 113 automated tests passing in `tests/extensions/midi_library`. All 20 governance gates green in `<8s`.
 
 ---
 
