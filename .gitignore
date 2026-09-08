@@ -51,3 +51,7 @@ terraform.rc
 # Agent Rules & Runtime
 .agents_runtime/
 
+# Runtime Data & Backups
+app/data/
+backups/
+

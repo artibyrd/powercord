@@ -71,18 +71,16 @@ class ViewsCog(GuildAwareCog):
     @commands.command()
     async def db_test(self, ctx):
         """Tests the database connection and SQLModel."""
-        from sqlmodel import select
-
-        from app.common.alchemy import get_session
-        from app.db.models import GuildExtensionSettings
-
-        await ctx.send("Starting Database Test...")
+        from sqlmodel import Session, select
 
         try:
-            session_gen = get_session()
-            session = next(session_gen)
+            from app.common.alchemy import init_connection_engine
+            from app.db.models import GuildExtensionSettings
 
-            try:
+            await ctx.send("Starting Database Test...")
+
+            engine = init_connection_engine()
+            with Session(engine) as session:
                 # 1. Create
                 test_setting = GuildExtensionSettings(
                     guild_id=ctx.guild.id,
@@ -110,9 +108,6 @@ class ViewsCog(GuildAwareCog):
                     session.delete(result)
                     session.commit()
                     await ctx.send("✅ Deleted test record.")
-
-            finally:
-                session.close()
 
         except Exception as e:
             await ctx.send(f"❌ Error: {e}")

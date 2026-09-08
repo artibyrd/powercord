@@ -18,11 +18,31 @@ The 500 LOC Ceiling Law (`inv-500-loc-ceiling`) establishes that no source file 
 
 ```mermaid
 graph LR
-    V23["v2.3.0 (Completed)<br/>100% Zero Debt Ratchet Graduation"] --> V24["v2.4.0 (Next)<br/>Production Hardening & Client Harmonization"]
-    V24 --> V30["v3.0.0 (Horizon)<br/>Full Ecosystem Release & Legacy Decommissioning"]
+    V24["v2.4.0 (Completed)<br/>MIDI Pipeline Hardening & Contributor Architecture"] --> V25["v2.5.0 (Next)<br/>MIDI Craftsmanship Engine & Scoring Modernization"]
+    V25 --> V26["v2.6.0<br/>Production Hardening & Client Harmonization"]
+    V26 --> V30["v3.0.0 (Horizon)<br/>Full Ecosystem Release & Legacy Decommissioning"]
 ```
 
-### Milestone v2.4.0: Production Hardening & Client Harmonization
+### Milestone v2.5.0: MIDI Craftsmanship Engine & Objective Scoring Modernization
+* **Focus**: Transitioning from legacy heuristic track-counting to an objective, multi-pillar MIDI Craftsmanship Index (MCI) that measures technical integrity and arrangement fidelity without artistic or genre bias.
+* **Key Initiatives**:
+  1. **Terminology Transparency & User-Facing Definition**:
+     - Replace ambiguous "Quality Score" with "MIDI Craftsmanship Index" (MCI) across Discord embed footers, UI cards, and REST API schemas.
+     - Provide contextual breakdowns (velocity dynamic range, arrangement polyphony, sequencing cleanliness) in tooltips and detail modals.
+  2. **Heuristic Hardening & Solo Instrument Fairness**:
+     - Eliminate the "Chopin Paradox": award arrangement complexity/diversity points when a single instrument exhibits multi-register polyphony (>3 simultaneous voices and >3 octave pitch span), ensuring solo piano, classical guitar, and minimalist arrangements are not penalized.
+     - Remove arbitrary `drum_penalty` thresholds to properly accommodate rhythm-driven genres (electronic, hip-hop, funk) when intentional musical structure is present.
+     - Refine duplicate note detection from coarse 10ms timestamp rounding to exact-tick or sub-5ms delta checks to prevent misidentifying fast trills, strums, and flams.
+  3. **3-Pillar MIDI Craftsmanship Index (MCI)**:
+     - Implement the 3-pillar scoring engine in `midiscribe.py` evaluating:
+       - **Pillar 1: Technical Integrity & Hygiene (35 pts)**: Zero-duration ghost notes (<15ms), hanging notes (>180s), stuck overlapping polyphony, pitch range sanity, and tick-exact deduplication.
+       - **Pillar 2: Dynamic & Human Expression (30 pts)**: Velocity variance (standard deviation measuring human dynamics vs flat robotic export), tempo map changes (`set_tempo`), and MIDI CC/articulation automation (pitch bend, mod wheel, sustain pedal CC64).
+       - **Pillar 3: Arrangement Fidelity & Functional Polyphony (35 pts)**: Register-based role detection (bass register <48, chordal body 48–72, melodic contour >72, percussion).
+     - Provide a library-wide re-scoring CLI tool with before/after distribution analytics in the health dashboard.
+
+---
+
+### Milestone v2.6.0: Production Hardening & Client Harmonization
 * **Focus**: Solidifying downstream production workflows, desktop client integration, and continuous repository hygiene.
 * **Key Initiatives**:
   1. **Downstream Production Synchronization**: Validate production Cloud Build submission exclusively from locked downstream assembly (`inv-downstream-deploy-origin`) with pre-deploy QA gating (`inv-pre-deploy-qa-and-backup-gate`).
