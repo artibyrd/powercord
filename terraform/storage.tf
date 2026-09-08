@@ -33,3 +33,10 @@ resource "google_storage_bucket_iam_member" "compute_backup_writer" {
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${google_service_account.compute_sa.email}"
 }
+
+resource "google_storage_bucket_iam_member" "compute_bgml_admin" {
+  bucket = "bgml"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.compute_sa.email}"
+}
+
