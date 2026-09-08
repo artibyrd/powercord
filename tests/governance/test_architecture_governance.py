@@ -357,3 +357,94 @@ def test_discord_status_edit_component_sentinel_invariant() -> None:
         "Use a sentinel default (e.g. _VIEW_UNSET = object()) and check 'if view is not _VIEW_UNSET:' "
         "so that explicitly passing view=None forwards view=None to Discord to clear interactive buttons."
     )
+
+
+# ==============================================================================
+# Invariant: Zero Automated PR Merges (Human Mk1 Authority)
+# ==============================================================================
+
+
+@pytest.mark.unit
+def test_no_automated_pr_merges_in_scripts_or_recipes() -> None:
+    """Verify that no Justfile, task runner, or script automates 'gh pr merge'.
+
+    Per inv-branch-pr-review-gate, all PR merges into main require human Mk1 review.
+    Automated tools and agents must never self-merge PRs.
+    """
+    violations = []
+    roots_to_scan = [REPO_ROOT]
+    ext_root = REPO_ROOT.parent / "powercord-extensions"
+    if ext_root.exists():
+        roots_to_scan.append(ext_root)
+
+    for root in roots_to_scan:
+        for file_path in root.rglob("*"):
+            if any(p in file_path.parts for p in (".venv", "__pycache__", ".git", "backups", "tests")):
+                continue
+            if file_path.suffix in (".sh", ".bash", ".py") or file_path.name in ("Justfile", "Makefile"):
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                if re.search(r"\bgh\s+pr\s+merge\b", content):
+                    violations.append(
+                        str(
+                            file_path.relative_to(REPO_ROOT)
+                            if REPO_ROOT in file_path.parents
+                            else file_path.relative_to(REPO_ROOT.parent)
+                        )
+                    )
+
+    assert not violations, (
+        f"Automated PR merge commands detected in: {violations}.\n"
+        "Per inv-branch-pr-review-gate, 'gh pr merge' must never be automated. Merging requires human Mk1 review."
+    )
+
+
+# ==============================================================================
+# Invariant: Container Filesystem Isolation Path Guards
+# ==============================================================================
+
+
+@pytest.mark.unit
+def test_container_isolated_path_guards() -> None:
+    """Verify that governance tests accessing WORKSPACE_ROOT guard against container environments.
+
+    In isolated container builds (e.g. Cloud Build /workspace), REPO_ROOT.parent resolves to root '/',
+    where sibling repositories and workspace AGENTS.md do not exist. Any test referencing
+    WORKSPACE_ROOT or REPO_ROOT.parent must guard with an existence check and pytest.skip.
+    """
+    violations = []
+    gov_dir = REPO_ROOT / "tests" / "governance"
+    for py_file in gov_dir.glob("*.py"):
+        content = py_file.read_text(encoding="utf-8", errors="ignore")
+        if "WORKSPACE_ROOT" in content or "REPO_ROOT.parent" in content:
+            if "pytest.skip" not in content:
+                violations.append(py_file.name)
+
+    assert not violations, (
+        f"Governance test files referencing workspace root without pytest.skip container guards: {violations}.\n"
+        "Guard workspace root accesses with 'if not ROOT_PATH.exists(): pytest.skip(...)' to maintain container parity."
+    )
+
+
+# ==============================================================================
+# Invariant: Cold Boot Deployment Polling Margin (>=180s)
+# ==============================================================================
+
+
+@pytest.mark.unit
+def test_prod_deploy_health_poll_timeout() -> None:
+    """Verify that prod-deploy allows at least 180s for container startup.
+
+    Cold VM reboots with remote Docker pulls and database migrations take 90-120s.
+    Polling must allow at least 180s (>=60 loops x 3s) to prevent false-positive failures.
+    """
+    justfile = REPO_ROOT / "Justfile"
+    assert justfile.exists(), "Missing Justfile"
+    content = justfile.read_text(encoding="utf-8")
+
+    match = re.search(r"for\s+i\s+in\s+\{1\.\.(\d+)\};", content)
+    assert match, "Could not find health check loop in Justfile"
+    loop_count = int(match.group(1))
+    assert loop_count >= 60, (
+        f"prod-deploy health poll loop count is {loop_count} (<60 iterations). "
+        "Must allow at least 180s (>=60 iterations at 3s interval) for cold container boot."
+    )

@@ -589,17 +589,17 @@ prod-deploy: _require-gcp
 
     # Gate 5: Post-Deploy Health Check Polling
     echo ""
-    echo "→ Gate 5: Polling health endpoints (waiting up to 90s for container startup)..."
+    echo "→ Gate 5: Polling health endpoints (waiting up to 180s for container startup)..."
     vm_ip=$(gcloud compute instances describe {{gcp_instance}} --zone={{gcp_zone}} --project={{gcp_project}} --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
 
     success=0
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s -f -m 3 "http://${vm_ip}/" >/dev/null 2>&1; then
-            echo "  ✓ Endpoint http://${vm_ip}/ responded OK (attempt $i/30)"
+            echo "  ✓ Endpoint http://${vm_ip}/ responded OK (attempt $i/60, $((i * 3))s elapsed)"
             success=1
             break
         fi
-        echo "  Waiting for container startup... ($i/30)"
+        echo "  Waiting for container startup... ($i/60, $((i * 3))s elapsed)"
         sleep 3
     done
 
@@ -611,7 +611,7 @@ prod-deploy: _require-gcp
     else
         echo ""
         echo "================================================================================"
-        echo "⚠️ WARNING: Health check timed out after 90s."
+        echo "⚠️ WARNING: Health check timed out after 180s."
         echo "Inspect logs: just prod-logs"
         echo "Rollback:     just prod-rollback"
         echo "================================================================================"

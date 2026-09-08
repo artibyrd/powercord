@@ -36,14 +36,16 @@ def _read_pyproject_version(path: Path) -> str | None:
 @pytest.mark.unit
 def test_ecosystem_baseline_versions() -> None:
     """Verify true baseline version alignment across core packages."""
+    if WORKSPACE_ROOT == Path("/") or not DOWNSTREAM_ROOT.exists():
+        pytest.skip(f"Ecosystem multi-repo root not available in container environment: {WORKSPACE_ROOT}")
+
     powercord_version = _read_pyproject_version(REPO_ROOT / "pyproject.toml")
     assert powercord_version is not None, "powercord version must be defined in pyproject.toml"
 
-    if DOWNSTREAM_ROOT.exists():
-        downstream_version = _read_pyproject_version(DOWNSTREAM_ROOT / "pyproject.toml")
-        assert downstream_version == powercord_version, (
-            f"powercord-downstream-server must mirror core {powercord_version}, got: {downstream_version}"
-        )
+    downstream_version = _read_pyproject_version(DOWNSTREAM_ROOT / "pyproject.toml")
+    assert downstream_version == powercord_version, (
+        f"powercord-downstream-server must mirror core {powercord_version}, got: {downstream_version}"
+    )
 
     if CLIENT_ROOT.exists():
         client_version = _read_pyproject_version(CLIENT_ROOT / "pyproject.toml")
@@ -102,7 +104,7 @@ def test_extension_manifest_and_pyproject_parity() -> None:
 def test_alembic_multi_head_isolation() -> None:
     """Verify that extensions maintain independent Alembic migration lineages."""
     if not EXTENSIONS_ROOT.exists():
-        return
+        pytest.skip(f"powercord-extensions directory not found at {EXTENSIONS_ROOT} (isolated container environment)")
 
     violations = []
     for ext_dir in EXTENSIONS_ROOT.iterdir():
