@@ -51,6 +51,12 @@ terraform.rc
 # Agent Rules & Runtime
 .agents_runtime/
 
+# Vendor IDE & AI Agent Dotfolders
+.gemini/
+.cursor/
+.vscode/
+.idea/
+
 # Runtime Data & Backups
 app/data/
 backups/

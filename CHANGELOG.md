@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.5.0] - 2026-11-24
+
+### 🧩 Antigravity v2.34 Modernization, Skill Overlays & Shift-Left Governance
+* **Platform-Agnostic Skill Overlay Architecture & Zero Lock-In (`powercord-agent` & `.agents/overrides/`)**:
+  - Modernized `powercord-agent` to native Antigravity v2.34 plugin layout (`skills/`, `rules/AGENTS.md`, `hooks.json`, `mcp_config.json`, `overrides/`) with 8 retained domain skills, 6 self-contained 3-section overlays (`architecture-review`, `knowledge-governance`, `release-lifecycle`, `pr-brief`, `bootstrap-approvals`, `domain-modeling`), and a focused `hooks/guard_prod_ops.py` production safety hook.
+  - Added deterministic `just sync-overlays` recipe and container-safe `test_standalone_skill_overlays_parity` gate mirroring overlays into standalone `powercord/.agents/overrides/` so standalone clones work identically with or without `antigravity-customizations`.
+  - Added `just agent-check` running `powercord-agent/scripts/lint_skills.py`, hook unit tests, and conditionally invoking `agy plugin validate --strict` only when `agy` is installed on `PATH`.
+* **Modular Justfile Decomposition (`powercord/Justfile` & `just/*.just`)**:
+  - Decomposed the monolithic 739-LOC `powercord/Justfile` into a lean (<120 LOC) root entry point plus focused modules under `just/{dev,qa,db,vcs,prod}.just`, preserving `devkit.just`, optional extension imports, and the exact 180s cold-boot health poll in `just/prod.just`.
+  - Removed the obsolete `bootstrap-approvals` wrapper recipe.
+* **Shift-Left PR Parity Gate, GitHub Actions CI & Cloud Build Hygiene**:
+  - Added pure-stdlib [`scripts/validate_pr.py`](scripts/validate_pr.py) and hermetic unit tests [`tests/governance/test_validate_pr.py`](tests/governance/test_validate_pr.py) enforcing PR title `[vX.Y.Z]` parity, SemVer version bump progression over `origin/main` on feature/release branches, `CHANGELOG.md` heading parity, and optional sibling `powercord-agent/plugin.json` SemVer alignment; wired into `just pr-create`.
+  - Added container-safe GitHub Actions CI workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) running Ruff, Mypy, governance tests, unit tests, and `validate_pr.py`.
+  - Replaced the inline `python -c "import textwrap; exec(...)"` blob in [`cloudbuild.yaml`](cloudbuild.yaml) with checked-in [`scripts/wait_for_db.py`](scripts/wait_for_db.py).
+* **Governance Test Modernization & Repository Hygiene (`tests/governance/`)**:
+  - Added `.gemini/`, `.cursor/`, `.vscode/`, and `.idea/` to `.gitignore`, converted hardcoded machine-local links in [`docs/INTENTS.md`](docs/INTENTS.md) to relative paths, and added container-safe `test_zero_tracked_vendor_ide_dotfolders` and `test_zero_machine_local_paths_in_tracked_files` gates.
+  - Adopted Ousterhout Deep Modules (`~500 LOC` soft decomposition trigger in `.agents/overrides/architecture-review.md`) backed by a hard 1,000-LOC anti-god-file safety rail (`test_1000_loc_anti_god_file_safety_rail`) across `powercord/app`, `powercord-client`, and `powercord-extensions/*`, retiring empty `governance_ratchet.json`.
+  - Tightened `test_agents_md_context_economy` to a true `<= 800`-token ceiling (`int(len(words) * 1.33)`) and updated `test_agents_md_parity` to target `powercord-agent/rules/AGENTS.md`.
+  - Upgraded `test_version_and_manifest_parity.py` to validate `[[tool.powercord.default_widgets]]` (`column_span` 1–12 and `admin_`/`guild_admin_` scope prefixes) in external extensions' `pyproject.toml` alongside `extension.json`, and to validate `powercord-client` SemVer (`>= 1.0.0`).
+
+---
+
 ## [2.4.0] - 2026-09-07
 
 ### 🎹 MIDI Pipeline Hardening, Contributor Architecture & Ingestion Resiliency
