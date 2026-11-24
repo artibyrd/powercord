@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  qa:
+    name: Lint, Typecheck & Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: powercord
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POWERCORD_DB_HOST: localhost:5433
+      POWERCORD_POSTGRES_USER: powercord
+      POWERCORD_POSTGRES_PASSWORD: test_pass
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry & dependencies
+        run: |
+          pip install poetry
+          poetry install --no-interaction
+
+      - name: Ruff lint
+        run: poetry run ruff check .
+
+      - name: Ruff format check
+        run: poetry run ruff format --check .
+
+      - name: Mypy static typecheck
+        run: poetry run mypy .
+
+      - name: Governance tests (container-safe)
+        run: poetry run pytest tests/governance -v --no-cov
+
+      - name: Wait for PostgreSQL service
+        run: poetry run python scripts/wait_for_db.py --url "postgresql+pg8000://powercord:test_pass@localhost:5433/postgres"
+
+      - name: Unit tests
+        run: poetry run pytest tests/unit -v
+
+      - name: PR version-bump & CHANGELOG parity gate
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.head_ref }}
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          python3 scripts/validate_pr.py \
+            --branch "$PR_BRANCH" \
+            --pr-title "$PR_TITLE" \
+            --base-ref "$BASE_REF"

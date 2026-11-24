@@ -60,15 +60,23 @@ just dev
 
 ### Quality Assurance
 ```bash
-just qa        # Run linting, formatting, security checks, type checks, and tests
-just qa fix    # Same, but auto-fix lint and formatting issues
+just check         # Fast hermetic pre-commit gate (<3s: ruff lint/format + governance tests)
+just typecheck     # Mypy static type checking
+just agent-check   # Validate powercord-agent skills, overlays, hooks (and agy plugin when installed)
+just sync-overlays # Mirror canonical overlays from powercord-agent/overrides/ into .agents/overrides/
+just qa            # Run full linting, formatting, governance checks, and tests
+just qa --fix      # Same, with automatic lint and formatting fixes
 ```
+
+> [!NOTE]
+> Recipes are organized into modular files under `just/` (`dev.just`, `qa.just`, `db.just`, `vcs.just`, `prod.just`) imported by the root `Justfile`. Powercord's standalone `.agents/overrides/*.md` overlays work with or without the optional `antigravity-customizations` companion suite — zero vendor lock-in.
 
 ## Documentation
 
 | Guide | Description |
 |-------|-------------|
 | **[Fresh Setup Guide](docs/SETUP.md)** | Clone, install extensions, and run Powercord from scratch |
+| **[Justfile Guide](docs/justfile.md)** | Modular `just/*.just` command runner reference and QA/VCS/prod recipes |
 | **[Extending Powercord](docs/extensions.md)** | Extension framework: creating, managing, and publishing extensions |
 | **[API Security & Management](docs/api.md)** | API authentication, scopes, Swagger docs, and API key management |
 | **[API Developer Guide](docs/api_developer_guide.md)** | API integration guide for third-party tools, companion clients, and Lutebot/Lutemod |

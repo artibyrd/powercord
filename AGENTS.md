@@ -11,3 +11,4 @@ This repository contains the core Powercord backend server framework, FastAPI AP
 3. **No Extension Pollution**: Never add extension-specific dependencies into core `pyproject.toml` or `poetry.lock`.
 4. **Pytest Namespace**: Do not name FastAPI app instances `test_app` inside test modules to avoid pytest collection warnings.
 5. **Pre-Commit Checks**: Always run `poetry run ruff check --fix . && poetry run ruff format .` and `poetry run pytest` before submitting changes for human review.
+6. **Skill Overlays**: Project-specific overrides for companion skills live in `.agents/overrides/<skill>.md` (synced from `powercord-agent/overrides/` via `just sync-overlays`).

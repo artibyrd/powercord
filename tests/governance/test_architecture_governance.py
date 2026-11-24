@@ -1,7 +1,7 @@
 """Architecture and Modularity Governance Tests for Powercord.
 
 Governed by:
-- inv-500-loc-ceiling: 500 LOC Module Ceiling Law with Ratchet
+- inv-500-loc-ceiling: Deep Modules (~500 LOC soft trigger) + 1,000-LOC Anti-God-File Safety Rail
 - inv-compute-ontology: Pure Function Ontology (compute_*)
 - inv-client-server-decoupling: Client-Server Runtime Isolation
 - inv-source-isolation-no-ad-hoc-cp: Core Extension Directory Isolation
@@ -10,69 +10,187 @@ Governed by:
 from __future__ import annotations
 
 import ast
-import json
+import os
 import re
+import shutil
+import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+WORKSPACE_ROOT = REPO_ROOT.parent
 SRC_ROOT = REPO_ROOT / "app"
-CLIENT_ROOT = REPO_ROOT.parent / "powercord-client"
-RATCHET_PATH = Path(__file__).parent / "governance_ratchet.json"
+CLIENT_ROOT = WORKSPACE_ROOT / "powercord-client"
+EXTENSIONS_ROOT = WORKSPACE_ROOT / "powercord-extensions"
+CLIENT_EXTENSIONS_ROOT = WORKSPACE_ROOT / "powercord-client-extensions"
+
+HARD_LOC_CEILING = 1000
+VENDOR_IDE_DOTFOLDERS = {".gemini", ".vscode", ".cursor", ".idea"}
+MACHINE_LOCAL_PATH_RE = re.compile(r"(?:/home/|/Users/)[A-Za-z0-9._-]+/")
+DEFAULT_SKIP_DIRS = {".venv", "__pycache__", ".git", ".mypy_cache", ".ruff_cache", ".pytest_cache", "node_modules"}
+
+
+def _iter_files(
+    root: Path,
+    *,
+    suffixes: set[str] | None = None,
+    names: set[str] | None = None,
+    skip_dirs: set[str] = DEFAULT_SKIP_DIRS,
+) -> Iterator[Path]:
+    """Walk root while pruning skipped directories in-place (avoids descending into .venv/.git)."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in skip_dirs)
+        base = Path(dirpath)
+        for fname in sorted(filenames):
+            fpath = base / fname
+            if suffixes is None and names is None:
+                yield fpath
+            elif (suffixes and fpath.suffix in suffixes) or (names and fname in names):
+                yield fpath
+
+
+def _discover_ecosystem_git_repos() -> list[Path]:
+    """Return existing git repositories in the workspace, always starting with REPO_ROOT."""
+    repos: list[Path] = [REPO_ROOT]
+    if WORKSPACE_ROOT == Path("/") or not WORKSPACE_ROOT.exists():
+        return repos
+
+    fixed_siblings = [
+        WORKSPACE_ROOT / "powercord-agent",
+        CLIENT_ROOT,
+        WORKSPACE_ROOT / "powercord-downstream-server",
+    ]
+    for candidate in fixed_siblings:
+        if candidate.is_dir() and (candidate / ".git").exists():
+            repos.append(candidate)
+
+    for group_dir in (EXTENSIONS_ROOT, CLIENT_EXTENSIONS_ROOT):
+        if group_dir.is_dir():
+            for child in sorted(group_dir.iterdir()):
+                if child.is_dir() and (child / ".git").exists():
+                    repos.append(child)
+
+    return repos
 
 
 @pytest.mark.unit
-def test_500_loc_ceiling_with_ratchet() -> None:
-    """Verify 500 LOC ceiling for all new code and monotonic ratchet decreases for legacy debt."""
-    assert RATCHET_PATH.exists(), f"Missing architectural debt ratchet: {RATCHET_PATH}"
-    ratchet_data = json.loads(RATCHET_PATH.read_text(encoding="utf-8"))
-    ratchet_files = ratchet_data.get("files", {})
+def test_1000_loc_anti_god_file_safety_rail() -> None:
+    """Verify the 1,000-LOC anti-god-file safety rail across core, client, and extensions.
 
-    violations = []
-    graduations = []
-    active_debt_lines = 0
+    Powercord adopts Ousterhout Deep Modules (~500 LOC soft decomposition trigger in
+    .agents/overrides/architecture-review.md) backed by a hard 1,000-LOC ceiling here.
+    """
+    roots_to_scan: list[Path] = [SRC_ROOT]
+    if CLIENT_ROOT.exists():
+        roots_to_scan.append(CLIENT_ROOT)
+    if EXTENSIONS_ROOT.exists():
+        roots_to_scan.append(EXTENSIONS_ROOT)
 
-    print("\n" + "=" * 76)
-    print("                 POWERCORD ARCHITECTURAL DEBT DASHBOARD")
-    print("=" * 76)
+    violations: list[str] = []
+    skipped_parts = DEFAULT_SKIP_DIRS | {"tests", "alembic"}
 
-    for py_file in sorted(SRC_ROOT.rglob("*.py")):
-        if ".venv" in py_file.parts or "__pycache__" in py_file.parts:
-            continue
-
-        rel_path = str(py_file.relative_to(REPO_ROOT))
-        line_count = len(py_file.read_text(encoding="utf-8", errors="ignore").splitlines())
-
-        if rel_path in ratchet_files:
-            max_allowed = ratchet_files[rel_path]["max_loc"]
-            target_milestone = ratchet_files[rel_path].get("target_milestone", "future")
-            active_debt_lines += line_count
-
-            if line_count > max_allowed:
-                violations.append(
-                    f"Ratchet breach: {rel_path} has {line_count} LOC (max frozen ceiling was {max_allowed})"
+    for root in roots_to_scan:
+        for py_file in _iter_files(root, suffixes={".py"}, skip_dirs=skipped_parts):
+            line_count = len(py_file.read_text(encoding="utf-8", errors="ignore").splitlines())
+            if line_count > HARD_LOC_CEILING:
+                rel_path = (
+                    str(py_file.relative_to(REPO_ROOT))
+                    if REPO_ROOT in py_file.parents
+                    else str(py_file.relative_to(WORKSPACE_ROOT))
                 )
-            elif line_count <= 500:
-                graduations.append((rel_path, line_count))
-            else:
-                print(f"  [PROBATION] {rel_path:<48} : {line_count:>4} / {max_allowed:>4} LOC ({target_milestone})")
-        else:
-            if line_count > 500:
                 violations.append(
-                    f"New/unregistered file exceeding 500 LOC: {rel_path} has {line_count} LOC (limit is 500)"
+                    f"God-file safety rail breach: {rel_path} has {line_count} LOC (hard limit is {HARD_LOC_CEILING})"
                 )
-
-    print("-" * 76)
-    print(f"  Active Probation Files : {len(ratchet_files) - len(graduations)} / {len(ratchet_files)}")
-    print(f"  Total Ratcheted Debt   : {active_debt_lines} LOC")
-    if graduations:
-        print(f"  Eligible for Graduation: {len(graduations)} file(s):")
-        for g_file, g_loc in graduations:
-            print(f"    - {g_file} is down to {g_loc} LOC! (Remove from governance_ratchet.json)")
-    print("=" * 76 + "\n")
 
     assert not violations, "\n".join(violations)
+
+
+@pytest.mark.unit
+def test_zero_tracked_vendor_ide_dotfolders() -> None:
+    """Verify zero tracked vendor IDE/agent dotfolders and .gemini/ presence in .gitignore."""
+    git_bin = shutil.which("git")
+    repos = _discover_ecosystem_git_repos()
+
+    tracked_violations: list[str] = []
+    gitignore_violations: list[str] = []
+
+    for repo in repos:
+        gitignore_path = repo / ".gitignore"
+        if not gitignore_path.exists():
+            gitignore_violations.append(f"{repo.name}: missing .gitignore")
+        else:
+            lines = {line.strip() for line in gitignore_path.read_text(encoding="utf-8").splitlines()}
+            if ".gemini/" not in lines and ".gemini" not in lines:
+                gitignore_violations.append(f"{repo.name}/.gitignore: missing '.gemini/' entry")
+
+        if git_bin and (repo / ".git").exists():
+            proc = subprocess.run(
+                [git_bin, "-C", str(repo), "ls-files"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                for tracked in proc.stdout.splitlines():
+                    parts = Path(tracked).parts
+                    bad = [p for p in parts if p in VENDOR_IDE_DOTFOLDERS]
+                    if bad:
+                        tracked_violations.append(f"{repo.name}/{tracked} (contains {bad[0]})")
+
+    assert not tracked_violations, "Tracked vendor IDE/agent dotfolder files detected:\n" + "\n".join(
+        tracked_violations
+    )
+    assert not gitignore_violations, "Repository .gitignore hygiene violations:\n" + "\n".join(gitignore_violations)
+
+
+@pytest.mark.unit
+def test_zero_machine_local_paths_in_tracked_files() -> None:
+    """Verify zero hardcoded machine-local home paths (/home/<user>/, /Users/<user>/) in docs and config."""
+    files_to_scan: list[Path] = []
+
+    for single in (REPO_ROOT / "AGENTS.md", REPO_ROOT / "Justfile"):
+        if single.is_file():
+            files_to_scan.append(single)
+
+    for folder, suffixes in (
+        (REPO_ROOT / "docs", {".md"}),
+        (REPO_ROOT / "just", {".just"}),
+        (REPO_ROOT / "scripts", {".py", ".sh"}),
+    ):
+        if folder.is_dir():
+            for path in sorted(folder.rglob("*")):
+                if path.is_file() and path.suffix in suffixes:
+                    files_to_scan.append(path)
+
+    if WORKSPACE_ROOT != Path("/") and WORKSPACE_ROOT.exists():
+        root_agents = WORKSPACE_ROOT / "AGENTS.md"
+        if root_agents.is_file():
+            files_to_scan.append(root_agents)
+
+        agent_repo = WORKSPACE_ROOT / "powercord-agent"
+        if agent_repo.is_dir():
+            scan_suffixes = {".md", ".py", ".json", ".sh", ".yml", ".yaml"}
+            for path in sorted(agent_repo.rglob("*")):
+                if any(p in path.parts for p in (".git", "__pycache__", ".venv", "tests")):
+                    continue
+                if path.is_file() and path.suffix in scan_suffixes:
+                    files_to_scan.append(path)
+
+    violations: list[tuple[str, int, str]] = []
+    for file_path in files_to_scan:
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
+        for lineno, line in enumerate(content.splitlines(), start=1):
+            if MACHINE_LOCAL_PATH_RE.search(line):
+                rel = (
+                    str(file_path.relative_to(WORKSPACE_ROOT))
+                    if WORKSPACE_ROOT in file_path.parents
+                    else str(file_path.relative_to(REPO_ROOT))
+                )
+                violations.append((rel, lineno, line.strip()))
+
+    assert not violations, f"Hardcoded machine-local home paths detected: {violations}"
 
 
 @pytest.mark.unit
@@ -105,9 +223,7 @@ def test_client_server_runtime_isolation() -> None:
     disallowed_modules = ("app", "nextcord", "fasthtml")
     violations = []
 
-    for py_file in CLIENT_ROOT.rglob("*.py"):
-        if ".venv" in py_file.parts or "__pycache__" in py_file.parts:
-            continue
+    for py_file in _iter_files(CLIENT_ROOT, suffixes={".py"}):
         try:
             tree = ast.parse(py_file.read_text(encoding="utf-8", errors="ignore"), filename=str(py_file))
             for node in ast.walk(tree):
@@ -157,14 +273,11 @@ def test_no_raw_generator_session_leak_invariant() -> None:
     """
     violations = []
     roots_to_scan = [SRC_ROOT]
-    extensions_root = REPO_ROOT.parent / "powercord-extensions"
-    if extensions_root.exists():
-        roots_to_scan.append(extensions_root)
+    if EXTENSIONS_ROOT.exists():
+        roots_to_scan.append(EXTENSIONS_ROOT)
 
     for root in roots_to_scan:
-        for py_file in root.rglob("*.py"):
-            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
-                continue
+        for py_file in _iter_files(root, suffixes={".py"}, skip_dirs=DEFAULT_SKIP_DIRS | {"tests"}):
             if py_file.name == "alchemy.py":
                 continue
 
@@ -175,7 +288,7 @@ def test_no_raw_generator_session_leak_invariant() -> None:
                         rel_path = (
                             str(py_file.relative_to(REPO_ROOT))
                             if REPO_ROOT in py_file.parents
-                            else str(py_file.relative_to(REPO_ROOT.parent))
+                            else str(py_file.relative_to(WORKSPACE_ROOT))
                         )
                         violations.append((rel_path, node.lineno))
             except Exception:
@@ -204,15 +317,11 @@ def test_matplotlib_headless_backend_invariant() -> None:
     """
     violations = []
     roots_to_scan = [SRC_ROOT]
-    ext_root = REPO_ROOT.parent / "powercord-extensions"
-    if ext_root.exists():
-        roots_to_scan.append(ext_root)
+    if EXTENSIONS_ROOT.exists():
+        roots_to_scan.append(EXTENSIONS_ROOT)
 
     for root in roots_to_scan:
-        for py_file in root.rglob("*.py"):
-            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
-                continue
-
+        for py_file in _iter_files(root, suffixes={".py"}, skip_dirs=DEFAULT_SKIP_DIRS | {"tests"}):
             content = py_file.read_text(encoding="utf-8", errors="ignore")
             if "pyplot" in content:
                 tree = ast.parse(content, filename=str(py_file))
@@ -233,7 +342,7 @@ def test_matplotlib_headless_backend_invariant() -> None:
                         rel_path = (
                             str(py_file.relative_to(REPO_ROOT))
                             if REPO_ROOT in py_file.parents
-                            else str(py_file.relative_to(REPO_ROOT.parent))
+                            else str(py_file.relative_to(WORKSPACE_ROOT))
                         )
                         violations.append(rel_path)
 
@@ -264,17 +373,11 @@ def test_no_derived_asset_columns_in_database_models() -> None:
     """
     violations = []
     roots_to_scan = [SRC_ROOT]
-    ext_root = REPO_ROOT.parent / "powercord-extensions"
-    if ext_root.exists():
-        roots_to_scan.append(ext_root)
+    if EXTENSIONS_ROOT.exists():
+        roots_to_scan.append(EXTENSIONS_ROOT)
 
     for root in roots_to_scan:
-        for py_file in root.rglob("*.py"):
-            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
-                continue
-            if py_file.name not in ("models.py", "blueprint.py"):
-                continue
-
+        for py_file in _iter_files(root, names={"models.py", "blueprint.py"}, skip_dirs=DEFAULT_SKIP_DIRS | {"tests"}):
             content = py_file.read_text(encoding="utf-8", errors="ignore")
             tree = ast.parse(content, filename=str(py_file))
             for node in ast.walk(tree):
@@ -292,7 +395,7 @@ def test_no_derived_asset_columns_in_database_models() -> None:
                             rel_path = (
                                 str(py_file.relative_to(REPO_ROOT))
                                 if REPO_ROOT in py_file.parents
-                                else str(py_file.relative_to(REPO_ROOT.parent))
+                                else str(py_file.relative_to(WORKSPACE_ROOT))
                             )
                             violations.append((rel_path, node.name, field_name, getattr(item, "lineno", 0)))
 
@@ -319,15 +422,11 @@ def test_discord_status_edit_component_sentinel_invariant() -> None:
     """
     violations = []
     roots_to_scan = [SRC_ROOT]
-    ext_root = REPO_ROOT.parent / "powercord-extensions"
-    if ext_root.exists():
-        roots_to_scan.append(ext_root)
+    if EXTENSIONS_ROOT.exists():
+        roots_to_scan.append(EXTENSIONS_ROOT)
 
     for root in roots_to_scan:
-        for py_file in root.rglob("*.py"):
-            if ".venv" in py_file.parts or "__pycache__" in py_file.parts or "tests" in py_file.parts:
-                continue
-
+        for py_file in _iter_files(root, suffixes={".py"}, skip_dirs=DEFAULT_SKIP_DIRS | {"tests"}):
             content = py_file.read_text(encoding="utf-8", errors="ignore")
             if "status_edit" not in content:
                 continue
@@ -348,7 +447,7 @@ def test_discord_status_edit_component_sentinel_invariant() -> None:
                                         rel_path = (
                                             str(py_file.relative_to(REPO_ROOT))
                                             if REPO_ROOT in py_file.parents
-                                            else str(py_file.relative_to(REPO_ROOT.parent))
+                                            else str(py_file.relative_to(WORKSPACE_ROOT))
                                         )
                                         violations.append((rel_path, node.name, sub.lineno))
 
@@ -373,24 +472,25 @@ def test_no_automated_pr_merges_in_scripts_or_recipes() -> None:
     """
     violations = []
     roots_to_scan = [REPO_ROOT]
-    ext_root = REPO_ROOT.parent / "powercord-extensions"
-    if ext_root.exists():
-        roots_to_scan.append(ext_root)
+    if EXTENSIONS_ROOT.exists():
+        roots_to_scan.append(EXTENSIONS_ROOT)
 
     for root in roots_to_scan:
-        for file_path in root.rglob("*"):
-            if any(p in file_path.parts for p in (".venv", "__pycache__", ".git", "backups", "tests")):
-                continue
-            if file_path.suffix in (".sh", ".bash", ".py") or file_path.name in ("Justfile", "Makefile"):
-                content = file_path.read_text(encoding="utf-8", errors="ignore")
-                if re.search(r"\bgh\s+pr\s+merge\b", content):
-                    violations.append(
-                        str(
-                            file_path.relative_to(REPO_ROOT)
-                            if REPO_ROOT in file_path.parents
-                            else file_path.relative_to(REPO_ROOT.parent)
-                        )
+        for file_path in _iter_files(
+            root,
+            suffixes={".sh", ".bash", ".py", ".just"},
+            names={"Justfile", "Makefile"},
+            skip_dirs=DEFAULT_SKIP_DIRS | {"backups", "tests"},
+        ):
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            if re.search(r"\bgh\s+pr\s+merge\b", content):
+                violations.append(
+                    str(
+                        file_path.relative_to(REPO_ROOT)
+                        if REPO_ROOT in file_path.parents
+                        else file_path.relative_to(WORKSPACE_ROOT)
                     )
+                )
 
     assert not violations, (
         f"Automated PR merge commands detected in: {violations}.\n"
@@ -437,12 +537,12 @@ def test_prod_deploy_health_poll_timeout() -> None:
     Cold VM reboots with remote Docker pulls and database migrations take 90-120s.
     Polling must allow at least 180s (>=60 loops x 3s) to prevent false-positive failures.
     """
-    justfile = REPO_ROOT / "Justfile"
-    assert justfile.exists(), "Missing Justfile"
-    content = justfile.read_text(encoding="utf-8")
+    prod_just = REPO_ROOT / "just" / "prod.just"
+    assert prod_just.exists(), "Missing just/prod.just"
+    content = prod_just.read_text(encoding="utf-8")
 
     match = re.search(r"for\s+i\s+in\s+\{1\.\.(\d+)\};", content)
-    assert match, "Could not find health check loop in Justfile"
+    assert match, "Could not find health check loop in just/prod.just"
     loop_count = int(match.group(1))
     assert loop_count >= 60, (
         f"prod-deploy health poll loop count is {loop_count} (<60 iterations). "

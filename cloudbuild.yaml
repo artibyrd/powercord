@@ -26,22 +26,7 @@ steps:
         pip install poetry
         poetry install
         # Wait for Postgres to be ready
-        poetry run python -c "import textwrap; exec(textwrap.dedent('''
-        import time
-        from sqlalchemy import create_engine
-        url = 'postgresql+pg8000://powercord:test_pass@postgres:5432/postgres'
-        for i in range(30):
-            try:
-                engine = create_engine(url)
-                with engine.connect() as conn:
-                    print('PostgreSQL is ready!')
-                    break
-            except Exception as e:
-                print(f'Waiting for database... ({e})')
-                time.sleep(1)
-        else:
-            raise RuntimeError('Database did not start in time')
-        '''))"
+        poetry run python scripts/wait_for_db.py --url "postgresql+pg8000://powercord:test_pass@postgres:5432/postgres"
         poetry run ruff check .
         poetry run ruff format --check .
         poetry run mypy .

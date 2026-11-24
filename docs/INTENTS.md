@@ -2,7 +2,7 @@
 
 This document tracks and justifies the use of Discord privileged gateway intents across the Powercord ecosystem. Since the bot is deployed across large community servers collectively exceeding the **10,000 user threshold**, these details are critical for the Discord Developer Portal application review process.
 
-*   **Privacy Policy**: [`PRIVACY.md`](file:///home/pendragon/Projects/powercord-ecosystem/powercord/PRIVACY.md) | [GitHub Link](https://github.com/artibyrd/powercord/blob/main/PRIVACY.md)
+*   **Privacy Policy**: [`PRIVACY.md`](../PRIVACY.md) | [GitHub Link](https://github.com/artibyrd/powercord/blob/main/PRIVACY.md)
 *   **Public Repository**: [https://github.com/artibyrd/powercord](https://github.com/artibyrd/powercord)
 
 ---
@@ -23,7 +23,7 @@ This document tracks and justifies the use of Discord privileged gateway intents
 
 *   **Primary Justification**: Core API Authorization & RBAC Synchronization.
 *   **Where it is used**:
-    *   [powercord/app/bot/internal_server.py](file:///home/pendragon/Projects/powercord-ecosystem/powercord/app/bot/internal_server.py)
+    *   [`app/bot/internal_server.py`](../app/bot/internal_server.py)
         *   `GET /user/{user_id}/guilds/{guild_id}/roles` (via `guild.get_member(user_id)`)
         *   `GET /user/{user_id}/admin_guilds` (via `guild.get_member(user_id)`)
 *   **Technical Details**:
@@ -40,13 +40,13 @@ This document tracks and justifies the use of Discord privileged gateway intents
 
 *   **Primary Justification**: Auto-ingesting user-uploaded MIDI files and archives.
 *   **Where it is used**:
-    *   [powercord-extensions/midi_library/cog.py](file:///home/pendragon/Projects/powercord-ecosystem/powercord-extensions/midi_library/cog.py)
+    *   [`powercord-extensions/midi_library/cog.py`](../../powercord-extensions/midi_library/cog.py)
         *   `on_message` listener
 *   **Technical Details**:
     The MIDI Library extension automatically processes uploads of `.mid`, `.midi`, `.zip`, `.7z`, and `.rar` attachments sent in designated channels. Under Discord API rules, the `message.attachments` field is completely stripped from payload messages unless the `Message Content` intent is enabled.
 
 #### Note on Honeypot Extension
-*   The Honeypot extension ([honeypot/cog.py](file:///home/pendragon/Projects/powercord-ecosystem/powercord-extensions/honeypot/cog.py)) listens to the `on_message` event to track user channel hopping. However, it only inspects metadata (`message.channel.id` and `message.author.id`) and **does not** read `message.content` or `message.attachments`. It does not strictly require this intent to function.
+*   The Honeypot extension ([`honeypot/cog.py`](../../powercord-extensions/honeypot/cog.py)) listens to the `on_message` event to track user channel hopping. However, it only inspects metadata (`message.channel.id` and `message.author.id`) and **does not** read `message.content` or `message.attachments`. It does not strictly require this intent to function.
 
 ---
 
