@@ -8,6 +8,7 @@ Governed by:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -84,6 +85,43 @@ def test_standalone_skill_overlays_parity() -> None:
             drifted.append(name)
 
     assert not drifted, f"Overlay content drift detected for {drifted}. Run 'just sync-overlays' to restore parity."
+
+
+@pytest.mark.unit
+def test_umbrella_plugin_registration_and_no_duplicate_skills() -> None:
+    """Verify umbrella .agents/ registers powercord-agent natively without duplicate skill loaders."""
+    if not AGENT_OVERRIDES_DIR.exists():
+        pytest.skip(f"Sibling powercord-agent not found at {AGENT_OVERRIDES_DIR.parent} (isolated container build)")
+
+    umbrella_agents_dir = WORKSPACE_ROOT / ".agents"
+    assert umbrella_agents_dir.is_dir(), f"Missing umbrella .agents directory at {umbrella_agents_dir}"
+
+    plugins_json = umbrella_agents_dir / "plugins.json"
+    assert plugins_json.is_file(), (
+        f"Missing {plugins_json}; umbrella workspace must register powercord-agent via plugins.json "
+        "so hooks.json and mcp_config.json load natively."
+    )
+    data = json.loads(plugins_json.read_text(encoding="utf-8"))
+    paths = [entry.get("path") for entry in data.get("entries", []) if isinstance(entry, dict)]
+    assert "powercord-agent" in paths, (
+        f"Umbrella {plugins_json} must include entry {{'path': 'powercord-agent'}}, found: {paths}"
+    )
+
+    duplicate_skills_json = umbrella_agents_dir / "skills.json"
+    assert not duplicate_skills_json.exists(), (
+        f"Remove {duplicate_skills_json}: registering skills alongside plugins.json loads powercord-agent skills twice."
+    )
+
+    legacy_dot_agent = WORKSPACE_ROOT / ".agent"
+    assert not legacy_dot_agent.exists() and not legacy_dot_agent.is_symlink(), (
+        f"Remove legacy duplicate symlink/directory {legacy_dot_agent}; use .agents/ exclusively."
+    )
+
+    umbrella_overrides = umbrella_agents_dir / "overrides"
+    assert umbrella_overrides.exists(), f"Missing umbrella overlays link at {umbrella_overrides}"
+    assert umbrella_overrides.resolve() == AGENT_OVERRIDES_DIR.resolve(), (
+        f"Umbrella {umbrella_overrides} resolves to {umbrella_overrides.resolve()}, expected {AGENT_OVERRIDES_DIR.resolve()}"
+    )
 
 
 @pytest.mark.unit

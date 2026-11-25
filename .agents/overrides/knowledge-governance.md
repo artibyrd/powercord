@@ -7,7 +7,7 @@ Self-contained knowledge placement, context-economy, and documentation governanc
 - **4-Tier Knowledge Taxonomy (`inv-4tier-knowledge`)**: Place every rule, procedure, check, and spec in its single proper tier:
   - **Tier 0 — Universal Core Invariants (`AGENTS.md`)**: High-signal, system-wide rules in Class α (Safety & Custody), Class β (Topology & Lifecycle), and Class γ (Interface & Governance). Must stay strictly under **800 tokens** (`int(len(words) * 1.33) <= 800`, enforced by `test_agents_md_context_economy`). Never put multi-line procedures, shell recipes, or setup guides here.
   - **Tier 1 — Progressive Skills & Overlays (`powercord-agent/skills/<skill>/SKILL.md` and `powercord-agent/overrides/<skill>.md`)**: On-demand domain skills with `references/` and `scripts/`, plus self-contained 3-section project overlays.
-  - **Tier 2 — Shift-Left Automated Gates (`powercord/tests/governance/test_*.py` and `powercord-agent/scripts/lint_skills.py`)**: Fast (`< 3s`) deterministic tests enforcing invariants before commit.
+  - **Tier 2 — Shift-Left Automated Gates (`powercord/tests/governance/test_*.py` and `powercord-agent/scripts/lint_skills.py`)**: Fast (`~3–5s`) deterministic tests enforcing invariants before commit.
   - **Tier 3 — Blueprints, Guides & Release Ledgers (`powercord/docs/`, `CHANGELOG.md`, `ROADMAP.md`)**: Deep design docs, completed history, and forward-looking milestones.
 - **Canonical `AGENTS.md` & Standalone Overlay Parity**:
   - `powercord-agent/rules/AGENTS.md` is the canonical source for umbrella root `AGENTS.md`; both files must stay byte-for-byte identical (enforced by `test_agents_md_parity`).
@@ -20,8 +20,10 @@ Self-contained knowledge placement, context-economy, and documentation governanc
   - `ROADMAP.md` is strictly forward-looking. Once a milestone ships, move its completed details into `CHANGELOG.md` and prune completed task checklists from `ROADMAP.md`.
 - **Living Canon Semantic Slugs (`inv-living-canon`)**:
   - Reference invariants by semantic slug (such as `inv-branch-pr-review-gate`), never by hardcoded numbered counts (for example `"N core invariants"`). Enforced by `test_dynamic_living_canon_invariant`.
-- **Plain-English Prose Readability Rule**:
-  - Write documentation, overlays, PR summaries, and `CHANGELOG.md` entries in clear, direct plain English. Avoid stacked internal jargon, bloated acronym chains, or meta-commentary; lead with what changed and why it matters to a developer or operator.
+- **Plain-English Prose & Right-Shape Formatting Rule**:
+  - Write docs, overlays, PR briefs, changelogs, implementation plans, and walkthroughs in clear, direct plain English.
+  - Reserve Markdown tables for genuinely tabular data with short, uniform columns (for example PR merge order or version matrices); use headings and one-item-per-line bullet lists for narrative summaries, multi-file indices, and audit findings.
+  - Avoid walls of inline `code-snippets` inside prose sentences; lead with what changed and why it matters, keeping backticks to the single path or command a point actually needs.
 - **Knowledge Routing During `/learn` Retrospectives**:
   1. Never append procedural blobs or troubleshooting transcripts to `AGENTS.md`.
   2. Route subsystem procedures (Docker flags, Alembic steps, Flet quirks, GCP ops) into the owning skill's `references/` under `powercord-agent/skills/` or into `powercord-agent/overrides/`.

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.5.1] - 2026-11-24
+
+### 🎓 Post-Release `/learn` Retrospective Hardening
+* **Umbrella Plugin Registration Gate (`tests/governance/test_docs_integrity.py`)**: Added container-safe `test_umbrella_plugin_registration_and_no_duplicate_skills` verifying umbrella `.agents/plugins.json` registers `powercord-agent` natively, `.agents/overrides` resolves to `powercord-agent/overrides`, and neither `.agents/skills.json` nor legacy `.agent` exist.
+* **Prose & Table Readability Policy (`overrides/knowledge-governance.md`)**: Extended plain-English readability guidance to implementation plans and walkthroughs, reserving Markdown tables strictly for uniform tabular data and discouraging dense inline code-snippet walls.
+* **Strict SemVer Over Soft Roadmap Targets & Ephemeral Downstream Policy (`overrides/release-lifecycle.md`, `test_version_and_manifest_parity.py`)**: Codified that `ROADMAP.md` versions are soft planning targets shifted outward for prioritized interjected work, and relaxed `test_ecosystem_baseline_versions` so bumps on `powercord` feature branches are not blocked by an un-rebuilt ephemeral `powercord-downstream-server/`.
+* **Governance Gate Timing Accuracy (`just/qa.just` & `overrides/knowledge-governance.md`)**: Aligned governance gate timing descriptions with measured local runtime (`~3s` for `test-gov`).
+
+---
+
 ## [2.5.0] - 2026-11-24
 
 ### 🧩 Antigravity v2.34 Modernization, Skill Overlays & Shift-Left Governance

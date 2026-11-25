@@ -6,6 +6,7 @@ Self-contained branching, integration verification, PR gating, multi-repo merge 
 
 - **Local Downstream Integration Sandbox Instead of Cloud Previews (`inv-downstream-integration-testbed`, `inv-single-vm-cost-ceiling`)**:
   - Powercord runs on a single fixed-cost GCE VM (`powercord-instance`) with no cloud preview deployments.
+  - `powercord-downstream-server/` is an ephemeral combined-testing workspace — treat its local branches and container volumes as disposable and rebuild freely from `powercord` `main`.
   - Before opening a PR, reconcile upstream changes into `powercord-downstream-server/` via git rebase and `just ext-install`, rebuild the Docker stack (`just rebuild-target`), verify multi-head migrations (`just db-upgrade && poetry run alembic heads`), and inspect the live web UI and bot on `http://localhost:5001/` (`inv-mk1-downstream-walkthrough-verification`).
 - **Branch, Commit, and Human Mk1 Merge Authority (`inv-branch-pr-review-gate`)**:
   - Never push directly to `main`. Create semantic topic branches (`just branch feat/<topic>`) that describe the change — never couple a branch name to another repository's version.
@@ -28,6 +29,7 @@ Self-contained branching, integration verification, PR gating, multi-repo merge 
     2. `pyproject.toml` version on `feat/*`, `feature/*`, `fix/*`, `hotfix/*`, and `release/*` branches is strictly greater than `origin/main:pyproject.toml` (`docs/*`, `ci/*`, and `chore/*` branches are exempt from version bumps).
     3. The latest `## [X.Y.Z]` heading in `CHANGELOG.md` matches `pyproject.toml`.
     4. Sibling `powercord-agent/plugin.json` (when present) carries valid aligned SemVer.
+- **Strict SemVer Over Soft Roadmap Targets**: Version numbers in `ROADMAP.md` are soft planning targets, never reservations. Assign the next SemVer version after current `main` for whatever work ships next, and shift planned `ROADMAP.md` milestones outward to make room for prioritized interjected work.
 - **Extension SemVer & Manifest Parity (`inv-manifest-version-parity`)**:
   - Pre-release extensions (`< 1.0.0`) remain decoupled from core releases until their `1.0.0` launch; published extensions (`>= 1.0.0`) bump versions independently when their own code changes.
   - External server extensions declare metadata and `[[tool.powercord.default_widgets]]` inside `pyproject.toml`; internal server extensions and client extensions use `extension.json`.
