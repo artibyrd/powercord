@@ -31,14 +31,14 @@ alias tc := typecheck
 _check:
     poetry run mypy .
 
-# Fast hermetic pre-commit QA gate (<3s: lint + format + test-gov, zero DB)
+# Fast hermetic pre-commit QA gate (lint + format + test-gov, zero DB)
 [group: "qa"]
 check:
     poetry run ruff check .
     poetry run ruff format --check .
     poetry run pytest tests/governance -q --no-cov
 
-# Run shift-left governance tests (<3s, zero DB)
+# Run shift-left governance tests (~3s, zero DB)
 [group: "qa"]
 test-gov:
     poetry run pytest tests/governance -v --no-cov
